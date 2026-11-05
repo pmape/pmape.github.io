@@ -16,6 +16,7 @@
 #include "log.h"
 #include "pad.h"
 #include "out.h"
+#include "engine.h"
 
 /* ---------- HID tanımları ---------- */
 
@@ -55,7 +56,7 @@ static const uint8_t mouse_desc[] = {
 	0xc0, 0xc0,
 };
 
-static bool mapping_on = true;
+#define mapping_on engine_mapping()
 static bool pad_connected;
 
 enum { D_KB, D_MOUSE, D_PAD, D_N };
@@ -308,25 +309,12 @@ static void build_mapped(const struct pad_state *p, uint8_t kb[8], uint8_t ms[4]
 	if (p->lt > 100 || (p->btn & BIT(PB_LT))) ms[0] |= 2;
 }
 
-static void build_gamepad(const struct pad_state *p, uint8_t g[9])
-{
-	uint16_t b = p->btn & 0xffff; /* PB_A..PB_EXTRA = HID düğme 1..16 */
-
-	g[0] = b & 0xff;
-	g[1] = b >> 8;
-	g[2] = p->hat > 7 ? 0x0f : p->hat;
-	g[3] = p->lx; g[4] = p->ly; g[5] = p->rx; g[6] = p->ry;
-	g[7] = p->lt; g[8] = p->rt;
-}
-
 /* ---------- ana döngü (yaklaşık 125 Hz) ---------- */
 
 static void out_thread(void *a, void *b, void *c)
 {
 	struct pad_state p;
 	uint32_t tick = 0;
-	int64_t combo_since = 0;
-	bool combo_done = false;
 	static const uint8_t g_idle[9] = { 0, 0, 0x0f, 128, 128, 128, 128, 0, 0 };
 	static const uint8_t z8[8] = { 0 };
 
@@ -343,21 +331,6 @@ static void out_thread(void *a, void *b, void *c)
 		led_update(tick);
 		pad_get(&p);
 
-		/* Home + Select basılı → eşlemeyi aç/kapat */
-		uint32_t combo = BIT(PB_HOME) | BIT(PB_SELECT);
-
-		if ((p.btn & combo) == combo) {
-			if (!combo_since) combo_since = k_uptime_get();
-			if (!combo_done && k_uptime_get() - combo_since > 1500) {
-				mapping_on = !mapping_on;
-				combo_done = true;
-				OUT("{\"ev\":\"mode\",\"mapping\":%d}\n", mapping_on);
-			}
-		} else {
-			combo_since = 0;
-			combo_done = false;
-		}
-
 		if (!p.valid || !pad_connected) {
 			send(D_PAD, g_idle, 9, false);
 			send(D_KB, z8, 8, false);
@@ -365,32 +338,24 @@ static void out_thread(void *a, void *b, void *c)
 			continue;
 		}
 
+		struct out_rep r;
+		enum eng_mode m = engine_tick(&p, k_uptime_get(), &r);
+
+		if (m == E_LEGACY) {
+			build_mapped(&p, r.kb, r.ms);
+			memcpy(r.g, g_idle, 9);
+		}
+
 		/* 150 ms'dir hiçbir şey gitmediyse aynı gamepad durumunu tekrar gönder:
 		 * tablet bağlantıyı boşta sanıp uyutmasın (uyanma gecikmesi olmasın) */
 		if (k_uptime_get() - last_any_ms > 150) {
-			uint8_t g[9];
-
-			if (mapping_on) memcpy(g, g_idle, 9); else build_gamepad(&p, g);
 			keepalive = true;
-			send(D_PAD, g, 9, true);
+			send(D_PAD, r.g, 9, true);
 			keepalive = false;
 		}
-
-		if (mapping_on) {
-			uint8_t kb[8], ms[4];
-
-			build_mapped(&p, kb, ms);
-			send(D_PAD, g_idle, 9, false);
-			send(D_KB, kb, 8, false);
-			send(D_MOUSE, ms, 4, ms[1] || ms[2]);
-		} else {
-			uint8_t g[9];
-
-			build_gamepad(&p, g);
-			send(D_PAD, g, 9, false);
-			send(D_KB, z8, 8, false);
-			send(D_MOUSE, z8, 4, false);
-		}
+		send(D_PAD, r.g, 9, false);
+		send(D_KB, r.kb, 8, false);
+		send(D_MOUSE, r.ms, 4, r.ms[1] || r.ms[2] || r.ms[3]);
 	}
 }
 
