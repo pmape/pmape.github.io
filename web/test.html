@@ -61,7 +61,15 @@ td:first-child{color:var(--mute);width:40%}
     <div class="fields" id="live"></div>
   </section>
 
-  <section class="card wide">
+  <section class="card">
+    <h2>Tablete giden klavye</h2>
+    <p class="hint" style="margin:0">Pad'e bastığında kartın tablete gönderdiği klavye tuşu burada çıkar.</p>
+    <div id="kbout" style="font-size:20px;font-weight:600;min-height:28px;margin-top:6px">—</div>
+    <p class="hint">Deneme ayarı: A=Boşluk · B=Esc · X=R · Y=Q · RB=F · LB=Shift · L3=Ctrl · R3=V · Start=Enter · Select=Tab · Yön tuşu=oklar · Sol çubuk=WASD · Sağ çubuk=fare · RT/LT=sol/sağ tık. Home+Select 1,5 sn: gamepad ↔ klavye/fare.</p>
+    <input placeholder="Buraya tıkla, sonra pad'de X veya Y'ye bas" style="width:100%;padding:8px;font-size:15px;box-sizing:border-box">
+  </section>
+
+  <section class="card wide" style="display:none">
     <h2>Tuş tanıma</h2>
     <div id="wiz"><p class="hint">Kontrolcü bağlanıp tuş haritası okununca başlatabilirsin.</p><button class="btn pri" id="wstart" disabled onclick="wizStart()">Tuş tanımayı başlat</button></div>
   </section>
@@ -219,6 +227,11 @@ function handle(ev){
     case 'stats':
       setSt('usb',ev.usb?'ok':'bad',ev.usb?`USB çıkışı hazır · mod: ${ev.mapping?'klavye + fare (yeşil)':'gamepad (mavi)'}`:'USB çıkışı hazır değil');
       $('stats').textContent=`Gelen tuş raporu: ${ev.rx} · gönderilen: ${ev.tx_ok} · hata: ${ev.tx_err} · meşgul: ${ev.tx_busy} · kilit açma: ${ev.unstuck}`;break;
+    case 'kb':{
+      const KN={4:'A',5:'B',6:'C',7:'D',8:'E',9:'F',10:'G',11:'H',12:'I',13:'J',14:'K',15:'L',16:'M',17:'N',18:'O',19:'P',20:'Q',21:'R',22:'S',23:'T',24:'U',25:'V',26:'W',27:'X',28:'Y',29:'Z',40:'Enter',41:'Esc',43:'Tab',44:'Boşluk',79:'→',80:'←',81:'↓',82:'↑'};
+      const parts=[];if(ev.mod&1)parts.push('Ctrl');if(ev.mod&2)parts.push('Shift');
+      ev.k.filter(x=>x).forEach(x=>parts.push(KN[x]||('#'+x)));
+      $('kbout').textContent=parts.length?parts.join(' + '):'—';break;}
     case 'mode':log(ev.mapping?'Eşleme AÇIK (klavye + fare)':'Eşleme KAPALI (gamepad)');break;
     case 'disconnected':setSt('pad','bad','Kontrolcü ayrıldı (kod '+ev.reason+')');break;
     case 'connect_failed':setSt('pad','bad','Bağlanamadı (kod '+ev.code+')');break;

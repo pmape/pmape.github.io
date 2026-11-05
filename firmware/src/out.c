@@ -74,7 +74,31 @@ static void in_ready(const struct device *dev)
 	}
 }
 
-static const struct hid_ops ops = { .int_in_ready = in_ready };
+/* Tablet klavye ışığı (NumLock vb.) bilgisini yollar; kabul et, yoksa bazı sistemler klavyeyi bırakır */
+static int set_report(const struct device *dev, struct usb_setup_packet *setup, int32_t *len, uint8_t **data)
+{
+	return 0;
+}
+
+static int get_report(const struct device *dev, struct usb_setup_packet *setup, int32_t *len, uint8_t **data)
+{
+	static uint8_t zero[9];
+
+	for (int i = 0; i < D_N; i++) {
+		if (hid[i] == dev) {
+			*data = zero;
+			*len = i == D_KB ? 8 : (i == D_MOUSE ? 4 : 9);
+			return 0;
+		}
+	}
+	return -ENOTSUP;
+}
+
+static const struct hid_ops ops = {
+	.int_in_ready = in_ready,
+	.set_report = set_report,
+	.get_report = get_report,
+};
 
 int out_usb_init(void)
 {
@@ -137,6 +161,10 @@ static void send(int i, const uint8_t *buf, uint8_t len, bool force)
 		return;
 	}
 	tx_ok++;
+	if (i == D_KB) {
+		OUT("{\"ev\":\"kb\",\"mod\":%u,\"k\":[%u,%u,%u,%u,%u,%u]}\n",
+		    buf[0], buf[2], buf[3], buf[4], buf[5], buf[6], buf[7]);
+	}
 	memcpy(last[i], buf, len);
 	last_len[i] = len;
 }
