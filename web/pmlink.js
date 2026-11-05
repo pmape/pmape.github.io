@@ -109,7 +109,7 @@ const PM = (() => {
   }
 
   async function openUsb() {
-    const dev = await navigator.usb.requestDevice({ filters: [{ vendorId: 0x2fe3 }] });
+    const dev = await navigator.usb.requestDevice({ filters: [] }); /* listede "PadMapper"ı seç */
     await dev.open();
     if (!dev.configuration) await dev.selectConfiguration(1);
     let ctrl = null, data = null, epIn = 0, epOut = 0;
