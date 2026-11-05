@@ -1,0 +1,27 @@
+name: Kart yazılımını derle
+
+on:
+  push:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container: nordicplayground/nrfconnect-sdk:v2.6-branch
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Derle (XIAO nRF52840)
+        shell: bash
+        run: |
+          mkdir -p /workdir/project
+          cp -r "$GITHUB_WORKSPACE/firmware/." /workdir/project/
+          cd /workdir/project
+          west build -b xiao_ble --pristine -d build .
+          mkdir -p "$GITHUB_WORKSPACE/out"
+          cp build/zephyr/zephyr.uf2 "$GITHUB_WORKSPACE/out/padmapper.uf2"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: padmapper-uf2
+          path: out/padmapper.uf2
