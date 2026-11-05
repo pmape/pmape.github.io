@@ -1,0 +1,826 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PadMapper – XIAO reWASD tarzı eşleme</title>
+<style>
+:root{
+  --bg:#121419; --panel:#1b1e25; --panel2:#242833; --line:#2f3442; --text:#e8eaef; --mute:#8b93a5;
+  --acc:#ff8a3d; --acc2:#3dd6c6; --l1:#ff5d6c; --l2:#5fd36a; --l3:#5b9bff; --warn:#ffcc4d;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{margin:0;background:var(--bg);color:var(--text);font:15px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+button,select,input,textarea{font:inherit;color:inherit}
+select,input[type=number],input[type=text],textarea{background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:6px 8px;min-height:36px}
+.btn{background:var(--panel2);border:1px solid var(--line);border-radius:9px;padding:6px 12px;min-height:36px;cursor:pointer}
+.btn:hover{border-color:var(--acc)}
+.btn.pri{background:var(--acc);border-color:var(--acc);color:#1a1205;font-weight:600}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.ico{width:38px;padding:0;font-size:18px}
+.hint{color:var(--mute);font-size:13px}
+
+/* üst */
+header{position:sticky;top:0;z-index:5;background:var(--panel);border-bottom:1px solid var(--line);padding:8px 10px;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.acts{display:flex;gap:6px;align-items:center;margin-left:auto}
+.acts .st8{font-size:13px;white-space:nowrap;padding:0 4px}
+.dirty{color:var(--warn)}.clean{color:var(--l2)}
+header b{color:var(--acc);font-size:16px;white-space:nowrap}
+header select{flex:1;min-width:0;max-width:240px}
+@media (max-width:520px){header b{display:none}}
+.st.off{opacity:.45}
+.layers{display:flex;gap:4px;width:100%}
+.layers button{border:1px solid var(--line);background:var(--panel2);border-radius:20px;padding:5px 11px;min-height:34px;cursor:pointer;font-size:13px;white-space:nowrap}
+.layers button.on{color:#111;font-weight:700}
+.layers button.on[data-l="0"]{background:var(--acc);border-color:var(--acc)}
+.layers button.on[data-l="1"]{background:var(--l1);border-color:var(--l1)}
+.layers button.on[data-l="2"]{background:var(--l2);border-color:var(--l2)}
+.layers button.on[data-l="3"]{background:var(--l3);border-color:var(--l3)}
+@media (max-width:620px){.layers button{flex:1}.acts{width:100%;margin-left:0}.acts .sp{flex:1}}
+
+main{align-items:start;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:10px;padding:10px;max-width:1200px;margin:0 auto}
+@media (max-width:860px){main{grid-template-columns:minmax(0,1fr)}}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:10px}
+
+/* kontrolcü */
+svg{width:100%;height:auto;display:block;max-height:46vh}
+.grip{fill:#232835;stroke:#394052;stroke-width:2}
+.b{cursor:pointer}
+.b .s{fill:#323846;stroke:#4a5266;stroke-width:2}
+.b.map .s{fill:#5a3a22;stroke:var(--acc)}
+.b.inh .s{fill:#332e25;stroke:#7a6a4a;stroke-dasharray:4 3}
+.b.sel .s{stroke:#fff;stroke-width:3}
+.lb{font-size:10.5px;font-weight:600;fill:var(--acc2);pointer-events:none;dominant-baseline:central}
+.lb.inh{fill:#9a8a62}
+.b text{fill:var(--text);font-size:13px;font-weight:700;text-anchor:middle;dominant-baseline:central;pointer-events:none}
+details.sum{margin-top:6px}
+details.sum summary{cursor:pointer;color:var(--mute);font-size:13px;padding:4px 2px}
+.chips{display:flex;flex-wrap:wrap;gap:5px;margin-top:6px}
+.chip{background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:3px 8px;font-size:12.5px;cursor:pointer}
+.chip b{color:var(--mute);font-weight:600;margin-right:4px}
+
+/* editör */
+.ehead{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.ehead h2{font-size:17px;margin:0}
+.tag{font-size:11px;padding:2px 8px;border-radius:20px;background:var(--panel2);border:1px solid var(--line);color:var(--mute)}
+.scroll{display:flex;gap:5px;overflow-x:auto;padding:8px 0 4px;scrollbar-width:none}
+.scroll::-webkit-scrollbar{display:none}
+.pill{position:relative;flex:none;border:1px solid var(--line);background:var(--panel2);border-radius:20px;padding:5px 12px;min-height:34px;cursor:pointer;font-size:13px}
+.pill.on{border-color:var(--acc);color:var(--acc);font-weight:600}
+.pill .dot{position:absolute;top:-2px;right:-2px;width:9px;height:9px;border-radius:50%;background:var(--acc2)}
+.seg{display:flex;border:1px solid var(--line);border-radius:9px;overflow:hidden}
+.seg button{flex:1;border:0;background:var(--panel2);padding:6px 8px;min-height:36px;cursor:pointer;font-size:13px}
+.seg button+button{border-left:1px solid var(--line)}
+.seg button.on{background:var(--acc);color:#1a1205;font-weight:700}
+.lbl{font-size:12px;color:var(--mute);text-transform:uppercase;letter-spacing:.5px;margin:12px 0 5px}
+.row{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+
+/* makro */
+.mac{display:flex;flex-direction:column}
+.st{display:flex;align-items:center;gap:6px;background:var(--panel2);border:1px solid var(--line);border-radius:9px;padding:5px 6px}
+.st .n{width:18px;text-align:center;color:var(--mute);font-size:12px;flex:none}
+.st select{flex:1;min-width:0}
+.st .a{flex:0 0 108px}
+.st .ty{flex:0 0 52px;padding:4px 2px;text-align:center}
+.x{background:none;border:0;color:var(--mute);cursor:pointer;width:30px;height:32px;border-radius:7px;font-size:15px;flex:none}
+.x:hover{color:var(--text);background:var(--bg)}
+.gap{display:flex;align-items:center;gap:6px;padding:3px 0 3px 26px;color:var(--mute);font-size:13px}
+.gap::before{content:"";width:2px;height:26px;background:var(--line);margin-right:6px}
+.gap input{width:76px;min-height:32px;padding:3px 6px;text-align:right}
+.gap .x{width:30px;height:30px;border:1px solid var(--line);background:var(--panel2);color:var(--text)}
+.gap.loop{color:var(--acc2)}
+.gap.loop::before{background:var(--acc2)}
+.empty{color:var(--mute);font-size:13px;padding:6px 2px}
+.explain{background:#17231f;border:1px solid #28463c;color:#bfeee2;border-radius:9px;padding:7px 10px;font-size:13px;margin-top:10px}
+.note{background:#2a2414;border:1px solid #5a4a1f;color:#f3dfa6;border-radius:9px;padding:7px 10px;font-size:13px;margin-top:8px}
+.k{display:inline-block;background:var(--bg);border:1px solid var(--line);border-bottom-width:2px;border-radius:5px;padding:0 5px;font-size:12px;margin:0 1px;font-family:ui-monospace,Consolas,monospace}
+.rec{background:#5a1f26!important;border-color:var(--l1)!important}
+input[type=range]{accent-color:var(--acc);flex:1;min-width:120px}
+.dir{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
+.dir label{display:flex;flex-direction:column;gap:2px;font-size:12px;color:var(--mute)}
+
+/* ayarlar paneli */
+.sheet{position:fixed;inset:0;background:#000a;z-index:20;display:none;align-items:flex-end;justify-content:center}
+.sheet.open{display:flex}
+.sheet .in{background:var(--panel);border:1px solid var(--line);border-radius:16px 16px 0 0;width:100%;max-width:560px;max-height:88vh;overflow:auto;padding:12px 14px 20px}
+@media (min-width:700px){.sheet{align-items:center}.sheet .in{border-radius:16px}}
+.dev{display:flex;align-items:center;gap:10px;background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:8px 10px;margin-top:6px;cursor:pointer}
+.dev:hover{border-color:var(--acc)}
+.dev.act{border-color:var(--acc2)}
+.dev .r{color:var(--acc2);font-size:16px;width:18px;text-align:center}
+.dev .ic{font-size:22px;width:28px;text-align:center}
+.dev.no{opacity:.5;cursor:default}
+.dev.no:hover{border-color:var(--line)}
+.bars{display:inline-flex;gap:2px;align-items:flex-end;height:14px;vertical-align:middle}
+.bars i{width:4px;background:var(--line);border-radius:1px}
+.bars i.on{background:var(--acc2)}
+.ok{color:var(--l2);font-size:12px}.bad{color:var(--mute);font-size:12px}
+.spin{display:inline-block;width:14px;height:14px;border:2px solid var(--line);border-top-color:var(--acc2);border-radius:50%;animation:sp 0.8s linear infinite;vertical-align:middle}
+@keyframes sp{to{transform:rotate(360deg)}}
+.prev{font-size:11px;padding:2px 8px;border-radius:20px;background:#3a2f12;color:var(--warn);border:1px solid #5a4a1f}
+.sheet h2{font-size:17px;margin:0;flex:1}
+.sec{border-top:1px solid var(--line);padding-top:4px;margin-top:10px}
+textarea{width:100%;min-height:140px;font-family:ui-monospace,Consolas,monospace;font-size:12px}
+#card{display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+#card .dot{width:9px;height:9px;border-radius:50%;background:var(--line);display:inline-block}
+#card .dot.on{background:var(--l2)}#card .dot.warn{background:var(--warn)}
+#toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:var(--acc2);color:#062a26;padding:8px 16px;border-radius:9px;font-weight:600;opacity:0;transition:opacity .2s;pointer-events:none;z-index:30}
+</style>
+</head>
+<body>
+<header>
+  <b>PadMapper</b>
+  <select id="profSel" title="Profil"></select>
+  <select id="outSel" title="Tablet bu cihazı ne olarak görsün (bu profil için)"></select>
+  <button class="btn" id="card" onclick="cardBtn()" title="Karta bağlan / bağlantıyı kes"><span class="dot"></span><span id="cardTxt">Kart</span></button>
+  <button class="btn ico" title="Ayarlar" onclick="openSheet()">⚙</button>
+  <div class="acts" id="acts"></div>
+  <div class="layers" id="layers"></div>
+</header>
+
+<main>
+  <section class="card">
+    <svg viewBox="0 0 640 292" id="pad"></svg>
+    <details class="sum" id="sumBox"><summary id="sumTitle"></summary><div class="chips" id="summary"></div></details>
+  </section>
+  <section class="card" id="panel"></section>
+</main>
+
+<div class="sheet" id="sheet" onclick="if(event.target===this)closeSheet()"><div class="in" id="sheetIn"></div></div>
+<div class="sheet" id="scan" onclick="if(event.target===this)closeScan()"><div class="in" id="scanIn"></div></div>
+<div id="toast"></div>
+
+<script>
+/* PadMapper: profilleri kartın anladığı biçime çevir + karta bağlan (bilgisayar: WebSerial, Android: WebUSB).
+ * Biçim firmware/src/engine.h'de. */
+const PM = (() => {
+  const HID = {};
+  'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('').forEach((c, i) => HID['Key' + c] = 4 + i);
+  '1234567890'.split('').forEach((c, i) => HID['Digit' + c] = 30 + i);
+  for (let i = 1; i <= 12; i++) HID['F' + i] = 57 + i;
+  Object.assign(HID, {
+    Enter: 40, Escape: 41, Backspace: 42, Tab: 43, Space: 44, Minus: 45, Equal: 46, BracketLeft: 47,
+    BracketRight: 48, Backslash: 49, Semicolon: 51, Quote: 52, Backquote: 53, Comma: 54, Period: 55,
+    Slash: 56, CapsLock: 57, Insert: 73, Home: 74, PageUp: 75, Delete: 76, End: 77, PageDown: 78,
+    ArrowRight: 79, ArrowLeft: 80, ArrowDown: 81, ArrowUp: 82, IntlBackslash: 100,
+    ControlLeft: 0xe0, ShiftLeft: 0xe1, AltLeft: 0xe2, MetaLeft: 0xe3,
+    ControlRight: 0xe4, ShiftRight: 0xe5, AltRight: 0xe6,
+  });
+  for (let i = 1; i <= 9; i++) HID['Numpad' + i] = 88 + i;
+  HID.Numpad0 = 98;
+
+  const BTN = { A: 0, B: 1, X: 3, Y: 4, LB: 6, RB: 7, LT: 8, RT: 9, SELECT: 10, START: 11, HOME: 12,
+    L3: 13, R3: 14, SHARE: 15, UP: 16, DOWN: 17, LEFT: 18, RIGHT: 19, M1: 20, M2: 21 };
+  const MOUSE = { left: 0, right: 1, middle: 2, back: 3, fwd: 4, wheelUp: 5, wheelDown: 6 };
+  const OUT = { kbm: 0, kb: 1, pad: 2, all: 3 };
+  const SM = { inherit: 0, off: 1, mouse: 2, keys: 3, scroll: 4, pad: 5 };
+  const TRIG = { single: 0, double: 1, long: 2, start: 3, release: 4 };
+  const MODE = { normal: 0, turbo: 1, toggle: 2 };
+  const ACTS = { press: 0, down: 1, up: 2 };
+
+  function compile(S) {
+    const b = [];
+    const u8 = v => b.push(v & 255);
+    const u16 = v => { v = Math.max(0, Math.min(65535, Math.round(+v || 0))); b.push(v & 255, v >> 8); };
+    const d = S.device;
+    const profs = S.profiles.map(p => p._applied ? JSON.parse(p._applied) : p).slice(0, 8);
+    b.push(80, 77, 1);
+    u8(d.startMode === 'pad' ? 1 : 0);
+    u8(BTN[d.comboA] ?? 12); u8(BTN[d.comboB] ?? 10);
+    u16(d.holdMs || 1500);
+    u8((d.profSwitch ? 1 : 0) | (d.passUnmapped !== false ? 2 : 0));
+    u8(profs.length); u8(0); u8(0); /* seçili profil ayrıca 'cs' ile gider */
+    for (const p of profs) {
+      u8(OUT[p.output || 'all']); u8(p.trigThr ?? 30); u16(p.longMs || 300); u16(p.doubleMs || 250);
+      for (const l of p.layers) for (const s of ['LS', 'RS']) {
+        const st = l.sticks[s] || { mode: 'off' };
+        u8(SM[st.mode] ?? 1); u8(st.sens || 8); u8(st.dead ?? 12);
+        for (const k of ['up', 'down', 'left', 'right']) u8(HID[st.keys && st.keys[k]] || 0);
+      }
+      const binds = [];
+      p.layers.forEach((l, li) => {
+        for (const id in l.btn) {
+          if (BTN[id] === undefined) continue;
+          for (const k in l.btn[id]) {
+            const a = l.btn[id][k];
+            if (!a || !(a.kind === 'layer' || (a.steps && a.steps.length))) continue;
+            let trig, other = 255;
+            if (k.startsWith('c_')) { trig = 5; other = BTN[k.slice(2)]; if (other === undefined) continue; }
+            else { trig = TRIG[k]; if (trig === undefined) continue; }
+            binds.push({ li, btn: BTN[id], trig, other, a });
+          }
+        }
+      });
+      u16(binds.length);
+      for (const { li, btn, trig, other, a } of binds) {
+        const steps = a.kind === 'layer' ? [] : a.steps.slice(0, 255);
+        u8(li); u8(btn); u8(trig); u8(other);
+        u8(a.kind === 'layer' ? 1 : 0); u8(MODE[a.mode] || 0); u16(a.turbo || 80);
+        u8(a.layer || 0); u8(a.how === 'toggle' ? 1 : 0); u8(steps.length);
+        for (const s of steps) {
+          if (s.t === 'key') { u8(0); u8(HID[s.k] || 0); }
+          else if (s.t === 'mouse') { u8(1); u8(MOUSE[s.b] ?? 0); }
+          else { u8(2); u8(BTN[s.p] ?? 0); }
+          u8(ACTS[s.a] ?? 0); u16(s.after || 0);
+        }
+      }
+    }
+    return new Uint8Array(b);
+  }
+
+  const CRC = (() => { const t = []; for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1; t[n] = c >>> 0; } return t; })();
+  function crc32(a) { let c = 0xffffffff; for (const x of a) c = CRC[(c ^ x) & 255] ^ (c >>> 8); return (c ^ 0xffffffff) >>> 0; }
+  const hex = a => Array.from(a, x => x.toString(16).padStart(2, '0')).join('');
+
+  /* ---------- bağlantı ---------- */
+  const link = { kind: null, onLine: () => {}, onClose: () => {}, info: null };
+  let buf = '', writer = null, usb = null, closing = false;
+  const enc = new TextEncoder(), dec = new TextDecoder();
+
+  function feed(text) {
+    buf += text;
+    let i;
+    while ((i = buf.indexOf('\n')) >= 0) {
+      const l = buf.slice(0, i).trim(); buf = buf.slice(i + 1);
+      if (!l.startsWith('{')) continue;
+      try { const ev = JSON.parse(l); if (ev.ev === 'hello') link.info = ev; link.onLine(ev); } catch (e) {}
+    }
+  }
+
+  async function openSerial() {
+    const port = await navigator.serial.requestPort({ filters: [{ usbVendorId: 0x2fe3 }] }).catch(() => navigator.serial.requestPort());
+    await port.open({ baudRate: 115200 });
+    try { await port.setSignals({ dataTerminalReady: true }); } catch (e) {}
+    writer = port.writable.getWriter();
+    link.kind = 'serial'; link.port = port;
+    (async () => {
+      const r = port.readable.getReader(); link.reader = r;
+      try { for (;;) { const { value, done } = await r.read(); if (done) break; feed(dec.decode(value)); } }
+      catch (e) {} finally { r.releaseLock(); if (!closing) link.onClose(); }
+    })();
+  }
+
+  async function openUsb() {
+    const dev = await navigator.usb.requestDevice({ filters: [{ vendorId: 0x2fe3 }] });
+    await dev.open();
+    if (!dev.configuration) await dev.selectConfiguration(1);
+    let ctrl = null, data = null, epIn = 0, epOut = 0;
+    for (const itf of dev.configuration.interfaces) {
+      const alt = itf.alternates[0];
+      if (alt.interfaceClass === 2 && ctrl === null) ctrl = itf.interfaceNumber;
+      if (alt.interfaceClass === 10 && data === null) {
+        data = itf.interfaceNumber;
+        for (const ep of alt.endpoints) { if (ep.type === 'bulk') { if (ep.direction === 'in') epIn = ep.endpointNumber; else epOut = ep.endpointNumber; } }
+      }
+    }
+    if (data === null) throw new Error('Kartın seri bağlantısı bulunamadı');
+    try { await dev.claimInterface(ctrl); } catch (e) {}
+    await dev.claimInterface(data);
+    const ctl = (req, val, body) => dev.controlTransferOut({ requestType: 'class', recipient: 'interface', request: req, value: val, index: ctrl }, body);
+    try { await ctl(0x20, 0, new Uint8Array([0x00, 0xc2, 0x01, 0x00, 0, 0, 8])); } catch (e) {}
+    try { await ctl(0x22, 1); } catch (e) {}
+    usb = { dev, epIn, epOut };
+    link.kind = 'usb';
+    (async () => {
+      try { for (;;) { const r = await dev.transferIn(epIn, 64); if (r.data && r.data.byteLength) feed(dec.decode(r.data)); } }
+      catch (e) {} finally { if (!closing) link.onClose(); }
+    })();
+  }
+
+  async function connect() {
+    closing = false; link.info = null; buf = '';
+    if ('serial' in navigator) await openSerial();
+    else if ('usb' in navigator) await openUsb();
+    else throw new Error('Bu tarayıcı karta bağlanamıyor. Chrome kullan.');
+    await sendLine('hello');
+  }
+
+  async function sendLine(l) {
+    const d = enc.encode(l + '\n');
+    if (link.kind === 'serial') await writer.write(d);
+    else if (link.kind === 'usb') for (let i = 0; i < d.length; i += 64) await usb.dev.transferOut(usb.epOut, d.slice(i, i + 64));
+    else throw new Error('Kart bağlı değil');
+  }
+
+  async function disconnect() {
+    closing = true;
+    try {
+      if (link.kind === 'serial') { try { await link.reader.cancel(); } catch (e) {} writer.releaseLock(); await link.port.close(); }
+      else if (link.kind === 'usb') await usb.dev.close();
+    } catch (e) {}
+    link.kind = null; link.info = null;
+  }
+
+  function waitEv(name, ms) {
+    return new Promise((res, rej) => {
+      const prev = link.onLine;
+      const t = setTimeout(() => { link.onLine = prev; rej(new Error('Kart cevap vermedi')); }, ms);
+      link.onLine = ev => { prev(ev); if (ev.ev === name) { clearTimeout(t); link.onLine = prev; res(ev); } };
+    });
+  }
+
+  async function writeConfig(S) {
+    const blob = compile(S);
+    const w = waitEv('cfg', 8000);
+    await sendLine('cb ' + blob.length);
+    for (let i = 0; i < blob.length; i += 200) { await sendLine('cd ' + hex(blob.slice(i, i + 200))); await new Promise(r => setTimeout(r, 15)); }
+    await sendLine('ce ' + crc32(blob).toString(16).padStart(8, '0'));
+    const r = await w;
+    if (!r.ok) throw new Error('Kart ayarı kabul etmedi (' + (r.err || '?') + ')');
+    await sendLine('cs ' + Math.min(S.cur, S.profiles.length - 1));
+    return { len: blob.length, crc: crc32(blob) };
+  }
+
+  return { compile, crc32, hex, link, connect, disconnect, sendLine, writeConfig,
+    connected: () => !!link.kind, supported: () => 'serial' in navigator || 'usb' in navigator };
+})();
+if (typeof module !== 'undefined') module.exports = PM;
+
+</script>
+<script>
+/* ---------- Sabitler ---------- */
+const LAYER_NAMES=['Ana','Shift 1','Shift 2','Shift 3'];
+const ACTS=[['single','Tek basış'],['double','Çift basış'],['long','Uzun basış'],['start','Basma anı'],['release','Bırakma']];
+const BTNS=[
+  {id:'LT',name:'LT',sh:'r',x:40,y:6,w:130,h:22,t:'LT'},
+  {id:'LB',name:'LB',sh:'r',x:40,y:32,w:130,h:20,t:'LB'},
+  {id:'RT',name:'RT',sh:'r',x:470,y:6,w:130,h:22,t:'RT'},
+  {id:'RB',name:'RB',sh:'r',x:470,y:32,w:130,h:20,t:'RB'},
+  {id:'LS',name:'Sol analog',sh:'c',x:90,y:115,r:34,t:'L',stick:1},
+  {id:'L3',name:'L3 (sol analoga basma)',sh:'r',x:70,y:155,w:40,h:20,t:'L3'},
+  {id:'UP',name:'Yön yukarı',sh:'r',x:178,y:158,w:26,h:28,t:'▲'},
+  {id:'DOWN',name:'Yön aşağı',sh:'r',x:178,y:212,w:26,h:26,t:'▼'},
+  {id:'LEFT',name:'Yön sol',sh:'r',x:148,y:186,w:30,h:26,t:'◀'},
+  {id:'RIGHT',name:'Yön sağ',sh:'r',x:204,y:186,w:30,h:26,t:'▶'},
+  {id:'SELECT',name:'Select',sh:'c',x:262,y:90,r:12,t:'⧉'},
+  {id:'HOME',name:'Home',sh:'c',x:262,y:140,r:14,t:'⌂'},
+  {id:'START',name:'Start',sh:'c',x:378,y:90,r:12,t:'≡'},
+  {id:'SHARE',name:'Ekran görüntüsü',sh:'c',x:378,y:140,r:12,t:'◉'},
+  {id:'Y',name:'Y',sh:'c',x:548,y:82,r:18,t:'Y'},
+  {id:'X',name:'X',sh:'c',x:512,y:118,r:18,t:'X'},
+  {id:'B',name:'B',sh:'c',x:584,y:118,r:18,t:'B'},
+  {id:'A',name:'A',sh:'c',x:548,y:154,r:18,t:'A'},
+  {id:'RS',name:'Sağ analog',sh:'c',x:450,y:192,r:34,t:'R',stick:1},
+  {id:'R3',name:'R3 (sağ analoga basma)',sh:'r',x:520,y:200,w:40,h:20,t:'R3'},
+  {id:'M1',name:'M1 (arka)',sh:'r',x:62,y:250,w:56,h:22,t:'M1'},
+  {id:'M2',name:'M2 (arka)',sh:'r',x:522,y:250,w:56,h:22,t:'M2'},
+];
+const LPOS={LT:[164,17,'end'],LB:[164,42,'end'],RT:[594,17,'end'],RB:[594,42,'end'],LS:[90,72,'middle'],L3:[114,165,'start'],UP:[191,151,'middle'],DOWN:[191,251,'middle'],LEFT:[144,199,'end'],RIGHT:[238,199,'start'],SELECT:[262,110,'middle'],HOME:[262,164,'middle'],START:[378,110,'middle'],SHARE:[378,161,'middle'],Y:[548,57,'middle'],X:[490,118,'end'],B:[606,118,'start'],A:[548,181,'middle'],RS:[412,192,'end'],R3:[540,232,'middle'],M1:[122,261,'start'],M2:[518,261,'end']};
+const BY_ID=Object.fromEntries(BTNS.map(b=>[b.id,b]));
+const actList=bd=>{const l=ACTS.slice();if(bd)for(const k of Object.keys(bd))if(k.startsWith('c_')&&BY_ID[k.slice(2)])l.push([k,'＋'+BY_ID[k.slice(2)].t]);return l;};
+const actName=k=>k.startsWith('c_')?BY_ID[k.slice(2)].name+' ile birlikte basış':ACTS.find(x=>x[0]===k)[1];
+const KEYS=[];
+'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('').forEach(c=>KEYS.push(['Key'+c,c]));
+'1234567890'.split('').forEach(c=>KEYS.push(['Digit'+c,c]));
+for(let i=1;i<=12;i++)KEYS.push(['F'+i,'F'+i]);
+[['Space','Boşluk'],['Enter','Enter'],['Escape','Esc'],['Tab','Tab'],['Backspace','Geri sil'],['ShiftLeft','Sol Shift'],['ControlLeft','Sol Ctrl'],['AltLeft','Sol Alt'],['ShiftRight','Sağ Shift'],['ControlRight','Sağ Ctrl'],['AltRight','AltGr'],['MetaLeft','Win / Meta'],['CapsLock','Caps Lock'],['ArrowUp','↑'],['ArrowDown','↓'],['ArrowLeft','←'],['ArrowRight','→'],['Insert','Insert'],['Delete','Delete'],['Home','Home'],['End','End'],['PageUp','Page Up'],['PageDown','Page Down'],['Minus','-'],['Equal','='],['BracketLeft','['],['BracketRight',']'],['Semicolon',';'],['Quote',"'"],['Backquote','`'],['Backslash','\\'],['Comma',','],['Period','.'],['Slash','/'],['IntlBackslash','< >']].forEach(k=>KEYS.push(k));
+for(let i=0;i<=9;i++)KEYS.push(['Numpad'+i,'Num '+i]);
+const KEY_LABEL=Object.fromEntries(KEYS);
+/* Türkçe Q düzeninde aynı fiziksel tuşun yazdığı karakter */
+const TRQ={KeyI:'I',Quote:'İ',Semicolon:'Ş',BracketLeft:'Ğ',BracketRight:'Ü',Comma:'Ö',Period:'Ç',Slash:'.',Backslash:',',Minus:'*',Equal:'-',Backquote:'"',IntlBackslash:'<'};
+const keyName=c=>(S&&S.device&&S.device.layout!=='us'&&TRQ[c])||KEY_LABEL[c]||c;
+const MOUSE=[['left','Sol tık'],['right','Sağ tık'],['middle','Orta tık'],['back','Yan geri'],['fwd','Yan ileri'],['wheelUp','Tekerlek yukarı'],['wheelDown','Tekerlek aşağı']];
+const PAD=[['A','A'],['B','B'],['X','X'],['Y','Y'],['LB','LB'],['RB','RB'],['LT','LT'],['RT','RT'],['SELECT','Select'],['START','Start'],['HOME','Home'],['L3','L3'],['R3','R3'],['UP','Yön yukarı'],['DOWN','Yön aşağı'],['LEFT','Yön sol'],['RIGHT','Yön sağ']];
+const PAD_LABEL=Object.fromEntries(PAD);
+const TYPES=[['key','⌨'],['mouse','🖱'],['pad','🎮']];
+const OUTS=[['kbm','⌨🖱 Klavye + Fare'],['kb','⌨ Sadece klavye'],['pad','🎮 Gamepad'],['all','⌨🖱🎮 Hepsi']];
+const OUT_ALLOW={kbm:['key','mouse'],kb:['key'],pad:['pad'],all:['key','mouse','pad']};
+const OUT_NAME={kbm:'klavye + fare',kb:'sadece klavye',pad:'gamepad',all:'klavye + fare + gamepad'};
+const TYPE_NAME={key:'⌨ klavye',mouse:'🖱 fare',pad:'🎮 gamepad'};
+const ok=t=>OUT_ALLOW[P().output||'all'].includes(t);
+const STICK_NEED={mouse:'mouse',scroll:'mouse',keys:'key',pad:'pad'};
+const MOUSE_LABEL=Object.fromEntries(MOUSE);
+const KACT=[['press','Bas-bırak'],['down','Basılı tut'],['up','Bırak']];
+
+/* ---------- Veri ---------- */
+const act=()=>({kind:'combo',mode:'normal',turbo:80,steps:[],layer:1,how:'hold'});
+const stick=m=>({mode:m,sens:8,dead:12,keys:{up:'KeyW',down:'KeyS',left:'KeyA',right:'KeyD'}});
+const newLayer=main=>({btn:{},sticks:{LS:stick(main?'keys':'inherit'),RS:stick(main?'mouse':'inherit')}});
+const newProf=name=>({name,output:'all',longMs:300,doubleMs:250,trigThr:30,gapMs:50,layers:[newLayer(true),newLayer(),newLayer(),newLayer()]});
+function demoProf(){
+  const p=newProf('Örnek');
+  const k=(c,after=50)=>({t:'key',k:c,a:'press',after});
+  const a=act();a.steps=[k('KeyZ')];p.layers[0].btn.A={single:a};
+  const c=act();c.steps=[k('KeyZ',40),k('KeyX',40),k('KeyC',1000),k('KeyV')];p.layers[0].btn.LB={single:c};
+  const t=act();t.mode='turbo';t.turbo=60;t.steps=[{t:'mouse',b:'left',a:'press',after:50}];p.layers[0].btn.RT={single:t};
+  const s=act();s.kind='layer';s.layer=1;p.layers[0].btn.M1={single:s};
+  const q=act();q.steps=[k('KeyQ')];p.layers[1].btn.A={single:q};
+  return p;
+}
+/* eski kayıtlardaki "bekle" satırlarını önceki tuşun bekleme süresine çevir */
+function migrate(p){
+  p.gapMs=p.gapMs||50;
+  for(const l of p.layers)for(const id in l.btn)for(const k of Object.keys(l.btn[id])){
+    const a=l.btn[id][k];if(!a||!a.steps)continue;
+    const out=[];
+    for(const s of a.steps){
+      if(s.t==='wait'){if(out.length)out[out.length-1].after+=s.ms;continue;}
+      if(s.t==='wheel'){out.push({t:'mouse',b:s.d>0?'wheelUp':'wheelDown',a:'press',after:s.after||0});continue;}
+      out.push(Object.assign({after:0},s));
+    }
+    a.steps=out;
+  }
+  return p;
+}
+let S;
+try{S=JSON.parse(localStorage.getItem('padmapper_v1'))}catch(e){S=null}
+if(!S||!S.profiles||!S.profiles.length)S={cur:0,profiles:[demoProf()]};
+S.profiles.forEach(migrate);
+if(!S.device)S.device={startMode:'map',comboA:'HOME',comboB:'SELECT',holdMs:1500,profSwitch:true};
+if(S.device.passUnmapped===undefined)S.device.passUnmapped=true;
+if(!S.device.ctrls)S.device.ctrls=[{name:'BSP-D8Pro',addr:'03:24:00:D8:06:04',active:true}];
+let ui={sel:'A',layer:0,act:'single'};
+let rec=null;
+
+const P=()=>S.profiles[S.cur];
+const L=()=>P().layers[ui.layer];
+function save(){try{localStorage.setItem('padmapper_v1',JSON.stringify(S))}catch(e){}renderCard();}
+const snap=(p,ind)=>JSON.stringify(p,(k,v)=>k==='_applied'?undefined:v,ind);
+const dirty=p=>p._applied!==snap(p);
+S.profiles.forEach(p=>{if(p._applied===undefined)p._applied=snap(p);});
+if(S.device.autoApply===undefined)S.device.autoApply=false;
+if(!S.device.layout)S.device.layout='tr';
+function renderActs(){
+  const p=P(),d=dirty(p),auto=S.device.autoApply;
+  document.getElementById('acts').innerHTML=auto
+    ?`<span class="st8 clean">⚡ Otomatik uygulanıyor</span><span class="sp"></span><button class="btn" onclick="resetProf()">Sıfırla</button>`
+    :`<span class="st8 ${d?'dirty':'clean'}">${d?'● Uygulanmadı':'✓ Uygulandı'}</span><span class="sp"></span>
+      <button class="btn" ${d?'':'disabled'} onclick="revert()" title="Son uygulanan hale dön">Geri al</button>
+      <button class="btn" onclick="resetProf()" title="Bu profildeki bütün atamaları sil">Sıfırla</button>
+      <button class="btn pri" ${d?'':'disabled'} onclick="apply()">Uygula</button>`;
+}
+function apply(){P()._applied=snap(P());render();if(PM.connected())writeCard();else toast('Uygulandı. Kart bağlanınca yazılacak');}
+function revert(){const p=P();if(!p._applied)return;const r=JSON.parse(p._applied);r._applied=p._applied;S.profiles[S.cur]=r;render();toast('Son uygulanan hale dönüldü');}
+async function resetProf(){const p=P();if(!await ask(`"${p.name}" profilindeki bütün atamalar silinsin mi? (Ad ve cihaz türü kalır)`,null))return;
+  const n=newProf(p.name);n.output=p.output;n._applied=p._applied;S.profiles[S.cur]=n;ui.layer=0;render();toast('Profil sıfırlandı');}
+const isSet=a=>a&&(a.kind==='layer'||(a.steps&&a.steps.length));
+const bindSet=b=>b&&actList(b).some(([k])=>isSet(b[k]));
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const fmtMs=ms=>ms>=1000?(ms/1000).toFixed(ms%1000?2:1).replace('.',',')+' sn':ms+' ms';
+
+/* ---------- Kısa açıklamalar ---------- */
+function stepLabel(s){
+  if(s.t==='key')return `<span class="k">${esc(keyName(s.k))}</span>`;
+  if(s.t==='mouse')return `<span class="k">${MOUSE_LABEL[s.b]}</span>`;
+  if(s.t==='pad')return `<span class="k">🎮${esc(PAD_LABEL[s.p])}</span>`;
+  return '';
+}
+function descAct(a){
+  if(!isSet(a))return '';
+  if(a.kind==='layer')return `→ ${LAYER_NAMES[a.layer]}`;
+  const p=a.steps.map(stepLabel);
+  let s=p.length>4?p.slice(0,4).join('')+'…':p.join('');
+  if(a.mode==='turbo')s='⚡'+s;
+  if(a.mode==='toggle')s='⇄'+s;
+  return s;
+}
+function descStick(st){
+  if(!st||st.mode==='inherit'||st.mode==='off')return '';
+  if(st.mode==='mouse')return 'Fare';
+  if(st.mode==='scroll')return 'Tekerlek';
+  if(st.mode==='pad')return '🎮 Çubuk';
+  return ['up','left','down','right'].map(d=>`<span class="k">${esc(st.keys[d]?keyName(st.keys[d]):'—')}</span>`).join('');
+}
+
+/* ---------- Kontrolcü ---------- */
+const MSHORT={left:'Sol tık',right:'Sağ tık',middle:'Orta tık',back:'Geri',fwd:'İleri',wheelUp:'Teker↑',wheelDown:'Teker↓'};
+function shortAct(a){
+  if(a.kind==='layer')return a.layer?'→S'+a.layer:'→Ana';
+  const s=a.steps[0];let t=a.steps.length>1?'Makro':s.t==='key'?keyName(s.k):s.t==='mouse'?MSHORT[s.b]:'🎮'+s.p;
+  if(t.length>8)t=t.slice(0,7)+'…';
+  return (a.mode==='turbo'?'⚡':a.mode==='toggle'?'⇄':'')+t;
+}
+function shortBind(bd){const l=actList(bd).filter(([k])=>isSet(bd[k]));if(!l.length)return '';return shortAct(bd[l[0][0]])+(l.length>1?' +'+(l.length-1):'');}
+function shortStick(st){
+  if(st.mode==='mouse')return 'Fare';if(st.mode==='scroll')return 'Teker';if(st.mode==='pad')return '🎮';if(st.mode!=='keys')return '';
+  const k=['up','left','down','right'].map(d=>keyName(st.keys[d]));return k.every(x=>x.length===1)?k.join(''):'Tuşlar';
+}
+function drawPad(){
+  let h=`<path class="grip" d="M40,60 Q14,60 14,95 L14,220 Q14,286 84,286 Q148,286 172,246 L296,246 L296,60 Z"/>
+  <path class="grip" d="M600,60 Q626,60 626,95 L626,220 Q626,286 556,286 Q492,286 468,246 L344,246 L344,60 Z"/>
+  <line x1="296" y1="70" x2="344" y2="70" stroke="#394052" stroke-width="3"/>
+  <line x1="296" y1="236" x2="344" y2="236" stroke="#394052" stroke-width="3"/>`;
+  for(const b of BTNS){
+    const sh=b.sh==='c'?`<circle class="s" cx="${b.x}" cy="${b.y}" r="${b.r}"/>`:`<rect class="s" x="${b.x}" y="${b.y}" width="${b.w}" height="${b.h}" rx="6"/>`;
+    const cx=b.sh==='c'?b.x:b.x+b.w/2,cy=b.sh==='c'?b.y:b.y+b.h/2;
+    const inner=b.stick?`<circle cx="${b.x}" cy="${b.y}" r="${b.r*.55}" fill="none" stroke="#4a5266" stroke-width="2" pointer-events="none"/>`:'';
+    h+=`<g class="b" id="b-${b.id}" onclick="pick('${b.id}')"><title>${esc(b.name)}</title>${sh}${inner}<text x="${cx}" y="${cy}">${b.t}</text></g>`;
+  }
+  for(const b of BTNS){const [x,y,an]=LPOS[b.id];h+=`<text class="lb" id="l-${b.id}" x="${x}" y="${y}" text-anchor="${an}"></text>`;}
+  document.getElementById('pad').innerHTML=h;
+}
+function paintPad(){
+  for(const b of BTNS){
+    const g=document.getElementById('b-'+b.id);let mapped,inh=false;
+    if(b.stick){const st=L().sticks[b.id];mapped=st.mode!=='inherit'&&st.mode!=='off';
+      if(ui.layer>0&&st.mode==='inherit')inh=P().layers[0].sticks[b.id].mode!=='off';}
+    else{const bd=L().btn[b.id];mapped=bindSet(bd);
+      if(ui.layer>0&&!mapped&&!(bd&&bd.noInherit))inh=bindSet(P().layers[0].btn[b.id]);}
+    const lb=document.getElementById('l-'+b.id);
+    const src=b.stick?(mapped?L().sticks[b.id]:inh?P().layers[0].sticks[b.id]:null):(mapped?L().btn[b.id]:inh?P().layers[0].btn[b.id]:null);
+    lb.textContent=src?(b.stick?shortStick(src):shortBind(src)):'';lb.classList.toggle('inh',!mapped&&inh);
+    g.classList.toggle('map',!!mapped);g.classList.toggle('inh',!mapped&&inh);g.classList.toggle('sel',ui.sel===b.id);
+  }
+}
+function renderTop(){
+  const ps=document.getElementById('profSel');
+  ps.innerHTML=S.profiles.map((p,i)=>`<option value="${i}" ${i===S.cur?'selected':''}>${esc(p.name)}</option>`).join('');
+  ps.onchange=()=>{S.cur=+ps.value;render();if(cardSynced())PM.sendLine('cs '+S.cur).catch(()=>{});};
+  const os=document.getElementById('outSel');
+  os.innerHTML=opt(OUTS,P().output||'all');
+  os.onchange=()=>{P().output=os.value;render();toast('Tablet bunu '+OUT_NAME[os.value]+' olarak görecek');};
+  document.getElementById('layers').innerHTML=LAYER_NAMES.map((n,i)=>`<button data-l="${i}" class="${i===ui.layer?'on':''}" onclick="ui.layer=${i};render()">${n}</button>`).join('');
+}
+function renderSummary(){
+  let n=0,h='';
+  for(const b of BTNS){
+    let t='';
+    if(b.stick)t=descStick(L().sticks[b.id]);
+    else{const bd=L().btn[b.id];if(bindSet(bd))t=actList(bd).filter(([k])=>isSet(bd[k])).map(([k,n])=>(k.startsWith('c_')?`<b>${n}:</b>`:'')+descAct(bd[k])).join(' · ');}
+    if(t){n++;h+=`<span class="chip" onclick="pick('${b.id}')"><b>${esc(b.t.length<3?b.t:b.name)}</b>${t}</span>`;}
+  }
+  document.getElementById('sumTitle').textContent=`${LAYER_NAMES[ui.layer]} katmanın atamaları (${n})`;
+  document.getElementById('summary').innerHTML=h||'<span class="empty">Bu katmanda atama yok.</span>';
+}
+
+/* ---------- Editör ---------- */
+const keySel=(v,on)=>`<select onchange="${on}">${KEYS.map(([c])=>`<option value="${c}" ${c===v?'selected':''}>${esc(keyName(c))}</option>`).join('')}</select>`;
+const opt=(list,v)=>list.map(([a,n])=>`<option value="${a}" ${a===v?'selected':''}>${n}</option>`).join('');
+function gapRow(val,on,loop){
+  return `<div class="gap${loop?' loop':''}"><span>${loop?'↻ tekrar arası':'⏱ sonra bekle'}</span>
+    <button class="x" onclick="${on}(-1)">−</button><input type="number" min="0" max="60000" step="10" value="${val}" onchange="${on}(0,this.value)"><button class="x" onclick="${on}(1)">+</button><span>ms${val>=1000?' ('+fmtMs(val)+')':''}</span></div>`;
+}
+function renderPanel(){
+  const b=BY_ID[ui.sel],el=document.getElementById('panel');
+  const head=`<div class="ehead"><h2>${esc(b.name)}</h2><span class="tag">${LAYER_NAMES[ui.layer]} katman</span></div>`;
+  if(b.stick){el.innerHTML=head+stickPanel(b);return;}
+  const bd=L().btn[b.id]||(L().btn[b.id]={});
+  if(ui.act.startsWith('c_')&&(!bd[ui.act]||ui.act==='c_'+b.id))ui.act='single';
+  let h=head;
+  const pills=`<div class="scroll">${actList(bd).map(([k,n])=>`<button class="pill ${k===ui.act?'on':''}" onclick="ui.act='${k}';render()">${n}${isSet(bd[k])?'<span class="dot"></span>':''}</button>`).join('')}<button class="pill ${ui.act==='_new'?'on':''}" onclick="ui.act='_new';render()">＋ Birleşim</button></div>`;
+  if(ui.act==='_new'){
+    const others=BTNS.filter(x=>!x.stick&&x.id!==b.id&&!bd['c_'+x.id]);
+    h+=pills+`<div class="lbl">${esc(b.name)} hangi tuşla birlikte basılınca?</div><div class="chips">${others.map(x=>{const there=L().btn[x.id]&&L().btn[x.id]['c_'+b.id];
+      return `<span class="chip" style="padding:8px 12px;font-size:14px" onclick="${there?`ui.sel='${x.id}';ui.act='c_${b.id}'`:`cur()['c_${x.id}']=act();ui.act='c_${x.id}'`};render()">${esc(x.t)}${there?' <span class="hint">(orada var)</span>':''}</span>`;}).join('')}</div>
+      <div class="explain">Örneğin LB seçersen: <b>${esc(b.t)} + LB</b> birlikte basılınca ayrı bir tuş ya da makro gönderilir. Tek başlarına basılınca kendi ayarları çalışmaya devam eder.</div>`;
+    el.innerHTML=h;return;
+  }
+  const a=bd[ui.act]||(bd[ui.act]=act());
+  if(ui.layer>0&&!bindSet(bd)){
+    const m=P().layers[0].btn[b.id];
+    h+=`<div class="note">${bd.noInherit?'Bu katmanda bu tuş hiçbir şey yapmaz.':bindSet(m)?'Boş: Ana katmandaki ayar geçerli ('+descAct(m[actList(m).find(([k])=>isSet(m[k]))[0]])+').':'Boş: Ana katmanda da atama yok.'}
+      <label style="display:block;margin-top:4px"><input type="checkbox" ${bd.noInherit?'checked':''} onchange="cur().noInherit=this.checked;render()"> Ana katmandan devralma</label></div>`;
+  }
+  h+=pills;
+  if(ui.act.startsWith('c_')){const o=BY_ID[ui.act.slice(2)];
+    h+=`<div class="note" style="background:#16222e;border-color:#2b4660;color:#cfe3ff"><b>${esc(b.t)} + ${esc(o.t)}</b> birlikte basılınca çalışır. O sırada iki tuşun tek başına ayarları gönderilmez.
+      <div style="margin-top:6px"><button class="btn" onclick="delete cur()['${ui.act}'];ui.act='single';render()">Birleşimi sil</button></div></div>`;}
+  if((ui.act==='single'||ui.act==='double')&&isSet(bd.single)&&isSet(bd.double))h+=`<div class="note">Bu tuşta hem tek hem çift basış var. Kart ikinci basışı beklediği için tek basış yaklaşık ${P().doubleMs} ms gecikmeli gider.</div>`;
+  h+=`<div class="seg" style="margin-top:4px"><button class="${a.kind==='combo'?'on':''}" onclick="curA().kind='combo';render()">Tuş / Makro</button><button class="${a.kind==='layer'?'on':''}" onclick="curA().kind='layer';render()">Katman değiştir</button></div>`;
+  if(a.kind==='layer'){
+    h+=`<div class="lbl">Hangi katman</div><div class="seg">${LAYER_NAMES.map((n,i)=>`<button class="${i===a.layer?'on':''}" onclick="curA().layer=${i};render()">${n}</button>`).join('')}</div>
+      <div class="lbl">Nasıl</div><div class="seg"><button class="${a.how==='hold'?'on':''}" onclick="curA().how='hold';render()">Basılıyken</button><button class="${a.how==='toggle'?'on':''}" onclick="curA().how='toggle';render()">Bas aç / bas kapat</button></div>
+      ${a.how==='toggle'&&a.layer>0&&!hasExit(a.layer)?`<div class="note">${LAYER_NAMES[a.layer]} katmanında geri dönüş tuşu yok. O katmana geçince orada takılı kalırsın. ${LAYER_NAMES[a.layer]} katmanında bir tuşa "Katman değiştir → Ana" ata.</div>`:''}
+      <div class="explain">${a.how==='hold'?`Basılı tuttuğun sürece bütün tuşlar <b>${LAYER_NAMES[a.layer]}</b> katmanındaki gibi çalışır.`:`Bir kez basınca <b>${LAYER_NAMES[a.layer]}</b> katmanına geçilir ve orada kalınır.`}</div>`;
+    el.innerHTML=h;return;
+  }
+  /* makro listesi */
+  const loop=a.mode==='turbo'||(a.mode==='toggle'&&a.steps.length>0);
+  h+=`<div class="lbl">Makro</div><div class="mac">`;
+  if(!a.steps.length)h+=`<div class="empty">Boş. Aşağıdan tuş ekle.</div>`;
+  a.steps.forEach((s,i)=>{
+    h+=`<div class="st${ok(s.t)?'':' off'}"><span class="n">${i+1}</span>`;
+    h+=`<select class="ty" title="Klavye / Fare / Gamepad" onchange="setType(${i},this.value)">${opt(TYPES,s.t)}</select>`;
+    const actSel=`<select class="a" onchange="setStep(${i},'a',this.value)">${opt(KACT,s.a)}</select>`;
+    if(s.t==='key')h+=keySel(s.k,`setStep(${i},'k',this.value)`)+actSel;
+    else if(s.t==='mouse')h+=`<select onchange="setStep(${i},'b',this.value)">${opt(MOUSE,s.b)}</select>`+(s.b.startsWith('wheel')?'':actSel);
+    else if(s.t==='pad')h+=`<select onchange="setStep(${i},'p',this.value)">${opt(PAD,s.p)}</select>`+actSel;
+    h+=`<button class="x" title="Yukarı taşı" onclick="mv(${i},-1)">↑</button><button class="x" title="Sil" onclick="rm(${i})">✕</button></div>`;
+    if(i<a.steps.length-1)h+=gapRow(s.after,`gap.bind(null,${i})`);
+  });
+  if(loop)h+=gapRow(a.turbo,'loopGap',true);
+  h+=`</div><div class="row" style="margin-top:8px">
+    ${['key','mouse','pad'].filter(ok).map(t=>`<button class="btn" onclick="add('${t}')">+ ${TYPE_NAME[t].replace(/^(\S+) (.)/,(m,a,b)=>a+' '+b.toUpperCase())}</button>`).join('')}
+    <button class="btn ${rec?'rec':''}" onclick="toggleRec()" title="Bilgisayar klavyesinde basarak kaydet">${rec?'■ Durdur':'● Kaydet'}</button></div>`;
+  if(a.steps.length>2)h+=`<div class="row" style="margin-top:6px"><span class="hint">Hepsinin arası</span><input type="number" id="allGap" min="0" max="60000" step="10" value="${P().gapMs}" style="width:84px"><span class="hint">ms</span><button class="btn" onclick="setAll()">Uygula</button></div>`;
+  h+=`<div class="lbl">Tekrar</div><div class="seg"><button class="${a.mode==='normal'?'on':''}" onclick="curA().mode='normal';render()">Normal</button><button class="${a.mode==='turbo'?'on':''}" onclick="curA().mode='turbo';render()">Turbo</button><button class="${a.mode==='toggle'?'on':''}" onclick="curA().mode='toggle';render()">Toggle</button></div>`;
+  if(b.id==='LT'||b.id==='RT')h+=`<div class="lbl">Tetik eşiği</div><div class="row"><input type="range" min="5" max="95" value="${P().trigThr}" oninput="P().trigThr=+this.value;this.nextElementSibling.textContent=this.value+'%'" onchange="render()"><span>${P().trigThr}%</span></div>`;
+  h+=`<div class="explain">${explain(a,b)}</div>`;
+  const bad=[...new Set(a.steps.filter(s=>!ok(s.t)).map(s=>TYPE_NAME[s.t]))];
+  if(bad.length)h+=`<div class="note">Bu profilde tablet cihazı <b>${OUT_NAME[P().output||'all']}</b> olarak görüyor. Soluk satırlardaki ${bad.join(', ')} adımları gönderilmez. Üstteki seçiciden değiştirebilirsin.</div>`;
+  el.innerHTML=h;
+}
+function explain(a,b){
+  const an=actName(ui.act).toLowerCase();
+  if(!a.steps.length)return `${esc(b.name)} için ${an} boş.`;
+  const seq=a.steps.map(stepLabel).join(' › ');
+  const single=a.steps.length===1&&a.steps[0].a==='press'&&!(a.steps[0].b||'').startsWith('wheel');
+  if(a.mode==='turbo')return `Basılı durdukça ${seq} tekrar eder, her tekrar arası ${fmtMs(a.turbo)}.`;
+  if(a.mode==='toggle')return single?`Bir bas: ${seq} basılı kalır. Bir daha bas: bırakılır.`:`Bir bas: ${seq} tekrar etmeye başlar. Bir daha bas: durur.`;
+  if(single&&ui.act==='single')return `${esc(b.name)} basılıyken ${seq} de basılı kalır.`;
+  if(ui.act.startsWith('c_'))return `${esc(b.t)} + ${esc(BY_ID[ui.act.slice(2)].t)} birlikte basılınca ${seq} bir kez gönderilir.`;
+  return `${an.charAt(0).toUpperCase()+an.slice(1)} olunca ${seq} bir kez gönderilir.`;
+}
+function stickPanel(b){
+  const st=L().sticks[b.id];
+  const modes=[['off','Kapalı'],['mouse','🖱 Fare'],['keys','⌨ Tuşlar'],['scroll','Tekerlek'],['pad','🎮 Gamepad']];
+  if(ui.layer>0)modes.unshift(['inherit','Ana gibi']);
+  let h=`<div class="lbl">Ne yapsın</div><div class="seg">${modes.map(([v,n])=>{const dis=STICK_NEED[v]&&!ok(STICK_NEED[v]);return `<button class="${st.mode===v?'on':''}" ${dis?'disabled style="opacity:.35" title="Bu profilin cihaz türünde yok"':''} onclick="curS().mode='${v}';render()">${n}</button>`;}).join('')}</div>`;
+  if(STICK_NEED[st.mode]&&!ok(STICK_NEED[st.mode]))h+=`<div class="note">Bu profilde tablet cihazı <b>${OUT_NAME[P().output||'all']}</b> olarak görüyor, bu çubuk ayarı çalışmaz. Başka bir seçenek seç.</div>`;
+  if(st.mode==='mouse'||st.mode==='scroll')h+=`<div class="lbl">Hız</div><div class="row"><input type="range" min="1" max="30" value="${st.sens}" oninput="curS().sens=+this.value;this.nextElementSibling.textContent=this.value" onchange="render()"><span>${st.sens}</span></div>`;
+  if(st.mode!=='inherit'&&st.mode!=='off')h+=`<div class="lbl">Ölü bölge</div><div class="row"><input type="range" min="0" max="50" value="${st.dead}" oninput="curS().dead=+this.value;this.nextElementSibling.textContent=this.value+'%'" onchange="render()"><span>${st.dead}%</span></div>`;
+  if(st.mode==='keys'){
+    const c=(d,n)=>`<label>${n}${keySel(st.keys[d],`curS().keys.${d}=this.value;render()`)}</label>`;
+    h+=`<div class="lbl">Yönler</div><div class="dir"><span></span>${c('up','Yukarı')}<span></span>${c('left','Sol')}<span></span>${c('right','Sağ')}<span></span>${c('down','Aşağı')}<span></span></div>
+      <div class="explain">Çapraza itince iki tuş birlikte basılır (W + D gibi).</div>`;
+  }
+  if(st.mode==='pad')h+=`<div class="explain">Çubuk tablete gamepad çubuğu olarak gider. Ölü bölge ayarı yine uygulanır.</div>`;
+  if(st.mode==='mouse')h+=`<div class="explain">Çubuğu ittikçe imleç o yöne gider. Çok itersen hızlı gider.</div>`;
+  h+=`<p class="hint" style="margin:10px 0 0">Analoga basma için çizimdeki ${b.id==='LS'?'L3':'R3'} düğmesine dokun.</p>`;
+  return h;
+}
+
+/* ---------- Düzenleme ---------- */
+function cur(){const l=L();return l.btn[ui.sel]||(l.btn[ui.sel]={});}
+function curA(){const b=cur();return b[ui.act]||(b[ui.act]=act());}
+function curS(){return L().sticks[ui.sel];}
+function pick(id){ui.sel=id;if(ui.act==='_new'||ui.act.startsWith('c_'))ui.act='single';if(rec)stopRec();render();}
+function hasExit(li){const l=P().layers[li];return Object.values(l.btn).some(bd=>Object.values(bd).some(a=>a&&a.kind==='layer'&&a.layer!==li));}
+function add(t){
+  const st=curA().steps,g=P().gapMs;
+  if(st.length&&!st[st.length-1].after)st[st.length-1].after=g;
+  st.push(newStep(t,g));
+  render();
+}
+function newStep(t,after){return t==='key'?{t,k:'KeyZ',a:'press',after}:t==='mouse'?{t,b:'left',a:'press',after}:{t,p:'A',a:'press',after};}
+function setType(i,t){const s=curA().steps;s[i]=Object.assign(newStep(t,s[i].after),{a:s[i].a||'press'});render();}
+function rm(i){curA().steps.splice(i,1);render();}
+function mv(i,d){const s=curA().steps,j=i+d;if(j<0||j>=s.length)return;[s[i],s[j]]=[s[j],s[i]];render();}
+function setStep(i,k,v){curA().steps[i][k]=v;render();}
+const clamp=v=>Math.max(0,Math.min(60000,Math.round(+v||0)));
+const stepOf=v=>v>=1000?100:10;
+function gap(i,d,v){const s=curA().steps[i];s.after=d?clamp(s.after+d*stepOf(s.after+(d<0?-1:0))):clamp(v);render();}
+function loopGap(d,v){const a=curA();a.turbo=Math.max(10,d?clamp(a.turbo+d*stepOf(a.turbo+(d<0?-1:0))):clamp(v));render();}
+function setAll(){const ms=clamp(document.getElementById('allGap').value);P().gapMs=ms;curA().steps.forEach(s=>s.after=ms);render();toast('Hepsinin arası '+fmtMs(ms));}
+function toggleRec(){rec?stopRec():(rec={t:0,steps:[]});render();}
+function stopRec(){
+  const st=rec.steps,out=[];
+  for(let i=0;i<st.length;i++){
+    const s=st[i],n=st[i+1];
+    if(s.a==='down'&&n&&n.a==='up'&&n.k===s.k&&s.after<=150){out.push({t:'key',k:s.k,a:'press',after:n.after});i++;continue;}
+    out.push(s);
+  }
+  if(out.length)out[out.length-1].after=out[out.length-1].after||P().gapMs;
+  curA().steps.push(...out);rec=null;render();
+}
+function recEv(e,a){
+  e.preventDefault();if(e.repeat)return;
+  const now=performance.now();
+  if(rec.steps.length)rec.steps[rec.steps.length-1].after=Math.round(now-rec.t);
+  rec.steps.push({t:'key',k:e.code,a,after:0});rec.t=now;
+  if(a==='down')toast('Kayıt: '+keyName(e.code));
+}
+document.addEventListener('keydown',e=>{if(rec)recEv(e,'down');});
+document.addEventListener('keyup',e=>{if(rec)recEv(e,'up');});
+
+/* ---------- Ayarlar paneli ---------- */
+function openSheet(){document.getElementById('sheet').classList.add('open');renderSheet();}
+function closeSheet(){document.getElementById('sheet').classList.remove('open');}
+function renderSheet(){
+  const d=S.device,p=P();
+  const bo=v=>BTNS.filter(b=>!b.stick).map(b=>`<option value="${b.id}" ${b.id===v?'selected':''}>${esc(b.name)}</option>`).join('');
+  document.getElementById('sheetIn').innerHTML=`
+  <div class="row"><h2>Ayarlar</h2><button class="btn ico" onclick="closeSheet()">✕</button></div>
+  <div class="sec"><div class="lbl">Profil: ${esc(p.name)}</div>
+    <div class="row"><button class="btn" onclick="newProfile()">+ Yeni</button><button class="btn" onclick="renameProfile()">Adını değiştir</button><button class="btn" onclick="dupProfile()">Kopyala</button><button class="btn" onclick="delProfile()">Sil</button></div>
+    <label class="hint" style="display:block;margin-top:8px"><input type="checkbox" ${S.device.autoApply?'checked':''} onchange="S.device.autoApply=this.checked;render()"> Değişiklikleri otomatik uygula (Uygula'ya basmadan)</label>
+    <div class="lbl">Basış süreleri</div>
+    <div class="row"><span class="hint">Uzun basış</span><input type="number" min="100" max="3000" step="50" value="${p.longMs}" style="width:84px" onchange="P().longMs=clamp(this.value);render()"><span class="hint">ms</span>
+      <span class="hint" style="margin-left:8px">Çift basış arası</span><input type="number" min="100" max="1000" step="10" value="${p.doubleMs}" style="width:84px" onchange="P().doubleMs=clamp(this.value);render()"><span class="hint">ms</span></div></div>
+  <div class="sec"><div class="lbl">Kayıtlı kontrolcüler</div>
+    ${d.ctrls.map((c,i)=>`<div class="dev ${c.active?'act':''}" onclick="setActive(${i})"><span class="r">${c.active?'◉':'○'}</span><div style="flex:1"><b>${esc(c.name)}</b><div class="hint">${esc(c.addr)}${c.active?' · kullanılıyor':''}</div></div><button class="x" title="Unut" onclick="event.stopPropagation();forget(${i})">✕</button></div>`).join('')||'<div class="empty">Kayıtlı kontrolcü yok.</div>'}
+    <div class="row" style="margin-top:8px"><button class="btn pri" onclick="openScan()">🔍 Cihaz ara</button><button class="btn" disabled title="Kart yazılımı hazır olunca">Tuşları tanıt</button></div>
+    <p class="hint" style="margin:6px 0 0">Birden fazla kontrolcü kaydedebilirsin. Kart açılınca çevrede hangisi açıksa ona bağlanır, işaretli olanı önce dener.</p></div>
+  <div class="sec"><div class="lbl">Tabletin klavye düzeni</div>
+    <div class="seg"><button class="${S.device.layout!=='us'?'on':''}" onclick="S.device.layout='tr';render();renderSheet()">Türkçe Q</button><button class="${S.device.layout==='us'?'on':''}" onclick="S.device.layout='us';render();renderSheet()">İngilizce (US)</button></div>
+    <p class="hint" style="margin:6px 0 0">Tuş adları buna göre gösterilir. Tabletteki klavye ayarıyla aynı olmalı.</p></div>
+  <div class="sec"><div class="lbl">Eşleme aç / kapat</div>
+    <div class="seg"><button class="${d.startMode==='map'?'on':''}" onclick="S.device.startMode='map';save();renderSheet()">Açılışta: eşleme açık</button><button class="${d.startMode==='pad'?'on':''}" onclick="S.device.startMode='pad';save();renderSheet()">Açılışta: normal gamepad</button></div>
+    <div class="row" style="margin-top:8px"><select style="flex:1" onchange="S.device.comboA=this.value;save();renderSheet()">${bo(d.comboA)}</select><span>+</span><select style="flex:1" onchange="S.device.comboB=this.value;save();renderSheet()">${bo(d.comboB)}</select></div>
+    <div class="row" style="margin-top:6px"><input type="number" min="300" max="5000" step="100" value="${d.holdMs}" style="width:84px" onchange="S.device.holdMs=Math.max(300,clamp(this.value));save();renderSheet()"><span class="hint">ms basılı tutunca değişir</span></div>
+    <label class="hint" style="display:block;margin-top:6px"><input type="checkbox" ${d.profSwitch?'checked':''} onchange="S.device.profSwitch=this.checked;save()"> ${esc(BY_ID[d.comboA].name)} basılıyken LB / RB ile profil değiştir</label>
+    <label class="hint" style="display:block;margin-top:6px"><input type="checkbox" ${d.passUnmapped?'checked':''} onchange="S.device.passUnmapped=this.checked;save()"> Eşleme açıkken, atanmamış tuşlar gamepad tuşu olarak geçsin</label>
+    <div class="explain">Kapalıyken D8 Pro tablete normal gamepad olarak gider. Kart ışığı: yeşil eşleme açık, mavi normal gamepad.</div>
+    ${d.comboA===d.comboB?'<div class="note">İki farklı tuş seç.</div>':''}</div>
+  <div class="sec"><div class="lbl">Yedek (bu profil)</div>
+    <textarea id="jsonTa" spellcheck="false">${esc(snap(p,2))}</textarea>
+    <div class="row" style="margin-top:6px"><button class="btn" onclick="copyJson()">Kopyala</button><button class="btn" onclick="importJson()">İçe aktar</button></div></div>
+  <div class="sec"><div class="lbl">Kart</div>
+    <div class="row"><button class="btn" onclick="cardBtn()">${PM.connected()?'Bağlantıyı kes':'🔌 Karta bağlan'}</button><button class="btn pri" ${PM.connected()?'':'disabled'} onclick="writeCard()">Karta yaz</button></div>
+    <p class="hint" style="margin:6px 0 0">${cardLine()}</p>
+    <p class="hint" style="margin:6px 0 0">Bütün profiller ve bu ayarlar kartın içine kaydedilir. Kart ondan sonra bağlantı olmadan da aynı şekilde çalışır.</p></div>`;
+}
+/* ---------- Cihaz arama (önizleme: gerçek liste karttan gelecek) ---------- */
+const DEMO=[
+  {name:'BSP-D8Pro',addr:'03:24:00:D8:06:04',rssi:-53,kind:'Gamepad',ic:'🎮',hid:true},
+  {name:'Xbox Wireless Controller',addr:'4C:3B:DF:12:9A:70',rssi:-61,kind:'Gamepad',ic:'🎮',hid:true},
+  {name:'Amazfit Neo',addr:'C8:87:5B:61:62:1F',rssi:-68,kind:'Saat',ic:'⌚',hid:false},
+  {name:'Bluetooth Klavye',addr:'E1:02:7C:44:10:B3',rssi:-72,kind:'Klavye',ic:'⌨',hid:true},
+  {name:'(adsız cihaz)',addr:'06:24:00:D8:06:04',rssi:-55,kind:'Bilinmiyor',ic:'❔',hid:false},
+  {name:'JBL Flip',addr:'F4:4E:FD:0A:22:91',rssi:-80,kind:'Hoparlör',ic:'🔊',hid:false},
+];
+let scan={on:false,found:[],onlyPad:true,pairing:null,timers:[]};
+function openScan(){document.getElementById('scan').classList.add('open');startScan();}
+function closeScan(){stopScan();document.getElementById('scan').classList.remove('open');}
+function startScan(){stopScan();scan.on=true;scan.found=[];
+  DEMO.forEach((d,i)=>scan.timers.push(setTimeout(()=>{scan.found.push(d);renderScan();},400+i*450)));
+  scan.timers.push(setTimeout(()=>{scan.on=false;renderScan();},400+DEMO.length*450+1500));renderScan();}
+function stopScan(){scan.timers.forEach(clearTimeout);scan.timers=[];scan.on=false;}
+const bars=r=>{const n=r>-60?4:r>-70?3:r>-80?2:1;return `<span class="bars">${[6,9,12,14].map((hh,i)=>`<i class="${i<n?'on':''}" style="height:${hh}px"></i>`).join('')}</span>`;};
+function renderScan(){
+  const saved=new Set(S.device.ctrls.map(c=>c.addr));
+  const list=scan.found.filter(d=>!scan.onlyPad||d.hid);
+  document.getElementById('scanIn').innerHTML=`
+  <div class="row"><h2>Cihaz ara</h2><span class="prev">önizleme</span><button class="btn ico" onclick="closeScan()">✕</button></div>
+  <p class="hint" style="margin:6px 0">Kontrolcünü eşleşme moduna al (D8 Pro'da X + Home). Listede görününce üstüne dokun.</p>
+  <div class="row"><span>${scan.on?'<span class="spin"></span> Aranıyor…':'Arama bitti'}</span><span style="flex:1"></span>
+    <label class="hint"><input type="checkbox" ${scan.onlyPad?'checked':''} onchange="scan.onlyPad=this.checked;renderScan()"> Sadece uyumlu</label>
+    <button class="btn" onclick="${scan.on?'stopScan();renderScan()':'startScan()'}">${scan.on?'Durdur':'Yeniden ara'}</button></div>
+  ${list.map(d=>{const i=DEMO.indexOf(d),s=saved.has(d.addr),pr=scan.pairing===d.addr;
+    return `<div class="dev ${d.hid?'':'no'}" ${d.hid&&!s&&!pr?`onclick="pair(${i})"`:''}><span class="ic">${d.ic}</span>
+      <div style="flex:1;min-width:0"><b>${esc(d.name)}</b><div class="hint">${d.kind} · ${d.addr}</div>
+      <div>${d.hid?'<span class="ok">✓ Uyumlu (BLE HID)</span>':'<span class="bad">Uyumsuz: giriş cihazı değil</span>'}</div></div>
+      ${bars(d.rssi)}<span style="min-width:74px;text-align:right">${pr?'<span class="spin"></span>':s?'<span class="hint">kayıtlı</span>':d.hid?'<span class="btn" style="display:inline-flex;align-items:center">Eşle</span>':''}</span></div>`;}).join('')||`<div class="empty">${scan.on?'Henüz bir şey bulunmadı…':'Uyumlu cihaz bulunamadı. Kontrolcü eşleşme modunda mı?'}</div>`}
+  <div class="note" style="margin-top:12px">Bu liste şimdilik örnek. Kart yazılımı hazır olunca XIAO'nun gerçekten çevrede gördüğü cihazlar burada çıkacak.</div>`;
+}
+function pair(i){const d=DEMO[i];scan.pairing=d.addr;renderScan();
+  scan.timers.push(setTimeout(()=>{scan.pairing=null;S.device.ctrls.forEach(c=>c.active=false);S.device.ctrls.push({name:d.name,addr:d.addr,active:true});save();renderScan();renderSheet();toast(d.name+' eşlendi');},1300));}
+function setActive(i){S.device.ctrls.forEach((c,j)=>c.active=i===j);save();renderSheet();}
+async function forget(i){const c=S.device.ctrls[i];if(!await ask(`"${c.name}" unutulsun mu?`,null))return;const wasA=c.active;S.device.ctrls.splice(i,1);if(wasA&&S.device.ctrls[0])S.device.ctrls[0].active=true;save();renderSheet();}
+
+function ask(msg,def){
+  return new Promise(res=>{
+    const d=document.createElement('div');d.className='sheet open';d.style.zIndex=25;
+    d.innerHTML=`<div class="in" style="max-width:400px"><div style="margin-bottom:8px">${esc(msg)}</div>${def!==null?`<input type="text" style="width:100%" value="${esc(def)}">`:''}<div class="row" style="justify-content:flex-end;margin-top:12px"><button class="btn" data-r="0">Vazgeç</button><button class="btn pri" data-r="1">Tamam</button></div></div>`;
+    document.body.appendChild(d);const inp=d.querySelector('input');if(inp){inp.focus();inp.select();}
+    d.onclick=e=>{const r=e.target.dataset.r;if(r===undefined)return;d.remove();res(r==='1'?(inp?inp.value.trim():true):null);};
+  });
+}
+async function newProfile(){const n=await ask('Yeni profil adı:','Yeni profil');if(!n)return;S.profiles.push(newProf(n));S.cur=S.profiles.length-1;ui.layer=0;render();renderSheet();}
+async function renameProfile(){const n=await ask('Profil adı:',P().name);if(!n)return;P().name=n;render();renderSheet();}
+async function dupProfile(){const n=await ask('Kopyanın adı:',P().name+' (kopya)');if(!n)return;const c=JSON.parse(JSON.stringify(P()));c.name=n;S.profiles.push(c);S.cur=S.profiles.length-1;render();renderSheet();}
+async function delProfile(){if(S.profiles.length<2){toast('En az bir profil kalmalı');return;}if(!await ask(`"${P().name}" silinsin mi?`,null))return;S.profiles.splice(S.cur,1);S.cur=0;render();renderSheet();}
+async function copyJson(){const t=document.getElementById('jsonTa');try{await navigator.clipboard.writeText(t.value);toast('Kopyalandı');}catch(e){t.select();toast('Seçildi, kopyala');}}
+function importJson(){try{const p=JSON.parse(document.getElementById('jsonTa').value);if(!p.layers||p.layers.length!==4)throw 0;p._applied=P()._applied;S.profiles[S.cur]=migrate(p);render();renderSheet();toast('İçe aktarıldı');}catch(e){toast('Okunamadı');}}
+function toast(m){const t=document.getElementById('toast');t.textContent=m;t.style.opacity=1;clearTimeout(t._h);t._h=setTimeout(()=>t.style.opacity=0,1400);}
+
+function render(){if(S.device.autoApply){P()._applied=snap(P());autoWrite();}renderTop();renderActs();paintPad();renderSummary();renderPanel();save();}
+/* ---------- Kart bağlantısı ---------- */
+let card={busy:false,crc:null};
+const wantCrc=()=>PM.crc32(PM.compile(S));
+function cardSynced(){return PM.connected()&&PM.link.info&&parseInt(PM.link.info.crc,16)===wantCrc();}
+function cardLine(){
+  if(!PM.supported())return 'Bu tarayıcı karta bağlanamıyor. Chrome kullan.';
+  if(!PM.connected())return 'Kart bağlı değil. Kartı USB ile bu cihaza tak, "Karta bağlan"a bas.';
+  const i=PM.link.info||{};
+  return `Bağlı · kart yazılımı ${i.fw||'?'} · ${card.busy?'yazılıyor…':cardSynced()?'karttaki ayar güncel ✓':i.cfg?'karttaki ayar farklı, "Karta yaz"a bas':'kartta henüz ayar yok'}`;
+}
+function renderCard(){
+  const d=document.querySelector('#card .dot'),t=document.getElementById('cardTxt');if(!d)return;
+  const c=PM.connected(),s=c&&cardSynced();
+  d.className='dot '+(!c?'':card.busy?'warn':s?'on':'warn');
+  t.textContent=!c?'Kart':card.busy?'Yazılıyor…':s?'Kart ✓':'Kart ●';
+  document.getElementById('card').title=cardLine();
+}
+async function cardBtn(){
+  if(PM.connected()){await PM.disconnect();renderCard();if(document.getElementById('sheet').classList.contains('open'))renderSheet();toast('Kart bağlantısı kesildi');return;}
+  try{
+    PM.link.onLine=ev=>{
+      if(ev.ev==='prof'&&ev.cur<S.profiles.length&&ev.cur!==S.cur){S.cur=ev.cur;ui.layer=0;render();toast('Profil: '+P().name);}
+      if(ev.ev==='mode')toast(ev.mapping?'Eşleme açık':'Normal gamepad');
+      if(ev.ev==='hello'){renderCard();if(document.getElementById('sheet').classList.contains('open'))renderSheet();}
+    };
+    PM.link.onClose=()=>{renderCard();toast('Kart bağlantısı koptu');};
+    await PM.connect();
+    toast('Karta bağlandı');
+    setTimeout(()=>{renderCard();if(PM.link.info&&!cardSynced())toast('Karttaki ayar farklı. "Karta yaz"a bas');},600);
+  }catch(e){if(e&&e.name!=='NotFoundError')toast(e.message||'Bağlanılamadı');}
+  renderCard();
+}
+async function writeCard(){
+  if(!PM.connected()){toast('Önce karta bağlan');return;}
+  if(card.busy){card.again=true;return;}
+  card.busy=true;renderCard();
+  try{const r=await PM.writeConfig(S);if(PM.link.info)PM.link.info.crc=r.crc.toString(16);toast('Karta yazıldı ✓');}
+  catch(e){toast(e.message||'Yazılamadı');}
+  card.busy=false;renderCard();
+  if(document.getElementById('sheet').classList.contains('open'))renderSheet();
+  if(card.again){card.again=false;writeCard();}
+}
+let awT=null;
+function autoWrite(){if(!PM.connected())return;clearTimeout(awT);awT=setTimeout(()=>{if(!cardSynced())writeCard();},700);}
+
+drawPad();render();
+</script>
+</body>
+</html>

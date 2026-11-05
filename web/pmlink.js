@@ -36,7 +36,7 @@ const PM = (() => {
     u8(BTN[d.comboA] ?? 12); u8(BTN[d.comboB] ?? 10);
     u16(d.holdMs || 1500);
     u8((d.profSwitch ? 1 : 0) | (d.passUnmapped !== false ? 2 : 0));
-    u8(profs.length); u8(Math.min(S.cur, profs.length - 1)); u8(0);
+    u8(profs.length); u8(0); u8(0); /* seçili profil ayrıca 'cs' ile gider */
     for (const p of profs) {
       u8(OUT[p.output || 'all']); u8(p.trigThr ?? 30); u16(p.longMs || 300); u16(p.doubleMs || 250);
       for (const l of p.layers) for (const s of ['LS', 'RS']) {
@@ -174,6 +174,7 @@ const PM = (() => {
     await sendLine('ce ' + crc32(blob).toString(16).padStart(8, '0'));
     const r = await w;
     if (!r.ok) throw new Error('Kart ayarı kabul etmedi (' + (r.err || '?') + ')');
+    await sendLine('cs ' + Math.min(S.cur, S.profiles.length - 1));
     return { len: blob.length, crc: crc32(blob) };
   }
 

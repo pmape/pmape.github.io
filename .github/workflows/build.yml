@@ -49,7 +49,9 @@ jobs:
           make_latest: false
           body: |
             En son derlenen kart yazılımı. **padmapper.uf2** dosyasını indir ve XIAO'ya yükle.
-            Test sayfası: **test.html** dosyasını indirip Chrome'da aç.
+            Ayar ekranı: **padmapper.html** dosyasını indirip Chrome'da aç, "Kart"a bas.
+            Test sayfası: **test.html**.
           files: |
             out/padmapper.uf2
+            web/padmapper.html
             web/test.html
