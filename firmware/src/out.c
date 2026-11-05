@@ -1,5 +1,6 @@
 /*
  * Tablete giden USB çıkışı: gamepad + klavye + fare.
+ * Arayüz sırası: klavye, fare, gamepad. Açılışta eşleme AÇIK.
  * Eşleme KAPALI: D8 Pro tablete normal gamepad olarak gider.
  * Eşleme AÇIK:   şimdilik yerleşik deneme ayarı (ayar ekranından yazma sonraki adım).
  * Aç/kapat:      Home + Select 1,5 sn basılı tut. Işık: mavi = gamepad, yeşil = eşleme.
@@ -54,10 +55,10 @@ static const uint8_t mouse_desc[] = {
 	0xc0, 0xc0,
 };
 
-static bool mapping_on;
+static bool mapping_on = true;
 static bool pad_connected;
 
-enum { D_PAD, D_KB, D_MOUSE, D_N };
+enum { D_KB, D_MOUSE, D_PAD, D_N };
 static volatile bool usb_cfg;
 static uint32_t tx_ok, tx_err, tx_busy, tx_unstuck;
 static int64_t busy_since[3];
@@ -78,8 +79,8 @@ static const struct hid_ops ops = { .int_in_ready = in_ready };
 int out_usb_init(void)
 {
 	static const char *names[D_N] = { "HID_0", "HID_1", "HID_2" };
-	static const uint8_t *descs[D_N] = { gamepad_desc, keyboard_desc, mouse_desc };
-	static const size_t sizes[D_N] = { sizeof(gamepad_desc), sizeof(keyboard_desc), sizeof(mouse_desc) };
+	static const uint8_t *descs[D_N] = { keyboard_desc, mouse_desc, gamepad_desc };
+	static const size_t sizes[D_N] = { sizeof(keyboard_desc), sizeof(mouse_desc), sizeof(gamepad_desc) };
 
 	for (int i = 0; i < D_N; i++) {
 		hid[i] = device_get_binding(names[i]);
@@ -194,9 +195,9 @@ void out_set_connected(bool c)
 #define MOD_LSHIFT 0x02
 
 static const struct { uint8_t btn; uint8_t key; uint8_t mod; } demo_keys[] = {
-	{ PB_A, K_SPACE, 0 }, { PB_B, K_E, 0 }, { PB_X, K_R, 0 }, { PB_Y, K_Q, 0 },
+	{ PB_A, K_SPACE, 0 }, { PB_B, K_ESC, 0 }, { PB_X, K_R, 0 }, { PB_Y, K_Q, 0 },
 	{ PB_RB, K_F, 0 }, { PB_LB, 0, MOD_LSHIFT }, { PB_L3, 0, MOD_LCTRL }, { PB_R3, K_V, 0 },
-	{ PB_START, K_ESC, 0 }, { PB_SELECT, K_TAB, 0 },
+	{ PB_START, K_ENTER, 0 }, { PB_SELECT, K_TAB, 0 },
 	{ PB_UP, K_UP, 0 }, { PB_DOWN, K_DOWN, 0 }, { PB_LEFT, K_LEFT, 0 }, { PB_RIGHT, K_RIGHT, 0 },
 };
 
