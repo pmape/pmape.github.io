@@ -54,7 +54,13 @@ static const uint8_t mouse_desc[] = {
 	0xc0, 0xc0,
 };
 
+static bool mapping_on;
+static bool pad_connected;
+
 enum { D_PAD, D_KB, D_MOUSE, D_N };
+static volatile bool usb_cfg;
+static uint32_t tx_ok, tx_err, tx_busy, tx_unstuck;
+static int64_t busy_since[3];
 static const struct device *hid[D_N];
 static struct k_sem ready[D_N];
 static uint8_t last[D_N][9];
@@ -88,19 +94,56 @@ int out_usb_init(void)
 	return 0;
 }
 
+void out_usb_status(int status)
+{
+	if (status == USB_DC_CONFIGURED) {
+		for (int i = 0; i < D_N; i++) {
+			k_sem_reset(&ready[i]);
+			k_sem_give(&ready[i]);
+			last_len[i] = 0; /* her şeyi yeniden gönder */
+		}
+		usb_cfg = true;
+	} else if (status == USB_DC_RESET || status == USB_DC_DISCONNECTED) {
+		usb_cfg = false;
+	}
+	OUT("{\"ev\":\"usb\",\"status\":%d,\"configured\":%d}\n", status, usb_cfg);
+}
+
 /* force: değişmese de gönder (fare hareketi gibi) */
 static void send(int i, const uint8_t *buf, uint8_t len, bool force)
 {
 	uint32_t wrote;
+	int err;
 
+	if (!usb_cfg) return;
 	if (!force && last_len[i] == len && !memcmp(last[i], buf, len)) return;
-	if (k_sem_take(&ready[i], K_NO_WAIT)) return; /* önceki gönderim bitmedi, sonra tekrar dene */
-	if (hid_int_ep_write(hid[i], buf, len, &wrote)) {
+	if (k_sem_take(&ready[i], K_NO_WAIT)) {
+		/* önceki gönderim bitmedi; çok uzun sürdüyse kilidi aç */
+		tx_busy++;
+		if (!busy_since[i]) busy_since[i] = k_uptime_get();
+		if (k_uptime_get() - busy_since[i] > 100) {
+			busy_since[i] = 0;
+			tx_unstuck++;
+			k_sem_give(&ready[i]);
+		}
+		return;
+	}
+	busy_since[i] = 0;
+	err = hid_int_ep_write(hid[i], buf, len, &wrote);
+	if (err) {
+		tx_err++;
 		k_sem_give(&ready[i]);
 		return;
 	}
+	tx_ok++;
 	memcpy(last[i], buf, len);
 	last_len[i] = len;
+}
+
+void out_print_stats(void)
+{
+	OUT("{\"ev\":\"stats\",\"usb\":%d,\"pad\":%d,\"mapping\":%d,\"rx\":%u,\"tx_ok\":%u,\"tx_err\":%u,\"tx_busy\":%u,\"unstuck\":%u}\n",
+	    usb_cfg, pad_connected, mapping_on, pad_rx_count(), tx_ok, tx_err, tx_busy, tx_unstuck);
 }
 
 /* ---------- ışık ---------- */
@@ -113,8 +156,6 @@ static const struct gpio_dt_spec led_b = GPIO_DT_SPEC_GET(DT_ALIAS(led2), gpios)
 #define HAVE_LED 0
 #endif
 
-static bool mapping_on;
-static bool pad_connected;
 
 static void led_update(uint32_t tick)
 {

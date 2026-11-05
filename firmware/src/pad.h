@@ -28,3 +28,5 @@ void pad_input(uint8_t report_id, const uint8_t *data, size_t len);
 void pad_get(struct pad_state *out);
 /* Bağlantı kopunca sıfırla */
 void pad_reset(void);
+/* Kaç rapor işlendi (teşhis) */
+uint32_t pad_rx_count(void);

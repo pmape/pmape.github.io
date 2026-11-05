@@ -25,6 +25,9 @@ static struct field fields[MAX_FIELDS];
 static int nfields;
 static struct pad_state st;
 static struct k_spinlock lock;
+static uint32_t rx_count;
+
+uint32_t pad_rx_count(void) { return rx_count; }
 
 /* HID düğme numarası (1..16) → mantıksal tuş. Linux/Android'in gamepad sırası. */
 static const uint8_t btn_map[16] = {
@@ -166,6 +169,7 @@ void pad_input(uint8_t rid, const uint8_t *data, size_t len)
 {
 	k_spinlock_key_t key = k_spin_lock(&lock);
 
+	rx_count++;
 	for (int k = 0; k < nfields; k++) {
 		struct field *f = &fields[k];
 		uint32_t raw;

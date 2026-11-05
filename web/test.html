@@ -50,6 +50,8 @@ td:first-child{color:var(--mute);width:40%}
     <div class="st"><span class="dot" id="d-card"></span><span id="s-card">Kart bağlı değil</span></div>
     <div class="st"><span class="dot" id="d-pad"></span><span id="s-pad">Kontrolcü bekleniyor</span></div>
     <div class="st"><span class="dot" id="d-map"></span><span id="s-map">Tuş haritası okunmadı</span></div>
+    <div class="st"><span class="dot" id="d-usb"></span><span id="s-usb">USB çıkışı: bilgi yok</span></div>
+    <div class="hint" id="stats"></div>
     <p class="hint">Kontrolcüyü eşleşme moduna al (D8 Pro'da X + Home). Kart onu kendisi bulup bağlanır.</p>
   </section>
 
@@ -214,6 +216,10 @@ function handle(ev){
       else setSt('map','bad','Tuş haritası okunamadı');break;
     case 'ready':setSt('pad','ok',`Kontrolcü hazır: ${ctrlName}`);break;
     case 'rep':{const by=(ev.d.match(/../g)||[]).map(x=>parseInt(x,16));decode(ev.id,by);renderLive();detect();return;}
+    case 'stats':
+      setSt('usb',ev.usb?'ok':'bad',ev.usb?`USB çıkışı hazır · mod: ${ev.mapping?'klavye + fare (yeşil)':'gamepad (mavi)'}`:'USB çıkışı hazır değil');
+      $('stats').textContent=`Gelen tuş raporu: ${ev.rx} · gönderilen: ${ev.tx_ok} · hata: ${ev.tx_err} · meşgul: ${ev.tx_busy} · kilit açma: ${ev.unstuck}`;break;
+    case 'mode':log(ev.mapping?'Eşleme AÇIK (klavye + fare)':'Eşleme KAPALI (gamepad)');break;
     case 'disconnected':setSt('pad','bad','Kontrolcü ayrıldı (kod '+ev.reason+')');break;
     case 'connect_failed':setSt('pad','bad','Bağlanamadı (kod '+ev.code+')');break;
   }
@@ -231,7 +237,7 @@ $('conn').onclick=async()=>{
       buf+=value;let i;
       while((i=buf.indexOf('\n'))>=0){
         const line=buf.slice(0,i).trim();buf=buf.slice(i+1);if(!line)continue;
-        if(!line.includes('"ev":"alive"'))log(line);
+        if(!line.includes('"ev":"alive"')&&!line.includes('"ev":"stats"'))log(line);
         try{handle(JSON.parse(line));}catch(e){}
       }
     }

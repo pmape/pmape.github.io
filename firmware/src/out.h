@@ -7,3 +7,7 @@ int out_usb_init(void);
 void out_start(void);
 /* Bağlantı durumu (ışık için) */
 void out_set_connected(bool c);
+/* USB durum değişikliği (usb_enable geri çağrısından) */
+void out_usb_status(int status);
+/* Teşhis sayaçlarını seri porta yaz */
+void out_print_stats(void);

@@ -33,7 +33,7 @@
 #include "pad.h"
 #include "out.h"
 
-#define FW_VERSION "0.2.0"
+#define FW_VERSION "0.2.1"
 
 bool host_listening(void)
 {
@@ -419,12 +419,17 @@ static struct bt_conn_auth_info_cb auth_info_cb = {
 
 /* ---------- ana ---------- */
 
+static void usb_status_cb(enum usb_dc_status_code status, const uint8_t *param)
+{
+	out_usb_status(status);
+}
+
 int main(void)
 {
 	int err;
 
 	out_usb_init();
-	err = usb_enable(NULL);
+	err = usb_enable(usb_status_cb);
 	if (err && err != -EALREADY) {
 		/* seri port yoksa yapacak pek bir şey yok, yine de devam */
 	}
@@ -453,6 +458,7 @@ int main(void)
 	while (1) {
 		k_sleep(K_SECONDS(3));
 		OUT("{\"ev\":\"alive\",\"connected\":%d}\n", cur_conn != NULL);
+		out_print_stats();
 	}
 	return 0;
 }
