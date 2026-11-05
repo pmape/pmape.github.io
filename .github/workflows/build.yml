@@ -4,6 +4,9 @@ on:
   push:
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -35,3 +38,18 @@ jobs:
         with:
           name: padmapper-uf2
           path: out/padmapper.uf2
+
+      - name: Releases sayfasına koy
+        if: github.ref == 'refs/heads/main'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: son-surum
+          name: Son sürüm
+          prerelease: true
+          make_latest: false
+          body: |
+            En son derlenen kart yazılımı. **padmapper.uf2** dosyasını indir ve XIAO'ya yükle.
+            Test sayfası: **test.html** dosyasını indirip Chrome'da aç.
+          files: |
+            out/padmapper.uf2
+            web/test.html
