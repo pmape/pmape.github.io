@@ -137,7 +137,10 @@ const PM = (() => {
 
   async function connect() {
     closing = false; link.info = null; buf = '';
-    if ('serial' in navigator) await openSerial();
+    /* Android Chrome'daki seri bağlantı yalnızca Bluetooth'u görür; orada USB yolunu kullan */
+    const android = /Android/i.test(navigator.userAgent);
+    if (android && 'usb' in navigator) await openUsb();
+    else if ('serial' in navigator) await openSerial();
     else if ('usb' in navigator) await openUsb();
     else throw new Error('Bu tarayıcı karta bağlanamıyor. Chrome kullan.');
     for (let i = 0; i < 3 && !link.info; i++) {
