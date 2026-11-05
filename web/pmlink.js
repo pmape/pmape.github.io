@@ -95,8 +95,8 @@ const PM = (() => {
     }
   }
 
-  async function openSerial() {
-    const port = await navigator.serial.requestPort({ filters: [{ usbVendorId: 0x2fe3 }] }).catch(() => navigator.serial.requestPort());
+  async function openSerial(port) {
+    if (!port) port = await navigator.serial.requestPort({ filters: [{ usbVendorId: 0x2fe3 }] }).catch(() => navigator.serial.requestPort());
     await port.open({ baudRate: 115200 });
     try { await port.setSignals({ dataTerminalReady: true }); } catch (e) {}
     writer = port.writable.getWriter();
@@ -108,8 +108,8 @@ const PM = (() => {
     })();
   }
 
-  async function openUsb() {
-    const dev = await navigator.usb.requestDevice({ filters: [] }); /* listede "PadMapper"ı seç */
+  async function openUsb(dev) {
+    if (!dev) dev = await navigator.usb.requestDevice({ filters: [] }); /* listede "PadMapper"ı seç */
     await dev.open();
     if (!dev.configuration) await dev.selectConfiguration(1);
     let ctrl = null, data = null, epIn = 0, epOut = 0;
@@ -135,10 +135,28 @@ const PM = (() => {
     })();
   }
 
-  async function connect() {
+  const isCard = d => d && (d.vendorId === 0x2fe3 || d.productName === 'PadMapper');
+  const android = /Android/i.test(navigator.userAgent);
+
+  /* Daha önce izin verilmiş kart takılıysa sormadan bağlan */
+  async function findKnown() {
+    if (android && 'usb' in navigator) {
+      const d = (await navigator.usb.getDevices()).find(isCard);
+      return d ? { usb: d } : null;
+    }
+    if ('serial' in navigator) {
+      const p = (await navigator.serial.getPorts()).find(x => (x.getInfo().usbVendorId) === 0x2fe3);
+      return p ? { serial: p } : null;
+    }
+    return null;
+  }
+
+  async function connect(known) {
     closing = false; link.info = null; buf = '';
+    if (known && known.usb) await openUsb(known.usb);
+    else if (known && known.serial) await openSerial(known.serial);
+    else
     /* Android Chrome'daki seri bağlantı yalnızca Bluetooth'u görür; orada USB yolunu kullan */
-    const android = /Android/i.test(navigator.userAgent);
     if (android && 'usb' in navigator) await openUsb();
     else if ('serial' in navigator) await openSerial();
     else if ('usb' in navigator) await openUsb();
@@ -191,7 +209,13 @@ const PM = (() => {
     return { len: blob.length, crc: crc32(blob) };
   }
 
-  return { compile, crc32, hex, link, connect, disconnect, sendLine, writeConfig,
+  /* takılınca haber ver */
+  function onPlug(cb) {
+    if (android && 'usb' in navigator) navigator.usb.addEventListener('connect', e => { if (isCard(e.device)) cb({ usb: e.device }); });
+    else if ('serial' in navigator) navigator.serial.addEventListener('connect', e => { const p = e.target; if (p.getInfo && p.getInfo().usbVendorId === 0x2fe3) cb({ serial: p }); });
+  }
+
+  return { findKnown, onPlug, compile, crc32, hex, link, connect, disconnect, sendLine, writeConfig,
     connected: () => !!link.kind, OLD, supported: () => 'serial' in navigator || 'usb' in navigator };
 })();
 if (typeof module !== 'undefined') module.exports = PM;
