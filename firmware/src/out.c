@@ -59,7 +59,8 @@ static bool mapping_on = true;
 static bool pad_connected;
 
 enum { D_KB, D_MOUSE, D_PAD, D_N };
-static volatile bool usb_cfg;
+static volatile bool usb_cfg, usb_susp;
+static int64_t last_ok_ms, last_err_ms;
 static uint32_t tx_ok, tx_err, tx_busy, tx_unstuck;
 static int64_t busy_since[3];
 static const struct device *hid[D_N];
@@ -128,8 +129,14 @@ void out_usb_status(int status)
 			last_len[i] = 0; /* her şeyi yeniden gönder */
 		}
 		usb_cfg = true;
+		usb_susp = false;
 	} else if (status == USB_DC_RESET || status == USB_DC_DISCONNECTED) {
 		usb_cfg = false;
+		usb_susp = false;
+	} else if (status == USB_DC_SUSPEND) {
+		usb_susp = true;
+	} else if (status == USB_DC_RESUME) {
+		usb_susp = false;
 	}
 	OUT("{\"ev\":\"usb\",\"status\":%d,\"configured\":%d}\n", status, usb_cfg);
 }
@@ -140,7 +147,6 @@ static void send(int i, const uint8_t *buf, uint8_t len, bool force)
 	uint32_t wrote;
 	int err;
 
-	if (!usb_cfg) return;
 	if (!force && last_len[i] == len && !memcmp(last[i], buf, len)) return;
 	if (k_sem_take(&ready[i], K_NO_WAIT)) {
 		/* önceki gönderim bitmedi; çok uzun sürdüyse kilidi aç */
@@ -157,10 +163,12 @@ static void send(int i, const uint8_t *buf, uint8_t len, bool force)
 	err = hid_int_ep_write(hid[i], buf, len, &wrote);
 	if (err) {
 		tx_err++;
+		last_err_ms = k_uptime_get();
 		k_sem_give(&ready[i]);
 		return;
 	}
 	tx_ok++;
+	if (i != D_PAD || mapping_on == false) last_ok_ms = k_uptime_get();
 	if (i == D_KB) {
 		OUT("{\"ev\":\"kb\",\"mod\":%u,\"k\":[%u,%u,%u,%u,%u,%u]}\n",
 		    buf[0], buf[2], buf[3], buf[4], buf[5], buf[6], buf[7]);
@@ -177,9 +185,10 @@ void out_print_stats(void)
 
 /* ---------- ışık ---------- */
 
-#if DT_NODE_HAS_STATUS(DT_ALIAS(led1), okay) && DT_NODE_HAS_STATUS(DT_ALIAS(led2), okay)
+#if DT_NODE_HAS_STATUS(DT_ALIAS(led0), okay) && DT_NODE_HAS_STATUS(DT_ALIAS(led1), okay) && DT_NODE_HAS_STATUS(DT_ALIAS(led2), okay)
 static const struct gpio_dt_spec led_g = GPIO_DT_SPEC_GET(DT_ALIAS(led1), gpios);
 static const struct gpio_dt_spec led_b = GPIO_DT_SPEC_GET(DT_ALIAS(led2), gpios);
+static const struct gpio_dt_spec led_r = GPIO_DT_SPEC_GET(DT_ALIAS(led0), gpios);
 #define HAVE_LED 1
 #else
 #define HAVE_LED 0
@@ -189,10 +198,17 @@ static const struct gpio_dt_spec led_b = GPIO_DT_SPEC_GET(DT_ALIAS(led2), gpios)
 static void led_update(uint32_t tick)
 {
 #if HAVE_LED
-	bool on = pad_connected || (tick / 50) % 2; /* bağlı değilken yanıp söner */
+	int64_t now = k_uptime_get();
+	bool on = pad_connected || (tick / 50) % 2; /* pad bağlı değilken yanıp söner */
+	/* tablete gönderirken kısa söner: veri gidiyor demek */
+	if (last_ok_ms && now - last_ok_ms < 50) on = false;
+	/* kırmızı: tablet kartı hazırlamadı (sabit) veya uyuttu (yanıp söner) ya da gönderim hatası */
+	bool err = last_err_ms > last_ok_ms && now - last_err_ms < 1000;
+	bool red = (!usb_cfg && !usb_susp) || err || (usb_susp && (tick / 25) % 2);
 
-	gpio_pin_set_dt(&led_g, on && mapping_on);
-	gpio_pin_set_dt(&led_b, on && !mapping_on);
+	gpio_pin_set_dt(&led_g, on && mapping_on && !red);
+	gpio_pin_set_dt(&led_b, on && !mapping_on && !red);
+	gpio_pin_set_dt(&led_r, red);
 #endif
 }
 
@@ -297,6 +313,7 @@ static void out_thread(void *a, void *b, void *c)
 #if HAVE_LED
 	gpio_pin_configure_dt(&led_g, GPIO_OUTPUT_INACTIVE);
 	gpio_pin_configure_dt(&led_b, GPIO_OUTPUT_INACTIVE);
+	gpio_pin_configure_dt(&led_r, GPIO_OUTPUT_INACTIVE);
 #endif
 	pad_reset();
 

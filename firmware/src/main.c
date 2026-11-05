@@ -33,7 +33,7 @@
 #include "pad.h"
 #include "out.h"
 
-#define FW_VERSION "0.2.4"
+#define FW_VERSION "0.2.5"
 
 bool host_listening(void)
 {
