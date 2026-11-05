@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- PadMapper kartı (XIAO): VID 0x2FE3, PID 0x0100 -->
+    <usb-device vendor-id="12259" product-id="256" />
+</resources>

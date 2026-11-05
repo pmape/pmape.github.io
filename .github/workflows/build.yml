@@ -39,8 +39,41 @@ jobs:
           name: padmapper-uf2
           path: out/padmapper.uf2
 
+  android:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.7'
+      - name: Android uygulamasını derle
+        run: |
+          mkdir -p android/app/src/main/assets
+          cp web/padmapper.html android/app/src/main/assets/padmapper.html
+          cd android
+          gradle assembleRelease --no-daemon -q
+          mkdir -p ../out
+          cp app/build/outputs/apk/release/app-release.apk ../out/padmapper-ayar.apk
+      - uses: actions/upload-artifact@v4
+        with:
+          name: padmapper-apk
+          path: out/padmapper-ayar.apk
+
+  release:
+    if: github.ref == 'refs/heads/main'
+    needs: [build, android]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: out
+          merge-multiple: true
       - name: Releases sayfasına koy
-        if: github.ref == 'refs/heads/main'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: son-surum
@@ -49,9 +82,11 @@ jobs:
           make_latest: false
           body: |
             En son derlenen kart yazılımı. **padmapper.uf2** dosyasını indir ve XIAO'ya yükle.
-            Ayar ekranı: **padmapper.html** dosyasını indirip Chrome'da aç, "Kart"a bas.
+            Tablet: **padmapper-ayar.apk** kur; kart takılınca ayar ekranı açılır.
+            Ayar ekranı (bilgisayar): **padmapper.html** dosyasını Chrome'da aç, "Kart"a bas.
             Test sayfası: **test.html**.
           files: |
             out/padmapper.uf2
+            out/padmapper-ayar.apk
             web/padmapper.html
             web/test.html
