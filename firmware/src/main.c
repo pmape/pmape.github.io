@@ -247,6 +247,9 @@ BT_CONN_CB_DEFINE(conn_callbacks) = {
 
 /* ---------- tuş haritası ve raporlar ---------- */
 
+static uint8_t map_buf[512];
+static size_t map_total;
+
 #define MAX_REPS 8
 #define MAX_REP_LEN 64
 
@@ -329,8 +332,6 @@ static void subscribe_inputs(void)
 	out_set_connected(n > 0);
 }
 
-static uint8_t map_buf[512];
-static size_t map_total;
 static size_t map_next_off;
 static void map_read_work_fn(struct k_work *w);
 static K_WORK_DEFINE(map_read_work, map_read_work_fn);
