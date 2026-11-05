@@ -60,7 +60,8 @@ static bool pad_connected;
 
 enum { D_KB, D_MOUSE, D_PAD, D_N };
 static volatile bool usb_cfg, usb_susp;
-static int64_t last_ok_ms, last_err_ms;
+static int64_t last_ok_ms, last_err_ms, last_any_ms;
+static bool keepalive;
 static uint32_t tx_ok, tx_err, tx_busy, tx_unstuck, tx_wake;
 static int64_t busy_since[3];
 static const struct device *hid[D_N];
@@ -179,6 +180,8 @@ static void send(int i, const uint8_t *buf, uint8_t len, bool force)
 		return;
 	}
 	tx_ok++;
+	last_any_ms = k_uptime_get();
+	if (keepalive) { memcpy(last[i], buf, len); last_len[i] = len; return; }
 	if (i != D_PAD || mapping_on == false) last_ok_ms = k_uptime_get();
 	if (i == D_KB) {
 		OUT("{\"ev\":\"kb\",\"mod\":%u,\"k\":[%u,%u,%u,%u,%u,%u]}\n",
@@ -262,16 +265,22 @@ static void kb_add(uint8_t *rep, int *n, uint8_t key)
 	if (key && *n < 6) rep[2 + (*n)++] = key;
 }
 
-static int8_t stick_mouse(uint8_t v)
-{
-	int d = (int)v - 128;
-	int dead = 14, speed = 14;
+#define MOUSE_MAX 28.0f   /* tam itişte 8 ms'de piksel (≈3500 px/sn) */
+static float acc_x, acc_y;
 
-	if (d > -dead && d < dead) return 0;
+static int8_t stick_mouse(uint8_t v, float *acc)
+{
+	float d = (float)v - 128.0f;
+	const float dead = 12.0f;
+
+	if (d > -dead && d < dead) { *acc = 0; return 0; }
 	d = d > 0 ? d - dead : d + dead;
-	/* yumuşak eğri: küçük itişte hassas, tam itişte hızlı */
-	int out = (d * abs(d) * speed) / (114 * 114);
-	if (out == 0) out = d > 0 ? 1 : -1;
+	float n = d / 116.0f;                       /* -1..1 */
+	float a = n < 0 ? -n : n;
+	/* eğri: küçük itişte hassas, tam itişte hızlı */
+	*acc += n * (0.35f * a + 0.65f * a * a) * MOUSE_MAX + (n > 0 ? 0.15f : -0.15f);
+	int out = (int)*acc;
+	*acc -= out;
 	return CLAMP(out, -127, 127);
 }
 
@@ -293,8 +302,8 @@ static void build_mapped(const struct pad_state *p, uint8_t kb[8], uint8_t ms[4]
 	if (p->lx < 64) kb_add(kb, &n, K_A);
 	if (p->lx > 192) kb_add(kb, &n, K_D);
 	/* sağ çubuk → fare, tetikler → tık */
-	ms[1] = (uint8_t)stick_mouse(p->rx);
-	ms[2] = (uint8_t)stick_mouse(p->ry);
+	ms[1] = (uint8_t)stick_mouse(p->rx, &acc_x);
+	ms[2] = (uint8_t)stick_mouse(p->ry, &acc_y);
 	if (p->rt > 100 || (p->btn & BIT(PB_RT))) ms[0] |= 1;
 	if (p->lt > 100 || (p->btn & BIT(PB_LT))) ms[0] |= 2;
 }
@@ -354,6 +363,17 @@ static void out_thread(void *a, void *b, void *c)
 			send(D_KB, z8, 8, false);
 			send(D_MOUSE, z8, 4, false);
 			continue;
+		}
+
+		/* 150 ms'dir hiçbir şey gitmediyse aynı gamepad durumunu tekrar gönder:
+		 * tablet bağlantıyı boşta sanıp uyutmasın (uyanma gecikmesi olmasın) */
+		if (k_uptime_get() - last_any_ms > 150) {
+			uint8_t g[9];
+
+			if (mapping_on) memcpy(g, g_idle, 9); else build_gamepad(&p, g);
+			keepalive = true;
+			send(D_PAD, g, 9, true);
+			keepalive = false;
 		}
 
 		if (mapping_on) {
