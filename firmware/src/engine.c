@@ -20,7 +20,7 @@ static K_MUTEX_DEFINE(mtx);
 
 #define MAXB 160
 #define MAXP 8
-#define HDR 12
+#define HDR 16
 #define PHDR 64
 #define BHDR 11
 #define STEP 5
@@ -55,6 +55,7 @@ static uint16_t p_long, p_double;
 
 /* cihaz ayarları */
 static uint8_t d_comboA = PB_HOME, d_comboB = PB_SELECT, d_flags = 3;
+static uint8_t d_pmod = PB_HOME, d_pprev = PB_LB, d_pnext = PB_RB;
 static uint16_t d_hold = 1500;
 static bool mapping = true;
 
@@ -77,7 +78,7 @@ static int walk_profile(const uint8_t *p, const uint8_t *end, const uint8_t **ne
 
 int engine_check(const uint8_t *b, size_t len)
 {
-	if (len < HDR || b[0] != 'P' || b[1] != 'M' || b[2] != 1) return -1;
+	if (len < HDR || b[0] != 'P' || b[1] != 'M' || b[2] != 2) return -1;
 	if (b[9] < 1 || b[9] > MAXP) return -2;
 	const uint8_t *p = b + HDR, *end = b + len;
 
@@ -137,6 +138,9 @@ int engine_set_config(const uint8_t *b, size_t len)
 	d_comboB = b[5] < NBTN ? b[5] : PB_SELECT;
 	d_hold = rd16(b + 6);
 	d_flags = b[8];
+	d_pmod = b[11] < NBTN ? b[11] : PB_HOME;
+	d_pprev = b[12] < NBTN ? b[12] : PB_LB;
+	d_pnext = b[13] < NBTN ? b[13] : PB_RB;
 	cur = b[10] < nprof ? b[10] : 0;
 	mapping = b[3] == 0;
 	load_profile(cur);
@@ -360,6 +364,9 @@ static void fire(int bi, int hb, int64_t now)
 	switch (b->mode) {
 	case 1: /* turbo */
 		run_start(bi, hb >= 0, hb, now);
+		break;
+	case 3: /* makro: bir basışta bir kez, bıraksan da biter */
+		run_start(bi, false, -1, now);
 		break;
 	case 2: /* toggle */
 		if (single_out(b)) tog_flip(bi, b->steps[0], b->steps[1]);
@@ -600,9 +607,9 @@ enum eng_mode engine_tick(const struct pad_state *p, int64_t now, struct out_rep
 
 	uint32_t pressed = btn & ~prev_btn, released = prev_btn & ~btn;
 
-	/* profil değiştir: kombA basılıyken LB / RB */
-	if ((d_flags & 1) && (btn & BIT(d_comboA)) && (pressed & (BIT(PB_LB) | BIT(PB_RB))) && nprof > 1) {
-		int n = (cur + ((pressed & BIT(PB_RB)) ? 1 : nprof - 1)) % nprof;
+	/* profil değiştir: değiştirici tuş basılıyken önceki / sonraki tuşu */
+	if ((d_flags & 1) && (btn & BIT(d_pmod)) && (pressed & (BIT(d_pprev) | BIT(d_pnext))) && nprof > 1) {
+		int n = (cur + ((pressed & BIT(d_pnext)) ? 1 : nprof - 1)) % nprof;
 
 		cur = n;
 		load_profile(n);
@@ -662,7 +669,7 @@ enum eng_mode engine_tick(const struct pad_state *p, int64_t now, struct out_rep
 		int l = active_layer();
 
 		for (int b = 0; b < 20; b++) {
-			if (!(btn & BIT(b)) || bs[b].consumed || b == d_comboA || (b == d_comboB && (btn & BIT(d_comboA)))) continue;
+			if (!(btn & BIT(b)) || bs[b].consumed || b == d_comboA || b == d_pmod || (b == d_comboB && (btn & BIT(d_comboA)))) continue;
 			if (!has_any(l, b) && !has_any(0, b)) gb |= BIT(b);
 		}
 		if (!has_any(l, PB_LT) && !has_any(0, PB_LT)) r->g[7] = p->lt;

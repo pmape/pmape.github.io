@@ -22,7 +22,7 @@ const PM = (() => {
   const OUT = { kbm: 0, kb: 1, pad: 2, all: 3 };
   const SM = { inherit: 0, off: 1, mouse: 2, keys: 3, scroll: 4, pad: 5 };
   const TRIG = { single: 0, double: 1, long: 2, start: 3, release: 4 };
-  const MODE = { normal: 0, turbo: 1, toggle: 2 };
+  const MODE = { normal: 0, turbo: 1, toggle: 2, macro: 3 };
   const ACTS = { press: 0, down: 1, up: 2 };
 
   function compile(S) {
@@ -31,12 +31,13 @@ const PM = (() => {
     const u16 = v => { v = Math.max(0, Math.min(65535, Math.round(+v || 0))); b.push(v & 255, v >> 8); };
     const d = S.device;
     const profs = S.profiles.map(p => p._applied ? JSON.parse(p._applied) : p).slice(0, 8);
-    b.push(80, 77, 1);
+    b.push(80, 77, 2);
     u8(d.startMode === 'pad' ? 1 : 0);
     u8(BTN[d.comboA] ?? 12); u8(BTN[d.comboB] ?? 10);
     u16(d.holdMs || 1500);
     u8((d.profSwitch ? 1 : 0) | (d.passUnmapped !== false ? 2 : 0));
-    u8(profs.length); u8(0); u8(0); /* seçili profil ayrıca 'cs' ile gider */
+    u8(profs.length); u8(0); /* seçili profil ayrıca 'cs' ile gider */
+    u8(BTN[d.profMod || 'HOME'] ?? 12); u8(BTN[d.profPrev || 'LB'] ?? 6); u8(BTN[d.profNext || 'RB'] ?? 7); u8(0); u8(0);
     for (const p of profs) {
       u8(OUT[p.output || 'all']); u8(p.trigThr ?? 30); u16(p.longMs || 300); u16(p.doubleMs || 250);
       for (const l of p.layers) for (const s of ['LS', 'RS']) {

@@ -108,8 +108,11 @@ static void hello(void)
 	    engine_profile(), engine_profile_count(), engine_mapping());
 }
 
+extern bool bt_cmd(char *l);
+
 static void cmd(char *l)
 {
+	if (bt_cmd(l)) return;
 	if (!strcmp(l, "hello")) {
 		hello();
 	} else if (!strncmp(l, "cb ", 3)) {

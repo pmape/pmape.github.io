@@ -3,9 +3,10 @@
  * klavye / fare / gamepad raporlarına çevirir.
  *
  * Ayar biçimi (küçük uçlu, ayar ekranı bunu üretir):
- *  Başlık 12 bayt:
- *   'P' 'M' sürüm(1) açılış(0=eşleme açık,1=gamepad) kombA kombB tutma_ms(u16)
- *   bayraklar(b0=LB/RB ile profil, b1=atanmamış gamepad'e geçsin) profil_sayısı seçili boş
+ *  Başlık 16 bayt:
+ *   'P' 'M' sürüm(2) açılış(0=eşleme açık,1=gamepad) kombA kombB tutma_ms(u16)
+ *   bayraklar(b0=profil geçişi açık, b1=atanmamış gamepad'e geçsin) profil_sayısı seçili
+ *   profil_değiştirici profil_önceki profil_sonraki boş boş
  *  Her profil:
  *   çıkış(0 kb+fare,1 kb,2 pad,3 hepsi) tetik_eşik(%) uzun_ms(u16) çift_ms(u16)
  *   4 katman x 2 çubuk (sol, sağ) x 7 bayt: mod hız ölü% yukarı aşağı sol sağ (HID kodu)
@@ -13,7 +14,7 @@
  *   atama_sayısı(u16), sonra her atama:
  *     katman tuş tetik diğer tür tekrar döngü_ms(u16) hedef_katman nasıl adım_sayısı
  *       tetik: 0 tek, 1 çift, 2 uzun, 3 basma anı, 4 bırakma, 5 birlikte (diğer = öbür tuş)
- *       tür: 0 tuş dizisi, 1 katman değiştir   tekrar: 0 normal, 1 turbo, 2 toggle
+ *       tür: 0 tuş dizisi, 1 katman değiştir   tekrar: 0 normal, 1 turbo, 2 toggle, 3 makro (bir kez)
  *       nasıl: 0 basılıyken, 1 bas aç/bas kapat
  *     her adım 5 bayt: tip(0 klavye,1 fare,2 pad) kod hareket(0 bas-bırak,1 basılı tut,2 bırak) sonra_ms(u16)
  */
