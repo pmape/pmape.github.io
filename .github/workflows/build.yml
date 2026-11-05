@@ -27,7 +27,7 @@ jobs:
           mkdir -p /workdir/project
           cp -r "$GITHUB_WORKSPACE/firmware/." /workdir/project/
           cd /workdir/project
-          west build -b xiao_ble --pristine -d build .
+          west build -b xiao_ble --pristine -d build . || { echo '--- hogp.h ---'; grep -nE 'typedef|bt_hogp_init_params|_cb;|^(int|void|bool|uint|size|enum|struct) bt_hogp' /workdir/nrf/include/bluetooth/services/hogp.h | head -80; exit 1; }
           mkdir -p "$GITHUB_WORKSPACE/out"
           cp build/zephyr/zephyr.uf2 "$GITHUB_WORKSPACE/out/padmapper.uf2"
 

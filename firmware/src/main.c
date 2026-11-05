@@ -365,7 +365,7 @@ static void hogp_pm_update_cb(struct bt_hogp *h)
 
 static const struct bt_hogp_init_params hogp_params = {
 	.ready_cb = hogp_ready_cb,
-	.prep_fail_cb = hogp_prep_fail_cb,
+	.prep_error_cb = hogp_prep_fail_cb,
 	.pm_update_cb = hogp_pm_update_cb,
 };
 
