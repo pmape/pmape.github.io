@@ -186,6 +186,7 @@ void out_set_connected(bool c)
 #define K_V 25
 #define K_SPACE 44
 #define K_ESC 41
+#define K_ENTER 40
 #define K_TAB 43
 #define K_RIGHT 79
 #define K_LEFT 80
