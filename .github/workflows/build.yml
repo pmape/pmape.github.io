@@ -14,14 +14,22 @@ jobs:
       - name: Derle (XIAO nRF52840)
         shell: bash
         run: |
-          echo "== /root/entry.sh"; cat /root/entry.sh
-          TC=$(ls -d /root/ncs/toolchains/*/ | head -1); echo "TC=$TC"; ls "$TC"; cat "$TC/environment.json" 2>/dev/null | head -60
+          TC=$(ls -d /root/ncs/toolchains/*/ | head -1); TC=${TC%/}
+          export PATH="$TC/bin:$TC/usr/bin:$TC/usr/local/bin:$TC/opt/bin:$TC/opt/nanopb/generator-bin:$TC/opt/zephyr-sdk/arm-zephyr-eabi/bin:$PATH"
+          export LD_LIBRARY_PATH="$TC/lib:$TC/lib/x86_64-linux-gnu:$TC/usr/local/lib"
+          export GIT_EXEC_PATH="$TC/usr/local/libexec/git-core"
+          export GIT_TEMPLATE_DIR="$TC/usr/local/share/git-core/templates"
+          export PYTHONHOME="$TC/usr/local"
+          export PYTHONPATH="$TC/usr/local/lib/python3.9:$TC/usr/local/lib/python3.9/site-packages"
+          export ZEPHYR_TOOLCHAIN_VARIANT=zephyr
+          export ZEPHYR_SDK_INSTALL_DIR="$TC/opt/zephyr-sdk"
+          export ZEPHYR_BASE=/workdir/zephyr
           mkdir -p /workdir/project
           cp -r "$GITHUB_WORKSPACE/firmware/." /workdir/project/
           cd /workdir/project
-          true west build -b xiao_ble --pristine -d build .
+          west build -b xiao_ble --pristine -d build .
           mkdir -p "$GITHUB_WORKSPACE/out"
-          true cp build/zephyr/zephyr.uf2 "$GITHUB_WORKSPACE/out/padmapper.uf2"
+          cp build/zephyr/zephyr.uf2 "$GITHUB_WORKSPACE/out/padmapper.uf2"
 
       - uses: actions/upload-artifact@v4
         with:
