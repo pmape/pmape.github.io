@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>PadMapper – Kart testi</title>
+<title>PadMapper – Kart testi ve tuş tanıma</title>
 <style>
 :root{--bg:#121419;--panel:#1b1e25;--panel2:#242833;--line:#2f3442;--text:#e8eaef;--mute:#8b93a5;--acc:#ff8a3d;--acc2:#3dd6c6;--ok:#5fd36a;--bad:#ff5d6c;--warn:#ffcc4d}
 *{box-sizing:border-box}
@@ -13,21 +13,28 @@ header b{color:var(--acc)}
 .btn{background:var(--panel2);border:1px solid var(--line);border-radius:9px;padding:7px 14px;color:inherit;font:inherit;cursor:pointer}
 .btn.pri{background:var(--acc);border-color:var(--acc);color:#1a1205;font-weight:600}
 .btn:disabled{opacity:.45;cursor:not-allowed}
-main{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:10px;padding:10px;max-width:1200px;margin:0 auto}
+main{display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:10px;padding:10px;max-width:1200px;margin:0 auto}
 .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px}
-h2{font-size:15px;margin:0 0 8px;color:var(--mute);text-transform:uppercase;letter-spacing:.5px}
+h2{font-size:14px;margin:0 0 8px;color:var(--mute);text-transform:uppercase;letter-spacing:.5px}
 .st{display:flex;align-items:center;gap:8px;margin:4px 0}
 .dot{width:10px;height:10px;border-radius:50%;background:var(--line);flex:none}
 .dot.ok{background:var(--ok)}.dot.wait{background:var(--warn)}.dot.bad{background:var(--bad)}
 .hint{color:var(--mute);font-size:13px}
-.bytes{display:flex;flex-wrap:wrap;gap:4px;margin-top:6px}
-.by{font-family:ui-monospace,Consolas,monospace;font-size:13px;background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:4px 0;width:44px;text-align:center}
-.by small{display:block;color:var(--mute);font-size:10px}
-.by.ch{border-color:var(--acc2);color:var(--acc2);background:#123430}
-pre{background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:8px;font-size:12px;max-height:260px;overflow:auto;white-space:pre-wrap;word-break:break-all;margin:6px 0 0}
-.dev{display:flex;justify-content:space-between;background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:6px 10px;margin-top:5px;font-size:14px}
+.fields{display:flex;flex-wrap:wrap;gap:5px;margin-top:6px}
+.f{font-size:12.5px;background:var(--bg);border:1px solid var(--line);border-radius:7px;padding:4px 8px;min-width:64px;text-align:center}
+.f b{display:block;font-size:14px;font-family:ui-monospace,Consolas,monospace}
+.f.on{border-color:var(--acc2);background:#123430;color:var(--acc2)}
+pre{background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:8px;font-size:12px;max-height:220px;overflow:auto;white-space:pre-wrap;word-break:break-all;margin:6px 0 0}
 .note{background:#2a2414;border:1px solid #5a4a1f;color:#f3dfa6;border-radius:9px;padding:8px 10px;font-size:13px;margin:10px}
 .wide{grid-column:1/-1}
+.wiz{background:#14232a;border:1px solid #2b4a5a;border-radius:12px;padding:14px;text-align:center}
+.wiz .big{font-size:26px;font-weight:700;margin:6px 0}
+.wiz .prog{height:6px;background:var(--line);border-radius:3px;overflow:hidden;margin:10px 0}
+.wiz .prog i{display:block;height:100%;background:var(--acc2)}
+table{width:100%;border-collapse:collapse;font-size:13.5px;margin-top:8px}
+td{padding:4px 6px;border-top:1px solid var(--line)}
+td:first-child{color:var(--mute);width:40%}
+.miss{color:var(--mute);font-style:italic}
 </style>
 </head>
 <body>
@@ -44,80 +51,194 @@ pre{background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:
     <div class="st"><span class="dot" id="d-pad"></span><span id="s-pad">Kontrolcü bekleniyor</span></div>
     <div class="st"><span class="dot" id="d-map"></span><span id="s-map">Tuş haritası okunmadı</span></div>
     <p class="hint">Kontrolcüyü eşleşme moduna al (D8 Pro'da X + Home). Kart onu kendisi bulup bağlanır.</p>
-    <div id="devs"></div>
   </section>
+
   <section class="card">
     <h2>Canlı tuşlar</h2>
-    <p class="hint" style="margin:0">Kontrolcüde bir tuşa bas ya da çubuğu oynat. Değişen baytlar yanar.</p>
-    <div id="reps"></div>
+    <p class="hint" style="margin:0">Tuşa bas, çubuğu oynat: basılan yanar.</p>
+    <div class="fields" id="live"></div>
   </section>
+
   <section class="card wide">
-    <h2>Tuş haritası (Report Map)</h2>
-    <p class="hint" style="margin:0">Okununca burada çıkar. "Kopyala"ya basıp sohbete yapıştırırsan tuşları çözerim.</p>
-    <pre id="map">—</pre>
-    <button class="btn" style="margin-top:6px" onclick="copyMap()">Kopyala</button>
+    <h2>Tuş tanıma</h2>
+    <div id="wiz"><p class="hint">Kontrolcü bağlanıp tuş haritası okununca başlatabilirsin.</p><button class="btn pri" id="wstart" disabled onclick="wizStart()">Tuş tanımayı başlat</button></div>
   </section>
+
   <section class="card wide">
     <h2>Kayıt</h2>
     <pre id="log"></pre>
-    <button class="btn" style="margin-top:6px" onclick="copyLog()">Kaydı kopyala</button>
+    <div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap">
+      <button class="btn" onclick="copy(logLines.join('\n'))">Kaydı kopyala</button>
+      <button class="btn" onclick="copy('Report Map: '+mapHex)">Tuş haritasını kopyala</button>
+    </div>
   </section>
 </main>
 <script>
 const $=id=>document.getElementById(id);
 if(!('serial' in navigator)){$('nosupport').style.display='block';$('conn').disabled=true;}
-let mapHex='',mapLen=0,logLines=[],reps={},found={};
+let mapHex='',logLines=[],fields=[],state={},idle=null,ctrlName='';
+
+/* ---------- HID tuş haritası çözücü ---------- */
+function parseMap(hex){
+  const b=hex.match(/../g).map(x=>parseInt(x,16));
+  const out=[],off={};let g={page:0,lmin:0,lmax:0,size:0,count:0,id:0},loc={u:[],min:null,max:null},i=0;
+  const sgn=(v,sz)=>sz===1&&v>127?v-256:sz===2&&v>32767?v-65536:v;
+  while(i<b.length){
+    const p=b[i],sz=[0,1,2,4][p&3],tag=p&0xfc;let d=0;
+    for(let k=0;k<sz;k++)d|=b[i+1+k]<<(8*k);d>>>=0;i+=1+sz;
+    switch(tag){
+      case 0x04:g.page=d;break; case 0x14:g.lmin=sgn(d,sz);break; case 0x24:g.lmax=sgn(d,sz);break;
+      case 0x74:g.size=d;break; case 0x94:g.count=d;break; case 0x84:g.id=d;break;
+      case 0x08:loc.u.push(sz===4?[d>>>16,d&0xffff]:[g.page,d]);break;
+      case 0x18:loc.min=d;break; case 0x28:loc.max=d;break;
+      case 0xa0:loc={u:[],min:null,max:null};break;
+      case 0xc0:break;
+      case 0x80:{
+        const rid=g.id,o=off[rid]||0,isConst=d&1,isVar=!!(d&2);
+        let us=loc.u.slice();if(!us.length&&loc.min!==null)for(let u=loc.min;u<=loc.max;u++)us.push([g.page,u]);
+        if(isConst){}
+        else if(isVar){for(let k=0;k<g.count;k++){const u=us[Math.min(k,us.length-1)];if(u)out.push({rid,bit:o+k*g.size,size:g.size,page:u[0],usage:u[1],lmin:g.lmin,lmax:g.lmax,kind:'var'});}}
+        else{for(let k=0;k<g.count;k++)out.push({rid,bit:o+k*g.size,size:g.size,page:g.page,usage:loc.min||0,lmin:g.lmin,lmax:g.lmax,kind:'array'});}
+        off[rid]=o+g.count*g.size;loc={u:[],min:null,max:null};break;}
+      case 0x90:case 0xb0:loc={u:[],min:null,max:null};break;
+    }
+  }
+  out.forEach(f=>{f.key=`${f.rid}:${f.bit}`;f.name=fieldName(f);f.type=fieldType(f);});
+  return out;
+}
+function fieldName(f){
+  if(f.page===9)return 'Düğme '+f.usage;
+  if(f.page===1)return {0x30:'X',0x31:'Y',0x32:'Z',0x33:'Rx',0x34:'Ry',0x35:'Rz',0x36:'Kaydırıcı',0x39:'Yön'}[f.usage]||('Genel '+f.usage.toString(16));
+  if(f.page===2)return {0xc4:'Gaz',0xc5:'Fren'}[f.usage]||('Sim '+f.usage.toString(16));
+  if(f.page===0xc)return 'Medya';
+  return 'Sayfa '+f.page.toString(16)+'/'+f.usage.toString(16);
+}
+function fieldType(f){
+  if(f.kind==='array')return 'array';
+  if(f.page===9||f.lmax===1)return 'btn';
+  if(f.page===1&&f.usage===0x39)return 'hat';
+  return 'axis';
+}
+function readBits(bytes,bit,size,signed){
+  let v=0;for(let k=0;k<size;k++){const B=bit+k;if(bytes[B>>3]&(1<<(B&7)))v+=2**k;}
+  if(signed&&v>=2**(size-1))v-=2**size;return v;
+}
+function decode(rid,bytes){
+  for(const f of fields)if(f.rid===rid)state[f.key]=readBits(bytes,f.bit,f.size,f.lmin<0);
+}
+const hatOut=f=>state[f.key]<f.lmin||state[f.key]>f.lmax;
+function active(f){
+  const v=state[f.key];if(v===undefined)return false;
+  if(f.type==='btn'||f.type==='array')return v!==0;
+  if(f.type==='hat')return !hatOut(f);
+  const base=idle&&idle[f.key]!==undefined?idle[f.key]:(f.lmin+f.lmax)/2;
+  return Math.abs(v-base)>(f.lmax-f.lmin)*0.35;
+}
+const HAT=['↑','↗','→','↘','↓','↙','←','↖'];
+function renderLive(){
+  $('live').innerHTML=fields.map(f=>{const v=state[f.key];const on=active(f);
+    const shown=v===undefined?'–':f.type==='hat'?(hatOut(f)?'·':HAT[v]||v):f.type==='array'&&v?('0x'+v.toString(16)):v;
+    return `<div class="f ${on?'on':''}">${f.name}<b>${shown}</b></div>`;}).join('');
+}
+
+/* ---------- Tuş tanıma ---------- */
+const STEPS=[
+  ['A','A tuşuna bas'],['B','B tuşuna bas'],['X','X tuşuna bas'],['Y','Y tuşuna bas'],
+  ['LB','LB (sol omuz) tuşuna bas'],['RB','RB (sağ omuz) tuşuna bas'],
+  ['LT','LT (sol tetik) tuşuna sonuna kadar bas'],['RT','RT (sağ tetik) tuşuna sonuna kadar bas'],
+  ['SELECT','Select / View tuşuna bas'],['START','Start / Menu tuşuna bas'],['HOME','Home tuşuna bas'],['SHARE','Ekran görüntüsü tuşuna bas'],
+  ['L3','Sol çubuğa bastır (L3)'],['R3','Sağ çubuğa bastır (R3)'],
+  ['UP','Yön tuşu YUKARI'],['DOWN','Yön tuşu AŞAĞI'],['LEFT','Yön tuşu SOL'],['RIGHT','Yön tuşu SAĞ'],
+  ['LS_X','Sol çubuğu SAĞA it'],['LS_Y','Sol çubuğu AŞAĞI it'],['RS_X','Sağ çubuğu SAĞA it'],['RS_Y','Sağ çubuğu AŞAĞI it'],
+  ['M1','Arka sol tuş (M1) varsa bas'],['M2','Arka sağ tuş (M2) varsa bas'],
+];
+let wiz=null;
+function wizStart(){
+  idle={...state};
+  wiz={i:0,map:{},used:new Set(),phase:'wait'};renderWiz();
+}
+function detect(){
+  if(!wiz||wiz.i>=STEPS.length)return;
+  if(wiz.phase==='release'){if(!fields.some(active)){wiz.phase='wait';renderWiz();}return;}
+  const [id]=STEPS[wiz.i];
+  for(const f of fields){
+    if(!active(f))continue;
+    const v=state[f.key],sig=f.type==='hat'||f.type==='array'?`${f.key}=${v}`:f.key;
+    if(wiz.used.has(sig))continue;
+    const base=idle[f.key]!==undefined?idle[f.key]:(f.lmin+f.lmax)/2;
+    wiz.map[id]=f.type==='hat'?{t:'hat',rid:f.rid,bit:f.bit,size:f.size,v}
+      :f.type==='array'?{t:'usage',rid:f.rid,bit:f.bit,size:f.size,page:f.page,v}
+      :f.type==='axis'?{t:'axis',rid:f.rid,bit:f.bit,size:f.size,min:f.lmin,max:f.lmax,dir:v>base?1:-1,name:f.name}
+      :{t:'btn',rid:f.rid,bit:f.bit,name:f.name};
+    wiz.used.add(sig);wiz.i++;wiz.phase='release';renderWiz();save();return;
+  }
+}
+function skip(){wiz.map[STEPS[wiz.i][0]]=null;wiz.i++;wiz.phase=fields.some(active)?'release':'wait';renderWiz();save();}
+function back(){if(wiz.i>0){wiz.i--;const m=wiz.map[STEPS[wiz.i][0]];if(m)wiz.used.delete(m.t==='hat'||m.t==='usage'?`${m.rid}:${m.bit}=${m.v}`:`${m.rid}:${m.bit}`);delete wiz.map[STEPS[wiz.i][0]];renderWiz();}}
+function desc(m){if(!m)return '<span class="miss">yok</span>';
+  if(m.t==='btn')return m.name;if(m.t==='hat')return 'Yön = '+m.v;if(m.t==='usage')return 'Medya 0x'+m.v.toString(16);
+  return m.name+(m.dir>0?' +':' −');}
+function result(){return {controller:ctrlName||'kontrolcü',reportMap:mapHex,buttons:wiz.map};}
+function renderWiz(){
+  const el=$('wiz');
+  if(wiz.i<STEPS.length){
+    const [id,txt]=STEPS[wiz.i];
+    el.innerHTML=`<div class="wiz"><div class="hint">${wiz.i+1} / ${STEPS.length}</div>
+      <div class="big">${txt}</div>
+      <div class="hint">${wiz.phase==='release'?'Bırak…':'Bekleniyor… Kontrolcünde bu tuş yoksa "Yok, atla"ya bas.'}</div>
+      <div class="prog"><i style="width:${wiz.i/STEPS.length*100}%"></i></div>
+      <button class="btn" onclick="back()" ${wiz.i?'':'disabled'}>← Geri</button> <button class="btn" onclick="skip()">Yok, atla</button></div>
+      ${table()}`;
+  }else{
+    el.innerHTML=`<div class="wiz"><div class="big">Bitti 🎉</div><div class="hint">Aşağıdakileri kontrol et. Doğruysa "Sonucu kopyala"ya basıp sohbete yapıştır.</div>
+      <div style="margin-top:10px"><button class="btn pri" onclick="copy(JSON.stringify(result()))">Sonucu kopyala</button> <button class="btn" onclick="back()">← Son adıma dön</button> <button class="btn" onclick="wizStart()">Baştan</button></div></div>${table()}`;
+  }
+}
+function table(){return `<table>${STEPS.filter(([id])=>id in wiz.map).map(([id,t])=>`<tr><td>${t}</td><td>${desc(wiz.map[id])}</td></tr>`).join('')}</table>`;}
+function save(){try{localStorage.setItem('padmapper_learn',JSON.stringify(result()));}catch(e){}}
+
+/* ---------- Seri port ---------- */
 function setSt(k,cls,txt){$('d-'+k).className='dot '+cls;$('s-'+k).textContent=txt;}
 function log(s){logLines.push(s);if(logLines.length>400)logLines.shift();const el=$('log');el.textContent=logLines.join('\n');el.scrollTop=el.scrollHeight;}
 function handle(ev){
   switch(ev.ev){
     case 'hello':$('fw').textContent='Kart yazılımı '+ev.fw;setSt('card','ok','Kart bağlı');break;
-    case 'alive':setSt('card','ok','Kart bağlı');if(!ev.connected&&$('d-pad').className.indexOf('ok')>=0)setSt('pad','bad','Kontrolcü bağlı değil');break;
+    case 'alive':setSt('card','ok','Kart bağlı');break;
     case 'scanning':setSt('pad','wait','Kontrolcü aranıyor…');break;
-    case 'found':found[ev.addr]=ev;$('devs').innerHTML=Object.values(found).map(d=>`<div class="dev"><span>🎮 ${d.name||'(adsız)'} <span class="hint">${d.addr}</span></span><span class="hint">${d.rssi} dBm</span></div>`).join('');setSt('pad','wait','Bulundu: '+(ev.name||ev.addr)+', bağlanılıyor…');break;
+    case 'found':ctrlName=ev.name||ev.addr;setSt('pad','wait','Bulundu: '+ctrlName+', bağlanılıyor…');break;
     case 'connected':setSt('pad','wait','Bağlandı, servisler okunuyor…');break;
-    case 'security':break;
     case 'hid_ready':setSt('pad','ok','Kontrolcü bağlı');setSt('map','wait','Tuş haritası okunuyor…');mapHex='';break;
-    case 'map':mapHex+=ev.d;$('map').textContent=mapHex.match(/../g).join(' ');break;
-    case 'map_end':mapLen=ev.len;setSt('map',ev.len?'ok':'bad',ev.len?`Tuş haritası okundu (${ev.len} bayt)`:'Tuş haritası okunamadı');break;
-    case 'ready':setSt('pad','ok',`Kontrolcü hazır (${ev.inputs} tuş raporu dinleniyor)`);break;
-    case 'rep':showRep(ev);return;
+    case 'map':mapHex+=ev.d;break;
+    case 'map_end':
+      if(mapHex){fields=parseMap(mapHex);state={};setSt('map','ok',`Tuş haritası okundu (${ev.len} bayt, ${fields.length} giriş)`);$('wstart').disabled=false;renderLive();}
+      else setSt('map','bad','Tuş haritası okunamadı');break;
+    case 'ready':setSt('pad','ok',`Kontrolcü hazır: ${ctrlName}`);break;
+    case 'rep':{const by=(ev.d.match(/../g)||[]).map(x=>parseInt(x,16));decode(ev.id,by);renderLive();detect();return;}
     case 'disconnected':setSt('pad','bad','Kontrolcü ayrıldı (kod '+ev.reason+')');break;
     case 'connect_failed':setSt('pad','bad','Bağlanamadı (kod '+ev.code+')');break;
-    case 'err':break;
   }
 }
-function showRep(ev){
-  const b=ev.d.match(/../g)||[],old=reps[ev.id];
-  reps[ev.id]=b;
-  let box=$('rep-'+ev.id);
-  if(!box){box=document.createElement('div');box.id='rep-'+ev.id;$('reps').appendChild(box);}
-  box.innerHTML=`<div class="hint" style="margin-top:8px">Rapor ${ev.id}</div><div class="bytes">${b.map((x,i)=>`<div class="by ${old&&old[i]!==x?'ch':''}"><small>${i}</small>${x}</div>`).join('')}</div>`;
-}
-let port,reader;
 $('conn').onclick=async()=>{
   try{
-    port=await navigator.serial.requestPort();
+    const port=await navigator.serial.requestPort();
     await port.open({baudRate:115200});
     try{await port.setSignals({dataTerminalReady:true});}catch(e){}
     $('conn').disabled=true;$('conn').textContent='Bağlandı';setSt('card','wait','Kart yanıtı bekleniyor…');
-    const dec=new TextDecoderStream();port.readable.pipeTo(dec.writable);reader=dec.readable.getReader();
+    const dec=new TextDecoderStream();port.readable.pipeTo(dec.writable);const reader=dec.readable.getReader();
     let buf='';
     while(true){
       const {value,done}=await reader.read();if(done)break;
       buf+=value;let i;
       while((i=buf.indexOf('\n'))>=0){
         const line=buf.slice(0,i).trim();buf=buf.slice(i+1);if(!line)continue;
-        if(!line.includes('"ev":"rep"')&&!line.includes('"ev":"alive"'))log(line);
+        if(!line.includes('"ev":"alive"'))log(line);
         try{handle(JSON.parse(line));}catch(e){}
       }
     }
   }catch(e){log('Hata: '+e.message);$('conn').disabled=false;$('conn').textContent='Karta bağlan (USB)';setSt('card','bad','Bağlantı koptu');}
 };
-async function copy(t){try{await navigator.clipboard.writeText(t);alertMsg('Kopyalandı');}catch(e){alertMsg('Kopyalanamadı, metni seçip kopyala');}}
-function alertMsg(m){const n=$('fw');const o=n.textContent;n.textContent=m;setTimeout(()=>n.textContent=o,1500);}
-function copyMap(){copy('Report Map ('+mapLen+' bayt): '+mapHex);}
-function copyLog(){copy(logLines.join('\n'));}
+async function copy(t){try{await navigator.clipboard.writeText(t);flash('Kopyalandı');}catch(e){flash('Kopyalanamadı');}}
+function flash(m){const n=$('fw'),o=n.textContent;n.textContent=m;setTimeout(()=>n.textContent=o,1500);}
 </script>
 </body>
 </html>
