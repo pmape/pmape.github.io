@@ -1,24 +1,17 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <uses-feature android:name="android.hardware.usb.host" android:required="false" />
-    <queries>
-        <intent>
-            <action android:name="android.intent.action.VIEW" />
-            <data android:scheme="content" android:mimeType="text/html" />
-        </intent>
-        <package android:name="com.android.chrome" />
-    </queries>
     <application
         android:label="@string/app_name"
         android:icon="@android:drawable/sym_def_app_icon"
         android:allowBackup="false">
-        <!-- Kart takılınca ya da simgeye dokununca ayar ekranını Chrome'da açar -->
+        <!-- Kart takılınca ya da simgeye dokununca ayar ekranı açılır -->
         <activity
-            android:name=".Ac"
+            android:name=".Main"
             android:exported="true"
-            android:excludeFromRecents="true"
-            android:noHistory="true"
-            android:theme="@android:style/Theme.Translucent.NoTitleBar">
+            android:launchMode="singleTask"
+            android:configChanges="orientation|screenSize|screenLayout|keyboard|keyboardHidden|navigation"
+            android:theme="@android:style/Theme.DeviceDefault.NoActionBar">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
@@ -30,10 +23,5 @@
                 android:name="android.hardware.usb.action.USB_DEVICE_ATTACHED"
                 android:resource="@xml/device_filter" />
         </activity>
-        <provider
-            android:name=".Files"
-            android:authorities="com.padmapper.ayar.files"
-            android:exported="false"
-            android:grantUriPermissions="true" />
     </application>
 </manifest>

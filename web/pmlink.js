@@ -136,11 +136,31 @@ const PM = (() => {
     })();
   }
 
+  /* Android uygulamasının içinde: karta uygulama bağlanır */
+  const native = typeof PMNative !== 'undefined';
+  let permWait = null, plugCb = null;
+  window.PM_native = {
+    feed: t => feed(t),
+    closed: () => { const was = link.kind === 'native'; link.kind = null; link.info = null; if (was && !closing) link.onClose(); },
+    perm: ok => { if (permWait) { const w = permWait; permWait = null; ok ? w.res() : w.rej(new Error('Karta izin verilmedi')); } },
+    plug: () => { if (plugCb) plugCb({ native: true }); },
+  };
+  async function openNative() {
+    let r = PMNative.open();
+    if (r === 'perm') {
+      await new Promise((res, rej) => { permWait = { res, rej }; setTimeout(() => { if (permWait) { permWait = null; rej(new Error('İzin beklenirken süre doldu')); } }, 60000); });
+      r = PMNative.open();
+    }
+    if (r === 'ok') { link.kind = 'native'; return; }
+    throw new Error(r === 'none' ? 'Kart takılı değil' : 'Karta bağlanılamadı (' + r + ')');
+  }
+
   const isCard = d => d && (d.vendorId === 0x2fe3 || d.productName === 'PadMapper');
   const android = /Android/i.test(navigator.userAgent);
 
   /* Daha önce izin verilmiş kart takılıysa sormadan bağlan */
   async function findKnown() {
+    if (native) return PMNative.present() ? { native: true } : null;
     if (android && 'usb' in navigator) {
       const d = (await navigator.usb.getDevices()).find(isCard);
       return d ? { usb: d } : null;
@@ -154,7 +174,8 @@ const PM = (() => {
 
   async function connect(known) {
     closing = false; link.info = null; buf = '';
-    if (known && known.usb) await openUsb(known.usb);
+    if (native) await openNative();
+    else if (known && known.usb) await openUsb(known.usb);
     else if (known && known.serial) await openSerial(known.serial);
     else
     /* Android Chrome'daki seri bağlantı yalnızca Bluetooth'u görür; orada USB yolunu kullan */
@@ -171,7 +192,8 @@ const PM = (() => {
 
   async function sendLine(l) {
     const d = enc.encode(l + '\n');
-    if (link.kind === 'serial') await writer.write(d);
+    if (link.kind === 'native') { if (!PMNative.write(l + '\n')) throw new Error('Karta yazılamadı'); }
+    else if (link.kind === 'serial') await writer.write(d);
     else if (link.kind === 'usb') for (let i = 0; i < d.length; i += 64) await usb.dev.transferOut(usb.epOut, d.slice(i, i + 64));
     else throw new Error('Kart bağlı değil');
   }
@@ -179,7 +201,8 @@ const PM = (() => {
   async function disconnect() {
     closing = true;
     try {
-      if (link.kind === 'serial') { try { await link.reader.cancel(); } catch (e) {} writer.releaseLock(); await link.port.close(); }
+      if (link.kind === 'native') PMNative.close();
+      else if (link.kind === 'serial') { try { await link.reader.cancel(); } catch (e) {} writer.releaseLock(); await link.port.close(); }
       else if (link.kind === 'usb') await usb.dev.close();
     } catch (e) {}
     link.kind = null; link.info = null;
@@ -212,11 +235,12 @@ const PM = (() => {
 
   /* takılınca haber ver */
   function onPlug(cb) {
+    if (native) { plugCb = cb; return; }
     if (android && 'usb' in navigator) navigator.usb.addEventListener('connect', e => { if (isCard(e.device)) cb({ usb: e.device }); });
     else if ('serial' in navigator) navigator.serial.addEventListener('connect', e => { const p = e.target; if (p.getInfo && p.getInfo().usbVendorId === 0x2fe3) cb({ serial: p }); });
   }
 
   return { findKnown, onPlug, compile, crc32, hex, link, connect, disconnect, sendLine, writeConfig,
-    connected: () => !!link.kind, OLD, supported: () => 'serial' in navigator || 'usb' in navigator };
+    connected: () => !!link.kind, OLD, supported: () => native || 'serial' in navigator || 'usb' in navigator, native };
 })();
 if (typeof module !== 'undefined') module.exports = PM;
