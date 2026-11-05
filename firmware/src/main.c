@@ -458,9 +458,6 @@ static uint8_t rep_cb(struct bt_hogp *h, struct bt_hogp_rep_info *rep, uint8_t e
 	size_t len = MIN(bt_hogp_rep_size(rep), MAX_REP_LEN);
 
 	pad_input(id, data, bt_hogp_rep_size(rep));
-	if (!host_listening()) {
-		return BT_GATT_ITER_CONTINUE;
-	}
 	int slot = -1;
 
 	for (int i = 0; i < MAX_REPS; i++) {
@@ -481,6 +478,9 @@ static uint8_t rep_cb(struct bt_hogp *h, struct bt_hogp_rep_info *rep, uint8_t e
 		rep_cache[slot].id = id;
 		rep_cache[slot].len = len;
 		memcpy(rep_cache[slot].last, data, len);
+	}
+	if (!host_listening()) {
+		return BT_GATT_ITER_CONTINUE;
 	}
 
 	OUT("{\"ev\":\"rep\",\"id\":%u,\"d\":\"", id);
@@ -675,7 +675,13 @@ bool bt_cmd(char *l)
 			print_hex(map_buf, MIN(map_total, sizeof(map_buf)));
 			OUT("\"}\n{\"ev\":\"map_end\",\"len\":%u}\n", (unsigned)map_total);
 		}
-		memset(rep_cache, 0, sizeof(rep_cache)); /* raporları yeniden yazsın */
+		/* son raporlar: ayar ekranı tuşlar bırakılmışken nasıl göründüğünü bilsin */
+		for (int i = 0; i < MAX_REPS; i++) {
+			if (!rep_cache[i].used) continue;
+			OUT("{\"ev\":\"rep\",\"id\":%u,\"d\":\"", rep_cache[i].id);
+			print_hex(rep_cache[i].last, rep_cache[i].len);
+			OUT("\"}\n");
+		}
 		return true;
 	}
 	if (!strncmp(l, "lm ", 3)) {

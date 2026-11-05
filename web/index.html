@@ -465,13 +465,14 @@ if(!S||!S.profiles||!S.profiles.length)S={cur:0,profiles:[demoProf()]};
 S.profiles.forEach(migrate);
 if(!S.device)S.device={startMode:'map',comboA:'HOME',comboB:'SELECT',holdMs:1500,profSwitch:true};
 if(S.device.passUnmapped===undefined)S.device.passUnmapped=true;
+if(!S.device.profMod){S.device.profMod=S.device.comboA||'HOME';S.device.profPrev='LB';S.device.profNext='RB';}
 if(!S.device.ctrls)S.device.ctrls=[{name:'BSP-D8Pro',addr:'03:24:00:D8:06:04',active:true}];
 let ui={sel:'A',layer:0,act:'single'};
 let rec=null;
 
 const P=()=>S.profiles[S.cur];
 const L=()=>P().layers[ui.layer];
-function save(){try{localStorage.setItem('padmapper_v1',JSON.stringify(S))}catch(e){}renderCard();}
+function save(){try{localStorage.setItem('padmapper_v1',JSON.stringify(S))}catch(e){}renderCard();if(S.device.autoApply)autoWrite();}
 const snap=(p,ind)=>JSON.stringify(p,(k,v)=>k==='_applied'?undefined:v,ind);
 const dirty=p=>p._applied!==snap(p);
 S.profiles.forEach(p=>{if(p._applied===undefined)p._applied=snap(p);});
@@ -509,6 +510,7 @@ function descAct(a){
   let s=p.length>4?p.slice(0,4).join('')+'…':p.join('');
   if(a.mode==='turbo')s='⚡'+s;
   if(a.mode==='toggle')s='⇄'+s;
+  if(a.mode==='macro')s='▶'+s;
   return s;
 }
 function descStick(st){
@@ -525,7 +527,7 @@ function shortAct(a){
   if(a.kind==='layer')return a.layer?'→S'+a.layer:'→Ana';
   const s=a.steps[0];let t=a.steps.length>1?'Makro':s.t==='key'?keyName(s.k):s.t==='mouse'?MSHORT[s.b]:'🎮'+s.p;
   if(t.length>8)t=t.slice(0,7)+'…';
-  return (a.mode==='turbo'?'⚡':a.mode==='toggle'?'⇄':'')+t;
+  return (a.mode==='turbo'?'⚡':a.mode==='toggle'?'⇄':a.mode==='macro'?'▶':'')+t;
 }
 function shortBind(bd){const l=actList(bd).filter(([k])=>isSet(bd[k]));if(!l.length)return '';return shortAct(bd[l[0][0]])+(l.length>1?' +'+(l.length-1):'');}
 function shortStick(st){
@@ -640,7 +642,8 @@ function renderPanel(){
     ${['key','mouse','pad'].filter(ok).map(t=>`<button class="btn" onclick="add('${t}')">+ ${TYPE_NAME[t].replace(/^(\S+) (.)/,(m,a,b)=>a+' '+b.toUpperCase())}</button>`).join('')}
     <button class="btn ${rec?'rec':''}" onclick="toggleRec()" title="Bilgisayar klavyesinde basarak kaydet">${rec?'■ Durdur':'● Kaydet'}</button></div>`;
   if(a.steps.length>2)h+=`<div class="row" style="margin-top:6px"><span class="hint">Hepsinin arası</span><input type="number" id="allGap" min="0" max="60000" step="10" value="${P().gapMs}" style="width:84px"><span class="hint">ms</span><button class="btn" onclick="setAll()">Uygula</button></div>`;
-  h+=`<div class="lbl">Tekrar</div><div class="seg"><button class="${a.mode==='normal'?'on':''}" onclick="curA().mode='normal';render()">Normal</button><button class="${a.mode==='turbo'?'on':''}" onclick="curA().mode='turbo';render()">Turbo</button><button class="${a.mode==='toggle'?'on':''}" onclick="curA().mode='toggle';render()">Toggle</button></div>`;
+  h+=`<div class="lbl">Tekrar</div><div class="seg"><button class="${a.mode==='normal'?'on':''}" onclick="curA().mode='normal';render()">Normal</button><button class="${a.mode==='turbo'?'on':''}" onclick="curA().mode='turbo';render()">Turbo</button><button class="${a.mode==='macro'?'on':''}" onclick="curA().mode='macro';render()">Makro</button><button class="${a.mode==='toggle'?'on':''}" onclick="curA().mode='toggle';render()">Toggle</button></div>`;
+  if(a.mode==='macro'&&a.steps.length<2)h+=`<div class="note">Makro için yukarıdan birden fazla adım ekle (+ Klavye, + Fare…) ya da "● Kaydet" ile klavyede basarak kaydet. Her adımın arasındaki süreyi ms olarak ayarlayabilirsin.</div>`;
   if(b.id==='LT'||b.id==='RT')h+=`<div class="lbl">Tetik eşiği</div><div class="row"><input type="range" min="5" max="95" value="${P().trigThr}" oninput="P().trigThr=+this.value;this.nextElementSibling.textContent=this.value+'%'" onchange="render()"><span>${P().trigThr}%</span></div>`;
   h+=`<div class="explain">${explain(a,b)}</div>`;
   const bad=[...new Set(a.steps.filter(s=>!ok(s.t)).map(s=>TYPE_NAME[s.t]))];
@@ -652,6 +655,7 @@ function explain(a,b){
   if(!a.steps.length)return `${esc(b.name)} için ${an} boş.`;
   const seq=a.steps.map(stepLabel).join(' › ');
   const single=a.steps.length===1&&a.steps[0].a==='press'&&!(a.steps[0].b||'').startsWith('wheel');
+  if(a.mode==='macro')return `Bir basışta ${seq} sırayla, aradaki sürelerle bir kez çalışır. Tuşu bıraksan da sonuna kadar gider.`;
   if(a.mode==='turbo')return `Basılı durdukça ${seq} tekrar eder, her tekrar arası ${fmtMs(a.turbo)}.`;
   if(a.mode==='toggle')return single?`Bir bas: ${seq} basılı kalır. Bir daha bas: bırakılır.`:`Bir bas: ${seq} tekrar etmeye başlar. Bir daha bas: durur.`;
   if(single&&ui.act==='single')return `${esc(b.name)} basılıyken ${seq} de basılı kalır.`;
@@ -734,18 +738,24 @@ function renderSheet(){
     <div class="lbl">Basış süreleri</div>
     <div class="row"><span class="hint">Uzun basış</span><input type="number" min="100" max="3000" step="50" value="${p.longMs}" style="width:84px" onchange="P().longMs=clamp(this.value);render()"><span class="hint">ms</span>
       <span class="hint" style="margin-left:8px">Çift basış arası</span><input type="number" min="100" max="1000" step="10" value="${p.doubleMs}" style="width:84px" onchange="P().doubleMs=clamp(this.value);render()"><span class="hint">ms</span></div></div>
-  <div class="sec"><div class="lbl">Kayıtlı kontrolcüler</div>
-    ${d.ctrls.map((c,i)=>`<div class="dev ${c.active?'act':''}" onclick="setActive(${i})"><span class="r">${c.active?'◉':'○'}</span><div style="flex:1"><b>${esc(c.name)}</b><div class="hint">${esc(c.addr)}${c.active?' · kullanılıyor':''}</div></div><button class="x" title="Unut" onclick="event.stopPropagation();forget(${i})">✕</button></div>`).join('')||'<div class="empty">Kayıtlı kontrolcü yok.</div>'}
-    <div class="row" style="margin-top:8px"><button class="btn pri" onclick="openScan()">🔍 Cihaz ara</button><button class="btn" disabled title="Kart yazılımı hazır olunca">Tuşları tanıt</button></div>
-    <p class="hint" style="margin:6px 0 0">Birden fazla kontrolcü kaydedebilirsin. Kart açılınca çevrede hangisi açıksa ona bağlanır, işaretli olanı önce dener.</p></div>
+  <div class="sec"><div class="lbl">Kontrolcüler (karttaki kayıt)</div>
+    ${ctrlListHtml()}
+    <div class="row" style="margin-top:8px"><button class="btn pri" onclick="openScan()" ${PM.connected()?'':'disabled'}>🔍 Cihaz ara</button><button class="btn" onclick="openLearn()" ${PM.connected()&&cardCtl.cur?'':'disabled'}>🎯 Tuşları tanıt</button></div>
+    <p class="hint" style="margin:6px 0 0">${PM.connected()?'Kart, listedeki kontrolcülerden hangisi açıksa ona bağlanır; en üstteki önceliklidir. Yeni bir kontrolcüyü "Cihaz ara" ile ekle. "Tuşları tanıt" bağlı kontrolcünün tuşlarını kartın tanımasını sağlar.':'Kontrolcü listesi için önce karta bağlan.'}</p></div>
   <div class="sec"><div class="lbl">Tabletin klavye düzeni</div>
     <div class="seg"><button class="${S.device.layout!=='us'?'on':''}" onclick="S.device.layout='tr';render();renderSheet()">Türkçe Q</button><button class="${S.device.layout==='us'?'on':''}" onclick="S.device.layout='us';render();renderSheet()">İngilizce (US)</button></div>
     <p class="hint" style="margin:6px 0 0">Tuş adları buna göre gösterilir. Tabletteki klavye ayarıyla aynı olmalı.</p></div>
+  <div class="sec"><div class="lbl">Profiller arası geçiş (kontrolcüden)</div>
+    <label class="hint" style="display:block"><input type="checkbox" ${d.profSwitch?'checked':''} onchange="S.device.profSwitch=this.checked;save();renderSheet()"> Açık</label>
+    ${d.profSwitch?`<div class="row" style="margin-top:6px;flex-wrap:wrap"><select style="flex:1;min-width:110px" title="Basılı tutulan tuş" onchange="S.device.profMod=this.value;save();renderSheet()">${bo(d.profMod)}</select><span>basılıyken</span>
+      <select style="flex:1;min-width:90px" title="Önceki profil" onchange="S.device.profPrev=this.value;save();renderSheet()">${bo(d.profPrev)}</select><span>önceki,</span>
+      <select style="flex:1;min-width:90px" title="Sonraki profil" onchange="S.device.profNext=this.value;save();renderSheet()">${bo(d.profNext)}</select><span>sonraki profil</span></div>
+      ${new Set([d.profMod,d.profPrev,d.profNext]).size<3?'<div class="note">Üç farklı tuş seç.</div>':''}
+      <p class="hint" style="margin:6px 0 0">Basılı tutulan tuş eşleme açıkken tablete gitmez.</p>`:''}</div>
   <div class="sec"><div class="lbl">Eşleme aç / kapat</div>
     <div class="seg"><button class="${d.startMode==='map'?'on':''}" onclick="S.device.startMode='map';save();renderSheet()">Açılışta: eşleme açık</button><button class="${d.startMode==='pad'?'on':''}" onclick="S.device.startMode='pad';save();renderSheet()">Açılışta: normal gamepad</button></div>
     <div class="row" style="margin-top:8px"><select style="flex:1" onchange="S.device.comboA=this.value;save();renderSheet()">${bo(d.comboA)}</select><span>+</span><select style="flex:1" onchange="S.device.comboB=this.value;save();renderSheet()">${bo(d.comboB)}</select></div>
     <div class="row" style="margin-top:6px"><input type="number" min="300" max="5000" step="100" value="${d.holdMs}" style="width:84px" onchange="S.device.holdMs=Math.max(300,clamp(this.value));save();renderSheet()"><span class="hint">ms basılı tutunca değişir</span></div>
-    <label class="hint" style="display:block;margin-top:6px"><input type="checkbox" ${d.profSwitch?'checked':''} onchange="S.device.profSwitch=this.checked;save()"> ${esc(BY_ID[d.comboA].name)} basılıyken LB / RB ile profil değiştir</label>
     <label class="hint" style="display:block;margin-top:6px"><input type="checkbox" ${d.passUnmapped?'checked':''} onchange="S.device.passUnmapped=this.checked;save()"> Eşleme açıkken, atanmamış tuşlar gamepad tuşu olarak geçsin</label>
     <div class="explain">Kapalıyken D8 Pro tablete normal gamepad olarak gider. Kart ışığı: yeşil eşleme açık, mavi normal gamepad.</div>
     ${d.comboA===d.comboB?'<div class="note">İki farklı tuş seç.</div>':''}</div>
@@ -757,43 +767,197 @@ function renderSheet(){
     <p class="hint" style="margin:6px 0 0">${cardLine()}</p>
     <p class="hint" style="margin:6px 0 0">Bütün profiller ve bu ayarlar kartın içine kaydedilir. Kart ondan sonra bağlantı olmadan da aynı şekilde çalışır.</p></div>`;
 }
-/* ---------- Cihaz arama (önizleme: gerçek liste karttan gelecek) ---------- */
-const DEMO=[
-  {name:'BSP-D8Pro',addr:'03:24:00:D8:06:04',rssi:-53,kind:'Gamepad',ic:'🎮',hid:true},
-  {name:'Xbox Wireless Controller',addr:'4C:3B:DF:12:9A:70',rssi:-61,kind:'Gamepad',ic:'🎮',hid:true},
-  {name:'Amazfit Neo',addr:'C8:87:5B:61:62:1F',rssi:-68,kind:'Saat',ic:'⌚',hid:false},
-  {name:'Bluetooth Klavye',addr:'E1:02:7C:44:10:B3',rssi:-72,kind:'Klavye',ic:'⌨',hid:true},
-  {name:'(adsız cihaz)',addr:'06:24:00:D8:06:04',rssi:-55,kind:'Bilinmiyor',ic:'❔',hid:false},
-  {name:'JBL Flip',addr:'F4:4E:FD:0A:22:91',rssi:-80,kind:'Hoparlör',ic:'🔊',hid:false},
-];
-let scan={on:false,found:[],onlyPad:true,pairing:null,timers:[]};
-function openScan(){document.getElementById('scan').classList.add('open');startScan();}
-function closeScan(){stopScan();document.getElementById('scan').classList.remove('open');}
-function startScan(){stopScan();scan.on=true;scan.found=[];
-  DEMO.forEach((d,i)=>scan.timers.push(setTimeout(()=>{scan.found.push(d);renderScan();},400+i*450)));
-  scan.timers.push(setTimeout(()=>{scan.on=false;renderScan();},400+DEMO.length*450+1500));renderScan();}
-function stopScan(){scan.timers.forEach(clearTimeout);scan.timers=[];scan.on=false;}
+/* ---------- Kontrolcüler: kartla ---------- */
+let cardCtl={list:[],cur:'',name:''};
+const ctrlName=a=>(S.device.names&&S.device.names[a])||'Kontrolcü';
+function rememberName(a,n){if(!a||!n)return;S.device.names=S.device.names||{};if(S.device.names[a]!==n){S.device.names[a]=n;save();}}
+const shortAddr=a=>String(a).replace(/ \(.*\)$/,'');
+function ctrlListHtml(){
+  if(!PM.connected())return '<div class="empty">Kart bağlı değil.</div>';
+  if(!cardCtl.list.length)return '<div class="empty">Kartta kayıtlı kontrolcü yok. Kart, çevrede gördüğü ilk kontrolcüye bağlanır.</div>';
+  return cardCtl.list.map((c,i)=>{const on=c.addr===cardCtl.cur;
+    return `<div class="dev ${i===0?'act':''}" onclick="useCtrl('${c.addr}')"><span class="r">${i===0?'◉':'○'}</span><div style="flex:1;min-width:0"><b>${esc(ctrlName(c.addr))}</b><div class="hint">${esc(shortAddr(c.addr))}${on?' · <span class="ok">bağlı</span>':''}${c.learned?' · tuşları tanıtıldı':''}</div></div><button class="x" title="Unut" onclick="event.stopPropagation();forgetCtrl('${c.addr}')">✕</button></div>`;}).join('');
+}
+async function useCtrl(a){if(a===cardCtl.list[0]?.addr&&a===cardCtl.cur)return;await PM.sendLine('use '+a);toast(ctrlName(a)+' seçildi, bağlanılıyor…');}
+async function forgetCtrl(a){if(!await ask(`"${ctrlName(a)}" unutulsun mu? (Öğretilen tuşları da silinir)`,null))return;await PM.sendLine('forget '+a);}
+
+let scan={on:false,found:[],onlyPad:true,pairing:null};
+function openScan(){if(!PM.connected()){toast('Önce karta bağlan');return;}document.getElementById('scan').classList.add('open');startScan();}
+function closeScan(){stopScan();lw=null;document.getElementById('scan').classList.remove('open');}
+function startScan(){scan.on=true;scan.found=[];scan.pairing=null;PM.sendLine('scan').catch(()=>{});renderScan();}
+function stopScan(){if(scan.on)PM.sendLine('scan_stop').catch(()=>{});scan.on=false;}
 const bars=r=>{const n=r>-60?4:r>-70?3:r>-80?2:1;return `<span class="bars">${[6,9,12,14].map((hh,i)=>`<i class="${i<n?'on':''}" style="height:${hh}px"></i>`).join('')}</span>`;};
+function scanEv(ev){
+  if(ev.ev==='dev'){const f=scan.found.find(x=>x.addr===ev.addr);if(f){f.rssi=ev.rssi;if(ev.name)f.name=ev.name;}else scan.found.push({addr:ev.addr,name:ev.name,rssi:ev.rssi,hid:!!ev.hid});
+    if(ev.hid&&ev.name)rememberName(ev.addr,ev.name);}
+  if(ev.ev==='scan_end')scan.on=false;
+  if(ev.ev==='connected'&&scan.pairing&&ev.addr===scan.pairing){scan.pairing=null;toast((ev.name||'Kontrolcü')+' bağlandı');}
+  if(document.getElementById('scan').classList.contains('open'))renderScan();
+}
 function renderScan(){
-  const saved=new Set(S.device.ctrls.map(c=>c.addr));
-  const list=scan.found.filter(d=>!scan.onlyPad||d.hid);
+  const saved=new Set(cardCtl.list.map(c=>c.addr));
+  const list=scan.found.filter(d=>!scan.onlyPad||d.hid).sort((a,b)=>b.hid-a.hid||b.rssi-a.rssi);
   document.getElementById('scanIn').innerHTML=`
-  <div class="row"><h2>Cihaz ara</h2><span class="prev">önizleme</span><button class="btn ico" onclick="closeScan()">✕</button></div>
+  <div class="row"><h2>Cihaz ara</h2><button class="btn ico" onclick="closeScan()">✕</button></div>
   <p class="hint" style="margin:6px 0">Kontrolcünü eşleşme moduna al (D8 Pro'da X + Home). Listede görününce üstüne dokun.</p>
   <div class="row"><span>${scan.on?'<span class="spin"></span> Aranıyor…':'Arama bitti'}</span><span style="flex:1"></span>
     <label class="hint"><input type="checkbox" ${scan.onlyPad?'checked':''} onchange="scan.onlyPad=this.checked;renderScan()"> Sadece uyumlu</label>
     <button class="btn" onclick="${scan.on?'stopScan();renderScan()':'startScan()'}">${scan.on?'Durdur':'Yeniden ara'}</button></div>
-  ${list.map(d=>{const i=DEMO.indexOf(d),s=saved.has(d.addr),pr=scan.pairing===d.addr;
-    return `<div class="dev ${d.hid?'':'no'}" ${d.hid&&!s&&!pr?`onclick="pair(${i})"`:''}><span class="ic">${d.ic}</span>
-      <div style="flex:1;min-width:0"><b>${esc(d.name)}</b><div class="hint">${d.kind} · ${d.addr}</div>
-      <div>${d.hid?'<span class="ok">✓ Uyumlu (BLE HID)</span>':'<span class="bad">Uyumsuz: giriş cihazı değil</span>'}</div></div>
-      ${bars(d.rssi)}<span style="min-width:74px;text-align:right">${pr?'<span class="spin"></span>':s?'<span class="hint">kayıtlı</span>':d.hid?'<span class="btn" style="display:inline-flex;align-items:center">Eşle</span>':''}</span></div>`;}).join('')||`<div class="empty">${scan.on?'Henüz bir şey bulunmadı…':'Uyumlu cihaz bulunamadı. Kontrolcü eşleşme modunda mı?'}</div>`}
-  <div class="note" style="margin-top:12px">Bu liste şimdilik örnek. Kart yazılımı hazır olunca XIAO'nun gerçekten çevrede gördüğü cihazlar burada çıkacak.</div>`;
+  ${list.map(d=>{const s=saved.has(d.addr),pr=scan.pairing===d.addr,on=cardCtl.cur===d.addr;
+    return `<div class="dev ${d.hid?'':'no'}" ${d.hid&&!on&&!pr?`onclick="pair('${d.addr}')"`:''}><span class="ic">${d.hid?'🎮':'❔'}</span>
+      <div style="flex:1;min-width:0"><b>${esc(d.name||'(adsız)')}</b><div class="hint">${esc(shortAddr(d.addr))}</div>
+      <div>${d.hid?'<span class="ok">✓ Uyumlu (Bluetooth HID)</span>':'<span class="bad">Uyumsuz: giriş cihazı değil</span>'}</div></div>
+      ${bars(d.rssi)}<span style="min-width:74px;text-align:right">${pr?'<span class="spin"></span>':on?'<span class="ok">bağlı</span>':s?'<span class="hint">kayıtlı</span>':d.hid?'<span class="btn" style="display:inline-flex;align-items:center">Eşle</span>':''}</span></div>`;}).join('')||`<div class="empty">${scan.on?'Henüz bir şey bulunmadı…':'Uyumlu cihaz bulunamadı. Kontrolcü eşleşme modunda mı?'}</div>`}`;
 }
-function pair(i){const d=DEMO[i];scan.pairing=d.addr;renderScan();
-  scan.timers.push(setTimeout(()=>{scan.pairing=null;S.device.ctrls.forEach(c=>c.active=false);S.device.ctrls.push({name:d.name,addr:d.addr,active:true});save();renderScan();renderSheet();toast(d.name+' eşlendi');},1300));}
-function setActive(i){S.device.ctrls.forEach((c,j)=>c.active=i===j);save();renderSheet();}
-async function forget(i){const c=S.device.ctrls[i];if(!await ask(`"${c.name}" unutulsun mu?`,null))return;const wasA=c.active;S.device.ctrls.splice(i,1);if(wasA&&S.device.ctrls[0])S.device.ctrls[0].active=true;save();renderSheet();}
+async function pair(a){scan.pairing=a;renderScan();await PM.sendLine('use '+a);}
+
+/* ---------- Tuş tanıtma ---------- */
+function parseMap(hex){
+  const b=hex.match(/../g).map(x=>parseInt(x,16));
+  const out=[],off={};let g={page:0,lmin:0,lmax:0,size:0,count:0,id:0},loc={u:[],min:null,max:null},i=0;
+  const sgn=(v,sz)=>sz===1&&v>127?v-256:sz===2&&v>32767?v-65536:v;
+  while(i<b.length){
+    const p=b[i],sz=[0,1,2,4][p&3],tag=p&0xfc;let d=0;
+    for(let k=0;k<sz;k++)d|=b[i+1+k]<<(8*k);d>>>=0;i+=1+sz;
+    switch(tag){
+      case 0x04:g.page=d;break; case 0x14:g.lmin=sgn(d,sz);break; case 0x24:g.lmax=sgn(d,sz);break;
+      case 0x74:g.size=d;break; case 0x94:g.count=d;break; case 0x84:g.id=d;break;
+      case 0x08:loc.u.push(sz===4?[d>>>16,d&0xffff]:[g.page,d]);break;
+      case 0x18:loc.min=d;break; case 0x28:loc.max=d;break;
+      case 0xa0:loc={u:[],min:null,max:null};break;
+      case 0x80:{
+        const rid=g.id,o=off[rid]||0,isConst=d&1,isVar=!!(d&2);
+        let us=loc.u.slice();if(!us.length&&loc.min!==null)for(let u=loc.min;u<=loc.max;u++)us.push([g.page,u]);
+        if(isConst){}
+        else if(isVar){for(let k=0;k<g.count;k++){const u=us[Math.min(k,us.length-1)];if(u)out.push({rid,bit:o+k*g.size,size:g.size,page:u[0],usage:u[1],lmin:g.lmin,lmax:g.lmax,kind:'var'});}}
+        else{for(let k=0;k<g.count;k++)out.push({rid,bit:o+k*g.size,size:g.size,page:g.page,usage:loc.min||0,lmin:g.lmin,lmax:g.lmax,kind:'array'});}
+        off[rid]=o+g.count*g.size;loc={u:[],min:null,max:null};break;}
+      case 0x90:case 0xb0:loc={u:[],min:null,max:null};break;
+    }
+  }
+  out.forEach(f=>{f.key=f.rid+':'+f.bit;f.name=fName(f);f.type=f.kind==='array'?'array':(f.page===9||f.lmax===1)?'btn':(f.page===1&&f.usage===0x39)?'hat':'axis';});
+  return out;
+}
+function fName(f){
+  if(f.page===9)return 'Düğme '+f.usage;
+  if(f.page===1)return {0x30:'X',0x31:'Y',0x32:'Z',0x33:'Rx',0x34:'Ry',0x35:'Rz',0x36:'Kaydırıcı',0x39:'Yön'}[f.usage]||('Genel '+f.usage.toString(16));
+  if(f.page===2)return {0xc4:'Gaz',0xc5:'Fren'}[f.usage]||('Sim '+f.usage.toString(16));
+  if(f.page===0xc)return 'Medya';
+  return 'Sayfa '+f.page.toString(16);
+}
+function readBits(by,bit,size,signed){let v=0;for(let k=0;k<size;k++){const B=bit+k;if(by[B>>3]&(1<<(B&7)))v+=2**k;}if(signed&&v>=2**(size-1))v-=2**size;return v;}
+const LSTEPS=[
+  ['A','A tuşuna bas'],['B','B tuşuna bas'],['X','X tuşuna bas'],['Y','Y tuşuna bas'],
+  ['LB','LB (sol omuz)'],['RB','RB (sağ omuz)'],['LT','LT (sol tetik), sonuna kadar bas'],['RT','RT (sağ tetik), sonuna kadar bas'],
+  ['SELECT','Select / View'],['START','Start / Menu'],['HOME','Home'],['SHARE','Ekran görüntüsü tuşu'],
+  ['L3','Sol çubuğa bastır (L3)'],['R3','Sağ çubuğa bastır (R3)'],
+  ['UP','Yön tuşu YUKARI'],['DOWN','Yön tuşu AŞAĞI'],['LEFT','Yön tuşu SOL'],['RIGHT','Yön tuşu SAĞ'],
+  ['LS_X','Sol çubuğu SAĞA it'],['LS_Y','Sol çubuğu AŞAĞI it'],['RS_X','Sağ çubuğu SAĞA it'],['RS_Y','Sağ çubuğu AŞAĞI it'],
+  ['M1','Arka sol tuş (M1)'],['M2','Arka sağ tuş (M2)'],
+];
+let lw=null;
+function openLearn(){
+  lw={fields:[],map:'',state:{},idle:null,i:0,res:{},used:new Set(),phase:'load',raw:[],ctrl:null};
+  document.getElementById('scan').classList.add('open');renderLearn();
+  PM.sendLine('map').catch(()=>{});
+}
+function closeLearn(){lw=null;document.getElementById('scan').classList.remove('open');}
+function lActive(f){
+  const v=lw.state[f.key];if(v===undefined)return false;
+  if(f.type==='btn'||f.type==='array')return v!==0&&(!lw.idle||lw.idle[f.key]!==v);
+  if(f.type==='hat')return v>=f.lmin&&v<=f.lmax;
+  return Math.abs(v-lBase(f))>(f.lmax-f.lmin)*0.35;
+}
+/* bırakılmış hali: kartın gönderdiği son rapor; yoksa tetikler en küçük değerde, çubuklar ortada */
+const lBase=f=>lw.idle&&lw.idle[f.key]!==undefined?lw.idle[f.key]:f.page===2?f.lmin:(f.lmin+f.lmax)/2;
+function learnEv(ev){
+  if(!lw)return;
+  if(ev.ev==='ctrl'){lw.ctrl=ev;if(!ev.connected){lw.phase='nopad';renderLearn();}}
+  if(ev.ev==='map'){lw.map+=ev.d;}
+  if(ev.ev==='map_end'){lw.fields=lw.map?parseMap(lw.map):[];lw.phase=lw.fields.length?'idle':'nomap';renderLearn();
+    setTimeout(()=>{if(lw&&lw.phase==='idle'){lw.idle={...lw.state};lw.phase='wait';renderLearn();}},900);}
+  if(ev.ev==='rep'){
+    const by=(ev.d.match(/../g)||[]).map(x=>parseInt(x,16));
+    for(const f of lw.fields)if(f.rid===ev.id)lw.state[f.key]=readBits(by,f.bit,f.size,f.lmin<0);
+    if(lw.phase==='wait'||lw.phase==='release'){const r=ev.id+':'+ev.d;if(!lw.raw.includes(r)){lw.raw.push(r);if(lw.raw.length>12)lw.raw.shift();}}
+    lDetect();
+  }
+}
+function lDetect(){
+  if(lw.i>=LSTEPS.length)return;
+  if(lw.phase==='release'){if(!lw.fields.some(lActive)){lw.phase='wait';lw.raw=[];renderLearn();}return;}
+  if(lw.phase!=='wait')return;
+  const [id]=LSTEPS[lw.i];
+  for(const f of lw.fields){
+    if(!lActive(f))continue;
+    const v=lw.state[f.key],sig=f.type==='hat'||f.type==='array'?f.key+'='+v:f.key;
+    if(lw.used.has(sig))continue;
+    const base=lBase(f);
+    lw.res[id]=f.type==='hat'?{t:'hat',rid:f.rid,bit:f.bit,size:f.size,v,lmin:f.lmin,name:'Yön'}
+      :f.type==='array'?{t:'usage',rid:f.rid,bit:f.bit,size:f.size,v,name:fName(f)+' 0x'+v.toString(16)}
+      :f.type==='axis'?{t:'axis',rid:f.rid,bit:f.bit,size:f.size,min:f.lmin,max:f.lmax,dir:v>base?1:-1,name:f.name}
+      :{t:'btn',rid:f.rid,bit:f.bit,name:f.name};
+    lw.used.add(sig);lw.i++;lw.phase='release';renderLearn();return;
+  }
+}
+const sigOf=m=>m&&(m.t==='hat'||m.t==='usage'?`${m.rid}:${m.bit}=${m.v}`:`${m.rid}:${m.bit}`);
+function lSkip(kind){const [id]=LSTEPS[lw.i];lw.res[id]=kind==='miss'?{t:'missing',raw:lw.raw.slice()}:null;lw.i++;lw.raw=[];lw.phase=lw.fields.some(lActive)?'release':'wait';renderLearn();}
+function lBack(){if(lw.i>0){lw.i--;const m=lw.res[LSTEPS[lw.i][0]];if(m&&m.t!=='missing')lw.used.delete(sigOf(m));delete lw.res[LSTEPS[lw.i][0]];lw.phase='wait';lw.raw=[];renderLearn();}}
+function lDesc(m){if(m===undefined)return '';if(!m)return '<span class="hint">yok</span>';if(m.t==='missing')return '<span style="color:var(--warn)">var ama algılanmadı</span>';
+  if(m.t==='axis')return esc(m.name)+(m.dir>0?' +':' −');return esc(m.name)+(m.t==='hat'?' = '+m.v:'');}
+function renderLearn(){
+  const el=document.getElementById('scanIn'),c=lw.ctrl;
+  let h=`<div class="row"><h2>Tuşları tanıt${c&&c.name?' · '+esc(c.name):''}</h2><button class="btn ico" onclick="closeLearn()">✕</button></div>`;
+  if(lw.phase==='load'){el.innerHTML=h+'<p class="hint"><span class="spin"></span> Kontrolcünün tuş haritası okunuyor…</p>';return;}
+  if(lw.phase==='nopad'){el.innerHTML=h+'<div class="note">Karta bağlı bir kontrolcü yok. Önce kontrolcüyü aç ve bağlanmasını bekle.</div>';return;}
+  if(lw.phase==='nomap'){el.innerHTML=h+'<div class="note">Kontrolcünün tuş haritası okunamadı. Kontrolcüyü kapatıp açıp tekrar dene.</div>';return;}
+  if(lw.phase==='idle'){el.innerHTML=h+'<p class="hint"><span class="spin"></span> Hiçbir tuşa dokunma, çubukları bırak…</p>';return;}
+  const n=LSTEPS.length;
+  if(lw.i<n){
+    const [,t]=LSTEPS[lw.i];
+    h+=`<div class="hint">${lw.i+1} / ${n}</div><div style="font-size:22px;font-weight:700;margin:8px 0">${t}</div>
+      <div class="hint">${lw.phase==='release'?'Bırak…':'Bekleniyor… Bu tuş kontrolcünde yoksa "Yok". Tuş var ama basınca burada bir şey olmuyorsa "Var ama algılamıyor".'}</div>
+      <div style="height:6px;background:var(--panel2);border-radius:4px;margin:10px 0"><i style="display:block;height:6px;border-radius:4px;background:var(--acc2);width:${lw.i/n*100}%"></i></div>
+      <div class="row"><button class="btn" onclick="lBack()" ${lw.i?'':'disabled'}>← Geri</button><button class="btn" onclick="lSkip('none')">Yok, atla</button><button class="btn" onclick="lSkip('miss')">Var ama algılamıyor</button></div>`;
+  }else{
+    const miss=LSTEPS.filter(([id])=>lw.res[id]&&lw.res[id].t==='missing');
+    h+=`<div style="font-size:20px;font-weight:700;margin:8px 0">Bitti</div>
+      <div class="row"><button class="btn pri" onclick="lSave()">Karta kaydet</button><button class="btn" onclick="lBack()">← Son adıma dön</button><button class="btn" onclick="openLearn()">Baştan</button><button class="btn" onclick="lClear()">Tanıtmayı sil</button></div>
+      ${miss.length?`<div class="note" style="margin-top:10px">${miss.length} tuş algılanmadı (${miss.map(([id])=>id).join(', ')}). "Sorun raporunu kopyala"ya basıp sohbete yapıştır; ne gönderdiğine bakıp düzeltelim.
+        <div style="margin-top:6px"><button class="btn" onclick="lCopy()">Sorun raporunu kopyala</button></div></div>`:''}`;
+  }
+  h+=`<table style="width:100%;margin-top:10px;font-size:13px">${LSTEPS.filter(([id])=>id in lw.res).map(([id,t])=>`<tr><td style="padding:3px 0">${t}</td><td style="text-align:right">${lDesc(lw.res[id])}</td></tr>`).join('')}</table>`;
+  el.innerHTML=h;
+}
+const PBI={A:0,B:1,X:3,Y:4,LB:6,RB:7,LT:8,RT:9,SELECT:10,START:11,HOME:12,L3:13,R3:14,SHARE:15,UP:16,DOWN:17,LEFT:18,RIGHT:19,M1:20,M2:21};
+function lEntries(){
+  const out=[],ent=(rid,kind,tgt,size,bit,flags,arg,mn,mx)=>out.push(rid,kind,tgt,size,bit&255,bit>>8,flags,0,arg&255,(arg>>8)&255,mn&255,(mn>>8)&255,mx&255,(mx>>8)&255);
+  let hatDone=false;
+  for(const [id] of LSTEPS){
+    const m=lw.res[id];if(!m||m.t==='missing')continue;
+    const stick={LS_X:0,LS_Y:1,RS_X:2,RS_Y:3}[id];
+    if(stick!==undefined){if(m.t==='axis')ent(m.rid,1,stick,m.size,m.bit,m.dir<0?1:0,0,m.min,m.max);continue;}
+    const pb=PBI[id];
+    if(m.t==='btn')ent(m.rid,0,pb,1,m.bit,0,0,0,1);
+    else if(m.t==='usage')ent(m.rid,5,pb,m.size,m.bit,0,m.v,0,0);
+    else if(m.t==='hat'){if(['UP','DOWN','LEFT','RIGHT'].includes(id)){if(!hatDone){ent(m.rid,3,0,m.size,m.bit,0,m.lmin&0xffff,0,0);hatDone=true;}}else ent(m.rid,5,pb,m.size,m.bit,0,m.v,0,0);}
+    else if(m.t==='axis'){
+      if(id==='LT'||id==='RT')ent(m.rid,2,id==='LT'?0:1,m.size,m.bit,m.dir<0?1:0,0,m.min,m.max);
+      else ent(m.rid,4,pb,m.size,m.bit,m.dir<0?4:0,60,m.min,m.max);
+    }
+  }
+  return out;
+}
+async function lSave(){
+  const e=lEntries();if(!e.length){toast('Kaydedilecek tuş yok');return;}
+  await PM.sendLine('lm '+lw.ctrl.addr+' '+PM.hex(e));toast('Tuşlar karta kaydedildi');PM.sendLine('ctrls');
+}
+async function lClear(){if(!await ask('Bu kontrolcünün tanıtılmış tuşları silinsin mi? Kart tuşları yine kendisi tahmin eder.',null))return;await PM.sendLine('lm '+lw.ctrl.addr+' -');toast('Tanıtma silindi');PM.sendLine('ctrls');}
+async function lCopy(){
+  const rep={kontrolcu:lw.ctrl&&lw.ctrl.name,adres:lw.ctrl&&lw.ctrl.addr,harita:lw.map,algilanan:{},algilanmayan:{}};
+  for(const [id] of LSTEPS){const m=lw.res[id];if(!m)continue;if(m.t==='missing')rep.algilanmayan[id]=m.raw;else rep.algilanan[id]=m;}
+  const t=JSON.stringify(rep);try{await navigator.clipboard.writeText(t);toast('Kopyalandı, sohbete yapıştır');}catch(e){ask('Kopyalanamadı, bunu seçip kopyala:',t);}
+}
 
 function ask(msg,def){
   return new Promise(res=>{
@@ -837,7 +1001,12 @@ async function cardBtn(known){
     PM.link.onLine=ev=>{
       if(ev.ev==='prof'&&ev.cur<S.profiles.length&&ev.cur!==S.cur){S.cur=ev.cur;ui.layer=0;render();toast('Profil: '+P().name);}
       if(ev.ev==='mode')toast(ev.mapping?'Eşleme açık':'Normal gamepad');
-      if(ev.ev==='hello'){renderCard();if(document.getElementById('sheet').classList.contains('open'))renderSheet();}
+      if(ev.ev==='hello'){renderCard();PM.sendLine('ctrls').catch(()=>{});if(document.getElementById('sheet').classList.contains('open'))renderSheet();}
+      if(ev.ev==='ctrls'){cardCtl=ev;if(ev.cur&&ev.name)rememberName(ev.cur,ev.name);if(document.getElementById('sheet').classList.contains('open'))renderSheet();}
+      if(ev.ev==='connected'){rememberName(ev.addr,ev.name);PM.sendLine('ctrls').catch(()=>{});}
+      if(ev.ev==='disconnected'||ev.ev==='lm')PM.sendLine('ctrls').catch(()=>{});
+      if(['dev','scan_end','connected'].includes(ev.ev))scanEv(ev);
+      if(['ctrl','map','map_end','rep'].includes(ev.ev))learnEv(ev);
     };
     PM.link.onClose=()=>{renderCard();toast('Kart bağlantısı koptu');};
     const ok=await PM.connect(known);
