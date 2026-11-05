@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PadMapper – Kart testi</title>
+<style>
+:root{--bg:#121419;--panel:#1b1e25;--panel2:#242833;--line:#2f3442;--text:#e8eaef;--mute:#8b93a5;--acc:#ff8a3d;--acc2:#3dd6c6;--ok:#5fd36a;--bad:#ff5d6c;--warn:#ffcc4d}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font:15px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+header{display:flex;gap:10px;align-items:center;padding:10px 14px;background:var(--panel);border-bottom:1px solid var(--line);flex-wrap:wrap}
+header b{color:var(--acc)}
+.btn{background:var(--panel2);border:1px solid var(--line);border-radius:9px;padding:7px 14px;color:inherit;font:inherit;cursor:pointer}
+.btn.pri{background:var(--acc);border-color:var(--acc);color:#1a1205;font-weight:600}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+main{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:10px;padding:10px;max-width:1200px;margin:0 auto}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px}
+h2{font-size:15px;margin:0 0 8px;color:var(--mute);text-transform:uppercase;letter-spacing:.5px}
+.st{display:flex;align-items:center;gap:8px;margin:4px 0}
+.dot{width:10px;height:10px;border-radius:50%;background:var(--line);flex:none}
+.dot.ok{background:var(--ok)}.dot.wait{background:var(--warn)}.dot.bad{background:var(--bad)}
+.hint{color:var(--mute);font-size:13px}
+.bytes{display:flex;flex-wrap:wrap;gap:4px;margin-top:6px}
+.by{font-family:ui-monospace,Consolas,monospace;font-size:13px;background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:4px 0;width:44px;text-align:center}
+.by small{display:block;color:var(--mute);font-size:10px}
+.by.ch{border-color:var(--acc2);color:var(--acc2);background:#123430}
+pre{background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:8px;font-size:12px;max-height:260px;overflow:auto;white-space:pre-wrap;word-break:break-all;margin:6px 0 0}
+.dev{display:flex;justify-content:space-between;background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:6px 10px;margin-top:5px;font-size:14px}
+.note{background:#2a2414;border:1px solid #5a4a1f;color:#f3dfa6;border-radius:9px;padding:8px 10px;font-size:13px;margin:10px}
+.wide{grid-column:1/-1}
+</style>
+</head>
+<body>
+<header>
+  <b>PadMapper</b><span>Kart testi</span>
+  <button class="btn pri" id="conn">Karta bağlan (USB)</button>
+  <span class="hint" id="fw"></span>
+</header>
+<div class="note" id="nosupport" style="display:none">Bu tarayıcı USB seri bağlantıyı desteklemiyor. Bilgisayarda <b>Chrome</b> ya da <b>Edge</b> ile aç.</div>
+<main>
+  <section class="card">
+    <h2>Durum</h2>
+    <div class="st"><span class="dot" id="d-card"></span><span id="s-card">Kart bağlı değil</span></div>
+    <div class="st"><span class="dot" id="d-pad"></span><span id="s-pad">Kontrolcü bekleniyor</span></div>
+    <div class="st"><span class="dot" id="d-map"></span><span id="s-map">Tuş haritası okunmadı</span></div>
+    <p class="hint">Kontrolcüyü eşleşme moduna al (D8 Pro'da X + Home). Kart onu kendisi bulup bağlanır.</p>
+    <div id="devs"></div>
+  </section>
+  <section class="card">
+    <h2>Canlı tuşlar</h2>
+    <p class="hint" style="margin:0">Kontrolcüde bir tuşa bas ya da çubuğu oynat. Değişen baytlar yanar.</p>
+    <div id="reps"></div>
+  </section>
+  <section class="card wide">
+    <h2>Tuş haritası (Report Map)</h2>
+    <p class="hint" style="margin:0">Okununca burada çıkar. "Kopyala"ya basıp sohbete yapıştırırsan tuşları çözerim.</p>
+    <pre id="map">—</pre>
+    <button class="btn" style="margin-top:6px" onclick="copyMap()">Kopyala</button>
+  </section>
+  <section class="card wide">
+    <h2>Kayıt</h2>
+    <pre id="log"></pre>
+    <button class="btn" style="margin-top:6px" onclick="copyLog()">Kaydı kopyala</button>
+  </section>
+</main>
+<script>
+const $=id=>document.getElementById(id);
+if(!('serial' in navigator)){$('nosupport').style.display='block';$('conn').disabled=true;}
+let mapHex='',mapLen=0,logLines=[],reps={},found={};
+function setSt(k,cls,txt){$('d-'+k).className='dot '+cls;$('s-'+k).textContent=txt;}
+function log(s){logLines.push(s);if(logLines.length>400)logLines.shift();const el=$('log');el.textContent=logLines.join('\n');el.scrollTop=el.scrollHeight;}
+function handle(ev){
+  switch(ev.ev){
+    case 'hello':$('fw').textContent='Kart yazılımı '+ev.fw;setSt('card','ok','Kart bağlı');break;
+    case 'alive':setSt('card','ok','Kart bağlı');if(!ev.connected&&$('d-pad').className.indexOf('ok')>=0)setSt('pad','bad','Kontrolcü bağlı değil');break;
+    case 'scanning':setSt('pad','wait','Kontrolcü aranıyor…');break;
+    case 'found':found[ev.addr]=ev;$('devs').innerHTML=Object.values(found).map(d=>`<div class="dev"><span>🎮 ${d.name||'(adsız)'} <span class="hint">${d.addr}</span></span><span class="hint">${d.rssi} dBm</span></div>`).join('');setSt('pad','wait','Bulundu: '+(ev.name||ev.addr)+', bağlanılıyor…');break;
+    case 'connected':setSt('pad','wait','Bağlandı, servisler okunuyor…');break;
+    case 'security':break;
+    case 'hid_ready':setSt('pad','ok','Kontrolcü bağlı');setSt('map','wait','Tuş haritası okunuyor…');mapHex='';break;
+    case 'map':mapHex+=ev.d;$('map').textContent=mapHex.match(/../g).join(' ');break;
+    case 'map_end':mapLen=ev.len;setSt('map',ev.len?'ok':'bad',ev.len?`Tuş haritası okundu (${ev.len} bayt)`:'Tuş haritası okunamadı');break;
+    case 'ready':setSt('pad','ok',`Kontrolcü hazır (${ev.inputs} tuş raporu dinleniyor)`);break;
+    case 'rep':showRep(ev);return;
+    case 'disconnected':setSt('pad','bad','Kontrolcü ayrıldı (kod '+ev.reason+')');break;
+    case 'connect_failed':setSt('pad','bad','Bağlanamadı (kod '+ev.code+')');break;
+    case 'err':break;
+  }
+}
+function showRep(ev){
+  const b=ev.d.match(/../g)||[],old=reps[ev.id];
+  reps[ev.id]=b;
+  let box=$('rep-'+ev.id);
+  if(!box){box=document.createElement('div');box.id='rep-'+ev.id;$('reps').appendChild(box);}
+  box.innerHTML=`<div class="hint" style="margin-top:8px">Rapor ${ev.id}</div><div class="bytes">${b.map((x,i)=>`<div class="by ${old&&old[i]!==x?'ch':''}"><small>${i}</small>${x}</div>`).join('')}</div>`;
+}
+let port,reader;
+$('conn').onclick=async()=>{
+  try{
+    port=await navigator.serial.requestPort();
+    await port.open({baudRate:115200});
+    try{await port.setSignals({dataTerminalReady:true});}catch(e){}
+    $('conn').disabled=true;$('conn').textContent='Bağlandı';setSt('card','wait','Kart yanıtı bekleniyor…');
+    const dec=new TextDecoderStream();port.readable.pipeTo(dec.writable);reader=dec.readable.getReader();
+    let buf='';
+    while(true){
+      const {value,done}=await reader.read();if(done)break;
+      buf+=value;let i;
+      while((i=buf.indexOf('\n'))>=0){
+        const line=buf.slice(0,i).trim();buf=buf.slice(i+1);if(!line)continue;
+        if(!line.includes('"ev":"rep"')&&!line.includes('"ev":"alive"'))log(line);
+        try{handle(JSON.parse(line));}catch(e){}
+      }
+    }
+  }catch(e){log('Hata: '+e.message);$('conn').disabled=false;$('conn').textContent='Karta bağlan (USB)';setSt('card','bad','Bağlantı koptu');}
+};
+async function copy(t){try{await navigator.clipboard.writeText(t);alertMsg('Kopyalandı');}catch(e){alertMsg('Kopyalanamadı, metni seçip kopyala');}}
+function alertMsg(m){const n=$('fw');const o=n.textContent;n.textContent=m;setTimeout(()=>n.textContent=o,1500);}
+function copyMap(){copy('Report Map ('+mapLen+' bayt): '+mapHex);}
+function copyLog(){copy(logLines.join('\n'));}
+</script>
+</body>
+</html>
