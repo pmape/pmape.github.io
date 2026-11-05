@@ -61,7 +61,7 @@ static bool pad_connected;
 enum { D_KB, D_MOUSE, D_PAD, D_N };
 static volatile bool usb_cfg, usb_susp;
 static int64_t last_ok_ms, last_err_ms;
-static uint32_t tx_ok, tx_err, tx_busy, tx_unstuck;
+static uint32_t tx_ok, tx_err, tx_busy, tx_unstuck, tx_wake;
 static int64_t busy_since[3];
 static const struct device *hid[D_N];
 static struct k_sem ready[D_N];
@@ -148,6 +148,17 @@ static void send(int i, const uint8_t *buf, uint8_t len, bool force)
 	int err;
 
 	if (!force && last_len[i] == len && !memcmp(last[i], buf, len)) return;
+	if (usb_susp) {
+		/* tablet USB'yi uyuttu: yeni veri var, uyandır; uyanınca gönderilir */
+		static int64_t last_wake;
+		int64_t now = k_uptime_get();
+
+		if (now - last_wake > 30) {
+			last_wake = now;
+			if (usb_wakeup_request() == 0) tx_wake++;
+		}
+		return;
+	}
 	if (k_sem_take(&ready[i], K_NO_WAIT)) {
 		/* önceki gönderim bitmedi; çok uzun sürdüyse kilidi aç */
 		tx_busy++;
@@ -179,8 +190,8 @@ static void send(int i, const uint8_t *buf, uint8_t len, bool force)
 
 void out_print_stats(void)
 {
-	OUT("{\"ev\":\"stats\",\"usb\":%d,\"pad\":%d,\"mapping\":%d,\"rx\":%u,\"tx_ok\":%u,\"tx_err\":%u,\"tx_busy\":%u,\"unstuck\":%u}\n",
-	    usb_cfg, pad_connected, mapping_on, pad_rx_count(), tx_ok, tx_err, tx_busy, tx_unstuck);
+	OUT("{\"ev\":\"stats\",\"usb\":%d,\"pad\":%d,\"mapping\":%d,\"rx\":%u,\"tx_ok\":%u,\"tx_err\":%u,\"tx_busy\":%u,\"unstuck\":%u,\"wake\":%u}\n",
+	    usb_cfg, pad_connected, mapping_on, pad_rx_count(), tx_ok, tx_err, tx_busy, tx_unstuck, tx_wake);
 }
 
 /* ---------- ışık ---------- */
