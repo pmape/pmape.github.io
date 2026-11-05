@@ -23,12 +23,27 @@
 #include <zephyr/bluetooth/gatt.h>
 #include <zephyr/bluetooth/uuid.h>
 #include <zephyr/settings/settings.h>
+#include <zephyr/drivers/uart.h>
 
 #include <bluetooth/scan.h>
 #include <bluetooth/gatt_dm.h>
 #include <bluetooth/services/hogp.h>
 
-#define FW_VERSION "0.1.0"
+#include "log.h"
+#include "pad.h"
+#include "out.h"
+
+#define FW_VERSION "0.2.0"
+
+bool host_listening(void)
+{
+	static const struct device *con = DEVICE_DT_GET(DT_CHOSEN(zephyr_console));
+	uint32_t dtr = 0;
+
+	if (!device_is_ready(con)) return false;
+	if (uart_line_ctrl_get(con, UART_LINE_CTRL_DTR, &dtr)) return false;
+	return dtr != 0;
+}
 
 static struct bt_conn *cur_conn;
 static struct bt_hogp hogp;
@@ -38,13 +53,13 @@ static struct bt_hogp hogp;
 static void print_hex(const uint8_t *d, size_t n)
 {
 	for (size_t i = 0; i < n; i++) {
-		printk("%02x", d[i]);
+		OUT("%02x", d[i]);
 	}
 }
 
 static void print_err(const char *where, int code)
 {
-	printk("{\"ev\":\"err\",\"where\":\"%s\",\"code\":%d}\n", where, code);
+	OUT("{\"ev\":\"err\",\"where\":\"%s\",\"code\":%d}\n", where, code);
 }
 
 static void start_scan(void)
@@ -55,7 +70,7 @@ static void start_scan(void)
 		print_err("scan_start", err);
 		return;
 	}
-	printk("{\"ev\":\"scanning\"}\n");
+	OUT("{\"ev\":\"scanning\"}\n");
 }
 
 /* ---------- tarama ---------- */
@@ -97,7 +112,7 @@ static void scan_filter_match(struct bt_scan_device_info *info,
 	bt_data_parse(info->adv_data, adv_name_cb, &ctx);
 	net_buf_simple_restore(info->adv_data, &state);
 
-	printk("{\"ev\":\"found\",\"addr\":\"%s\",\"name\":\"%s\",\"rssi\":%d,\"connectable\":%d}\n",
+	OUT("{\"ev\":\"found\",\"addr\":\"%s\",\"name\":\"%s\",\"rssi\":%d,\"connectable\":%d}\n",
 	       addr, ctx.name, info->recv_info->rssi, connectable);
 }
 
@@ -185,7 +200,7 @@ static void connected(struct bt_conn *conn, uint8_t conn_err)
 	bt_addr_le_to_str(bt_conn_get_dst(conn), addr, sizeof(addr));
 
 	if (conn_err) {
-		printk("{\"ev\":\"connect_failed\",\"addr\":\"%s\",\"code\":%u}\n", addr, conn_err);
+		OUT("{\"ev\":\"connect_failed\",\"addr\":\"%s\",\"code\":%u}\n", addr, conn_err);
 		if (conn == cur_conn) {
 			bt_conn_unref(cur_conn);
 			cur_conn = NULL;
@@ -194,7 +209,7 @@ static void connected(struct bt_conn *conn, uint8_t conn_err)
 		return;
 	}
 
-	printk("{\"ev\":\"connected\",\"addr\":\"%s\"}\n", addr);
+	OUT("{\"ev\":\"connected\",\"addr\":\"%s\"}\n", addr);
 
 	/* Şifreleme iste; desteklemeyen cihazlarda doğrudan devam et */
 	if (bt_conn_set_security(conn, BT_SECURITY_L2)) {
@@ -204,7 +219,9 @@ static void connected(struct bt_conn *conn, uint8_t conn_err)
 
 static void disconnected(struct bt_conn *conn, uint8_t reason)
 {
-	printk("{\"ev\":\"disconnected\",\"reason\":%u}\n", reason);
+	OUT("{\"ev\":\"disconnected\",\"reason\":%u}\n", reason);
+	out_set_connected(false);
+	pad_reset();
 
 	if (bt_hogp_assign_check(&hogp)) {
 		bt_hogp_release(&hogp);
@@ -218,7 +235,7 @@ static void disconnected(struct bt_conn *conn, uint8_t reason)
 
 static void security_changed(struct bt_conn *conn, bt_security_t level, enum bt_security_err err)
 {
-	printk("{\"ev\":\"security\",\"level\":%u,\"err\":%d}\n", level, err);
+	OUT("{\"ev\":\"security\",\"level\":%u,\"err\":%d}\n", level, err);
 	start_discovery(conn);
 }
 
@@ -253,6 +270,11 @@ static uint8_t rep_cb(struct bt_hogp *h, struct bt_hogp_rep_info *rep, uint8_t e
 
 	uint8_t id = bt_hogp_rep_id(rep);
 	size_t len = MIN(bt_hogp_rep_size(rep), MAX_REP_LEN);
+
+	pad_input(id, data, bt_hogp_rep_size(rep));
+	if (!host_listening()) {
+		return BT_GATT_ITER_CONTINUE;
+	}
 	int slot = -1;
 
 	for (int i = 0; i < MAX_REPS; i++) {
@@ -275,9 +297,9 @@ static uint8_t rep_cb(struct bt_hogp *h, struct bt_hogp_rep_info *rep, uint8_t e
 		memcpy(rep_cache[slot].last, data, len);
 	}
 
-	printk("{\"ev\":\"rep\",\"id\":%u,\"d\":\"", id);
+	OUT("{\"ev\":\"rep\",\"id\":%u,\"d\":\"", id);
 	print_hex(data, len);
-	printk("\"}\n");
+	OUT("\"}\n");
 	return BT_GATT_ITER_CONTINUE;
 }
 
@@ -286,8 +308,11 @@ static void subscribe_inputs(void)
 	struct bt_hogp_rep_info *rep = NULL;
 	int n = 0;
 
+	pad_reset();
+	pad_parse_map(map_buf, MIN(map_total, sizeof(map_buf)));
+
 	while ((rep = bt_hogp_rep_next(&hogp, rep)) != NULL) {
-		printk("{\"ev\":\"report\",\"id\":%u,\"type\":%d,\"size\":%u}\n",
+		OUT("{\"ev\":\"report\",\"id\":%u,\"type\":%d,\"size\":%u}\n",
 		       bt_hogp_rep_id(rep), bt_hogp_rep_type(rep), (unsigned)bt_hogp_rep_size(rep));
 		if (bt_hogp_rep_type(rep) == BT_HIDS_REPORT_TYPE_INPUT) {
 			int err = bt_hogp_rep_subscribe(&hogp, rep, rep_cb);
@@ -300,9 +325,11 @@ static void subscribe_inputs(void)
 		}
 	}
 	memset(rep_cache, 0, sizeof(rep_cache));
-	printk("{\"ev\":\"ready\",\"inputs\":%d}\n", n);
+	OUT("{\"ev\":\"ready\",\"inputs\":%d}\n", n);
+	out_set_connected(n > 0);
 }
 
+static uint8_t map_buf[512];
 static size_t map_total;
 static size_t map_next_off;
 static void map_read_work_fn(struct k_work *w);
@@ -315,14 +342,17 @@ static void map_cb(struct bt_hogp *h, uint8_t err, const uint8_t *data, size_t s
 		if (err && err != BT_ATT_ERR_INVALID_OFFSET) {
 			print_err("map_read", err);
 		}
-		printk("{\"ev\":\"map_end\",\"len\":%u}\n", (unsigned)map_total);
+		OUT("{\"ev\":\"map_end\",\"len\":%u}\n", (unsigned)map_total);
 		subscribe_inputs();
 		return;
 	}
 
-	printk("{\"ev\":\"map\",\"off\":%u,\"d\":\"", (unsigned)offset);
+	if (offset + size <= sizeof(map_buf)) {
+		memcpy(&map_buf[offset], data, size);
+	}
+	OUT("{\"ev\":\"map\",\"off\":%u,\"d\":\"", (unsigned)offset);
 	print_hex(data, size);
-	printk("\"}\n");
+	OUT("\"}\n");
 
 	map_total = offset + size;
 	map_next_off = offset + size;
@@ -335,7 +365,7 @@ static void map_read_work_fn(struct k_work *w)
 
 	if (err) {
 		/* okuma bitti ya da desteklenmiyor: yine de tuşları dinle */
-		printk("{\"ev\":\"map_end\",\"len\":%u}\n", (unsigned)map_total);
+		OUT("{\"ev\":\"map_end\",\"len\":%u}\n", (unsigned)map_total);
 		subscribe_inputs();
 	}
 }
@@ -344,7 +374,7 @@ static void hogp_ready_work_fn(struct k_work *w)
 {
 	map_total = 0;
 	map_next_off = 0;
-	printk("{\"ev\":\"hid_ready\"}\n");
+	OUT("{\"ev\":\"hid_ready\"}\n");
 	k_work_submit(&map_read_work);
 }
 static K_WORK_DEFINE(hogp_ready_work, hogp_ready_work_fn);
@@ -373,12 +403,12 @@ static const struct bt_hogp_init_params hogp_params = {
 
 static void pairing_complete(struct bt_conn *conn, bool bonded)
 {
-	printk("{\"ev\":\"paired\",\"bonded\":%d}\n", bonded);
+	OUT("{\"ev\":\"paired\",\"bonded\":%d}\n", bonded);
 }
 
 static void pairing_failed(struct bt_conn *conn, enum bt_security_err reason)
 {
-	printk("{\"ev\":\"pair_failed\",\"reason\":%d}\n", reason);
+	OUT("{\"ev\":\"pair_failed\",\"reason\":%d}\n", reason);
 }
 
 static struct bt_conn_auth_info_cb auth_info_cb = {
@@ -392,13 +422,15 @@ int main(void)
 {
 	int err;
 
+	out_usb_init();
 	err = usb_enable(NULL);
 	if (err && err != -EALREADY) {
 		/* seri port yoksa yapacak pek bir şey yok, yine de devam */
 	}
 	k_sleep(K_MSEC(1500));
+	out_start();
 
-	printk("{\"ev\":\"hello\",\"fw\":\"" FW_VERSION "\"}\n");
+	OUT("{\"ev\":\"hello\",\"fw\":\"" FW_VERSION "\"}\n");
 
 	bt_hogp_init(&hogp, &hogp_params);
 
@@ -419,7 +451,7 @@ int main(void)
 	/* Ekran kartın orada olduğunu anlasın diye ara ara haber ver */
 	while (1) {
 		k_sleep(K_SECONDS(3));
-		printk("{\"ev\":\"alive\",\"connected\":%d}\n", cur_conn != NULL);
+		OUT("{\"ev\":\"alive\",\"connected\":%d}\n", cur_conn != NULL);
 	}
 	return 0;
 }

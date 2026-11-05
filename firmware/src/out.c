@@ -1,0 +1,284 @@
+/*
+ * Tablete giden USB çıkışı: gamepad + klavye + fare.
+ * Eşleme KAPALI: D8 Pro tablete normal gamepad olarak gider.
+ * Eşleme AÇIK:   şimdilik yerleşik deneme ayarı (ayar ekranından yazma sonraki adım).
+ * Aç/kapat:      Home + Select 1,5 sn basılı tut. Işık: mavi = gamepad, yeşil = eşleme.
+ */
+#include <string.h>
+#include <zephyr/kernel.h>
+#include <zephyr/device.h>
+#include <zephyr/drivers/gpio.h>
+#include <zephyr/sys/printk.h>
+#include <zephyr/usb/usb_device.h>
+#include <zephyr/usb/class/usb_hid.h>
+#include "log.h"
+#include "pad.h"
+#include "out.h"
+
+/* ---------- HID tanımları ---------- */
+
+static const uint8_t gamepad_desc[] = {
+	0x05, 0x01, 0x09, 0x05, 0xa1, 0x01,
+	/* 16 düğme */
+	0x05, 0x09, 0x19, 0x01, 0x29, 0x10, 0x15, 0x00, 0x25, 0x01,
+	0x75, 0x01, 0x95, 0x10, 0x81, 0x02,
+	/* yön (hat) + 4 bit boşluk */
+	0x05, 0x01, 0x09, 0x39, 0x15, 0x00, 0x25, 0x07, 0x35, 0x00, 0x46, 0x3b, 0x01,
+	0x65, 0x14, 0x75, 0x04, 0x95, 0x01, 0x81, 0x42,
+	0x65, 0x00, 0x75, 0x04, 0x95, 0x01, 0x81, 0x01,
+	/* X Y Z Rz */
+	0x09, 0x30, 0x09, 0x31, 0x09, 0x32, 0x09, 0x35, 0x15, 0x00, 0x26, 0xff, 0x00,
+	0x75, 0x08, 0x95, 0x04, 0x81, 0x02,
+	/* fren (LT) + gaz (RT) */
+	0x05, 0x02, 0x09, 0xc5, 0x09, 0xc4, 0x15, 0x00, 0x26, 0xff, 0x00,
+	0x75, 0x08, 0x95, 0x02, 0x81, 0x02,
+	0xc0,
+};
+
+static const uint8_t keyboard_desc[] = {
+	0x05, 0x01, 0x09, 0x06, 0xa1, 0x01,
+	0x05, 0x07, 0x19, 0xe0, 0x29, 0xe7, 0x15, 0x00, 0x25, 0x01, 0x75, 0x01, 0x95, 0x08, 0x81, 0x02,
+	0x95, 0x01, 0x75, 0x08, 0x81, 0x01,
+	0x95, 0x05, 0x75, 0x01, 0x05, 0x08, 0x19, 0x01, 0x29, 0x05, 0x91, 0x02,
+	0x95, 0x01, 0x75, 0x03, 0x91, 0x01,
+	0x95, 0x06, 0x75, 0x08, 0x15, 0x00, 0x25, 0x65, 0x05, 0x07, 0x19, 0x00, 0x29, 0x65, 0x81, 0x00,
+	0xc0,
+};
+
+static const uint8_t mouse_desc[] = {
+	0x05, 0x01, 0x09, 0x02, 0xa1, 0x01, 0x09, 0x01, 0xa1, 0x00,
+	0x05, 0x09, 0x19, 0x01, 0x29, 0x05, 0x15, 0x00, 0x25, 0x01, 0x95, 0x05, 0x75, 0x01, 0x81, 0x02,
+	0x95, 0x01, 0x75, 0x03, 0x81, 0x01,
+	0x05, 0x01, 0x09, 0x30, 0x09, 0x31, 0x09, 0x38, 0x15, 0x81, 0x25, 0x7f, 0x75, 0x08, 0x95, 0x03, 0x81, 0x06,
+	0xc0, 0xc0,
+};
+
+enum { D_PAD, D_KB, D_MOUSE, D_N };
+static const struct device *hid[D_N];
+static struct k_sem ready[D_N];
+static uint8_t last[D_N][9];
+static uint8_t last_len[D_N];
+
+static void in_ready(const struct device *dev)
+{
+	for (int i = 0; i < D_N; i++) {
+		if (hid[i] == dev) k_sem_give(&ready[i]);
+	}
+}
+
+static const struct hid_ops ops = { .int_in_ready = in_ready };
+
+int out_usb_init(void)
+{
+	static const char *names[D_N] = { "HID_0", "HID_1", "HID_2" };
+	static const uint8_t *descs[D_N] = { gamepad_desc, keyboard_desc, mouse_desc };
+	static const size_t sizes[D_N] = { sizeof(gamepad_desc), sizeof(keyboard_desc), sizeof(mouse_desc) };
+
+	for (int i = 0; i < D_N; i++) {
+		hid[i] = device_get_binding(names[i]);
+		if (!hid[i]) {
+			OUT("{\"ev\":\"err\",\"where\":\"hid_dev\",\"code\":%d}\n", i);
+			return -ENODEV;
+		}
+		k_sem_init(&ready[i], 1, 1);
+		usb_hid_register_device(hid[i], descs[i], sizes[i], &ops);
+		usb_hid_init(hid[i]);
+	}
+	return 0;
+}
+
+/* force: değişmese de gönder (fare hareketi gibi) */
+static void send(int i, const uint8_t *buf, uint8_t len, bool force)
+{
+	uint32_t wrote;
+
+	if (!force && last_len[i] == len && !memcmp(last[i], buf, len)) return;
+	if (k_sem_take(&ready[i], K_NO_WAIT)) return; /* önceki gönderim bitmedi, sonra tekrar dene */
+	if (hid_int_ep_write(hid[i], buf, len, &wrote)) {
+		k_sem_give(&ready[i]);
+		return;
+	}
+	memcpy(last[i], buf, len);
+	last_len[i] = len;
+}
+
+/* ---------- ışık ---------- */
+
+#if DT_NODE_HAS_STATUS(DT_ALIAS(led1), okay) && DT_NODE_HAS_STATUS(DT_ALIAS(led2), okay)
+static const struct gpio_dt_spec led_g = GPIO_DT_SPEC_GET(DT_ALIAS(led1), gpios);
+static const struct gpio_dt_spec led_b = GPIO_DT_SPEC_GET(DT_ALIAS(led2), gpios);
+#define HAVE_LED 1
+#else
+#define HAVE_LED 0
+#endif
+
+static bool mapping_on;
+static bool pad_connected;
+
+static void led_update(uint32_t tick)
+{
+#if HAVE_LED
+	bool on = pad_connected || (tick / 50) % 2; /* bağlı değilken yanıp söner */
+
+	gpio_pin_set_dt(&led_g, on && mapping_on);
+	gpio_pin_set_dt(&led_b, on && !mapping_on);
+#endif
+}
+
+void out_set_connected(bool c)
+{
+	pad_connected = c;
+}
+
+/* ---------- yerleşik deneme ayarı (eşleme açıkken) ---------- */
+
+#define K_A 4
+#define K_W 26
+#define K_S 22
+#define K_D 7
+#define K_E 8
+#define K_R 21
+#define K_Q 20
+#define K_F 9
+#define K_V 25
+#define K_SPACE 44
+#define K_ESC 41
+#define K_TAB 43
+#define K_RIGHT 79
+#define K_LEFT 80
+#define K_DOWN 81
+#define K_UP 82
+#define MOD_LCTRL 0x01
+#define MOD_LSHIFT 0x02
+
+static const struct { uint8_t btn; uint8_t key; uint8_t mod; } demo_keys[] = {
+	{ PB_A, K_SPACE, 0 }, { PB_B, K_E, 0 }, { PB_X, K_R, 0 }, { PB_Y, K_Q, 0 },
+	{ PB_RB, K_F, 0 }, { PB_LB, 0, MOD_LSHIFT }, { PB_L3, 0, MOD_LCTRL }, { PB_R3, K_V, 0 },
+	{ PB_START, K_ESC, 0 }, { PB_SELECT, K_TAB, 0 },
+	{ PB_UP, K_UP, 0 }, { PB_DOWN, K_DOWN, 0 }, { PB_LEFT, K_LEFT, 0 }, { PB_RIGHT, K_RIGHT, 0 },
+};
+
+static void kb_add(uint8_t *rep, int *n, uint8_t key)
+{
+	if (key && *n < 6) rep[2 + (*n)++] = key;
+}
+
+static int8_t stick_mouse(uint8_t v)
+{
+	int d = (int)v - 128;
+	int dead = 14, speed = 14;
+
+	if (d > -dead && d < dead) return 0;
+	d = d > 0 ? d - dead : d + dead;
+	/* yumuşak eğri: küçük itişte hassas, tam itişte hızlı */
+	int out = (d * abs(d) * speed) / (114 * 114);
+	if (out == 0) out = d > 0 ? 1 : -1;
+	return CLAMP(out, -127, 127);
+}
+
+static void build_mapped(const struct pad_state *p, uint8_t kb[8], uint8_t ms[4])
+{
+	int n = 0;
+
+	memset(kb, 0, 8);
+	memset(ms, 0, 4);
+	for (size_t i = 0; i < ARRAY_SIZE(demo_keys); i++) {
+		if (p->btn & BIT(demo_keys[i].btn)) {
+			kb[0] |= demo_keys[i].mod;
+			kb_add(kb, &n, demo_keys[i].key);
+		}
+	}
+	/* sol çubuk → W A S D */
+	if (p->ly < 64) kb_add(kb, &n, K_W);
+	if (p->ly > 192) kb_add(kb, &n, K_S);
+	if (p->lx < 64) kb_add(kb, &n, K_A);
+	if (p->lx > 192) kb_add(kb, &n, K_D);
+	/* sağ çubuk → fare, tetikler → tık */
+	ms[1] = (uint8_t)stick_mouse(p->rx);
+	ms[2] = (uint8_t)stick_mouse(p->ry);
+	if (p->rt > 100 || (p->btn & BIT(PB_RT))) ms[0] |= 1;
+	if (p->lt > 100 || (p->btn & BIT(PB_LT))) ms[0] |= 2;
+}
+
+static void build_gamepad(const struct pad_state *p, uint8_t g[9])
+{
+	uint16_t b = p->btn & 0xffff; /* PB_A..PB_EXTRA = HID düğme 1..16 */
+
+	g[0] = b & 0xff;
+	g[1] = b >> 8;
+	g[2] = p->hat > 7 ? 0x0f : p->hat;
+	g[3] = p->lx; g[4] = p->ly; g[5] = p->rx; g[6] = p->ry;
+	g[7] = p->lt; g[8] = p->rt;
+}
+
+/* ---------- ana döngü (yaklaşık 125 Hz) ---------- */
+
+static void out_thread(void *a, void *b, void *c)
+{
+	struct pad_state p;
+	uint32_t tick = 0;
+	int64_t combo_since = 0;
+	bool combo_done = false;
+	static const uint8_t g_idle[9] = { 0, 0, 0x0f, 128, 128, 128, 128, 0, 0 };
+	static const uint8_t z8[8] = { 0 };
+
+#if HAVE_LED
+	gpio_pin_configure_dt(&led_g, GPIO_OUTPUT_INACTIVE);
+	gpio_pin_configure_dt(&led_b, GPIO_OUTPUT_INACTIVE);
+#endif
+	pad_reset();
+
+	while (1) {
+		k_sleep(K_MSEC(8));
+		tick++;
+		led_update(tick);
+		pad_get(&p);
+
+		/* Home + Select basılı → eşlemeyi aç/kapat */
+		uint32_t combo = BIT(PB_HOME) | BIT(PB_SELECT);
+
+		if ((p.btn & combo) == combo) {
+			if (!combo_since) combo_since = k_uptime_get();
+			if (!combo_done && k_uptime_get() - combo_since > 1500) {
+				mapping_on = !mapping_on;
+				combo_done = true;
+				OUT("{\"ev\":\"mode\",\"mapping\":%d}\n", mapping_on);
+			}
+		} else {
+			combo_since = 0;
+			combo_done = false;
+		}
+
+		if (!p.valid || !pad_connected) {
+			send(D_PAD, g_idle, 9, false);
+			send(D_KB, z8, 8, false);
+			send(D_MOUSE, z8, 4, false);
+			continue;
+		}
+
+		if (mapping_on) {
+			uint8_t kb[8], ms[4];
+
+			build_mapped(&p, kb, ms);
+			send(D_PAD, g_idle, 9, false);
+			send(D_KB, kb, 8, false);
+			send(D_MOUSE, ms, 4, ms[1] || ms[2]);
+		} else {
+			uint8_t g[9];
+
+			build_gamepad(&p, g);
+			send(D_PAD, g, 9, false);
+			send(D_KB, z8, 8, false);
+			send(D_MOUSE, z8, 4, false);
+		}
+	}
+}
+
+K_THREAD_STACK_DEFINE(out_stack, 2048);
+static struct k_thread out_th;
+
+void out_start(void)
+{
+	k_thread_create(&out_th, out_stack, K_THREAD_STACK_SIZEOF(out_stack), out_thread,
+			NULL, NULL, NULL, 5, 0, K_NO_WAIT);
+}
