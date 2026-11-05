@@ -235,6 +235,7 @@ const PM = (() => {
   /* ---------- bağlantı ---------- */
   const link = { kind: null, onLine: () => {}, onClose: () => {}, info: null };
   let buf = '', writer = null, usb = null, closing = false;
+  const OLD = 'Kart komutlara cevap vermiyor. Karttaki yazılım eski olabilir: 0.3.0 padmapper.uf2 dosyasını yükle.';
   const enc = new TextEncoder(), dec = new TextDecoder();
 
   function feed(text) {
@@ -292,7 +293,11 @@ const PM = (() => {
     if ('serial' in navigator) await openSerial();
     else if ('usb' in navigator) await openUsb();
     else throw new Error('Bu tarayıcı karta bağlanamıyor. Chrome kullan.');
-    await sendLine('hello');
+    for (let i = 0; i < 3 && !link.info; i++) {
+      await sendLine('hello');
+      await new Promise(r => setTimeout(r, 700));
+    }
+    return !!link.info;
   }
 
   async function sendLine(l) {
@@ -320,6 +325,11 @@ const PM = (() => {
   }
 
   async function writeConfig(S) {
+    if (!link.info) {
+      await sendLine('hello');
+      await new Promise(r => setTimeout(r, 700));
+      if (!link.info) throw new Error(OLD);
+    }
     const blob = compile(S);
     const w = waitEv('cfg', 8000);
     await sendLine('cb ' + blob.length);
@@ -332,7 +342,7 @@ const PM = (() => {
   }
 
   return { compile, crc32, hex, link, connect, disconnect, sendLine, writeConfig,
-    connected: () => !!link.kind, supported: () => 'serial' in navigator || 'usb' in navigator };
+    connected: () => !!link.kind, OLD, supported: () => 'serial' in navigator || 'usb' in navigator };
 })();
 if (typeof module !== 'undefined') module.exports = PM;
 
@@ -782,6 +792,7 @@ function cardSynced(){return PM.connected()&&PM.link.info&&parseInt(PM.link.info
 function cardLine(){
   if(!PM.supported())return 'Bu tarayıcı karta bağlanamıyor. Chrome kullan.';
   if(!PM.connected())return 'Kart bağlı değil. Kartı USB ile bu cihaza tak, "Karta bağlan"a bas.';
+  if(!PM.link.info)return PM.OLD;
   const i=PM.link.info||{};
   return `Bağlı · kart yazılımı ${i.fw||'?'} · ${card.busy?'yazılıyor…':cardSynced()?'karttaki ayar güncel ✓':i.cfg?'karttaki ayar farklı, "Karta yaz"a bas':'kartta henüz ayar yok'}`;
 }
@@ -801,8 +812,9 @@ async function cardBtn(){
       if(ev.ev==='hello'){renderCard();if(document.getElementById('sheet').classList.contains('open'))renderSheet();}
     };
     PM.link.onClose=()=>{renderCard();toast('Kart bağlantısı koptu');};
-    await PM.connect();
-    toast('Karta bağlandı');
+    const ok=await PM.connect();
+    if(!ok){toast(PM.OLD);renderCard();return;}
+    toast('Karta bağlandı · kart yazılımı '+PM.link.info.fw);
     setTimeout(()=>{renderCard();if(PM.link.info&&!cardSynced())toast('Karttaki ayar farklı. "Karta yaz"a bas');},600);
   }catch(e){if(e&&e.name!=='NotFoundError')toast(e.message||'Bağlanılamadı');}
   renderCard();

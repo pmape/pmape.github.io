@@ -82,6 +82,7 @@ const PM = (() => {
   /* ---------- bağlantı ---------- */
   const link = { kind: null, onLine: () => {}, onClose: () => {}, info: null };
   let buf = '', writer = null, usb = null, closing = false;
+  const OLD = 'Kart komutlara cevap vermiyor. Karttaki yazılım eski olabilir: 0.3.0 padmapper.uf2 dosyasını yükle.';
   const enc = new TextEncoder(), dec = new TextDecoder();
 
   function feed(text) {
@@ -139,7 +140,11 @@ const PM = (() => {
     if ('serial' in navigator) await openSerial();
     else if ('usb' in navigator) await openUsb();
     else throw new Error('Bu tarayıcı karta bağlanamıyor. Chrome kullan.');
-    await sendLine('hello');
+    for (let i = 0; i < 3 && !link.info; i++) {
+      await sendLine('hello');
+      await new Promise(r => setTimeout(r, 700));
+    }
+    return !!link.info;
   }
 
   async function sendLine(l) {
@@ -167,6 +172,11 @@ const PM = (() => {
   }
 
   async function writeConfig(S) {
+    if (!link.info) {
+      await sendLine('hello');
+      await new Promise(r => setTimeout(r, 700));
+      if (!link.info) throw new Error(OLD);
+    }
     const blob = compile(S);
     const w = waitEv('cfg', 8000);
     await sendLine('cb ' + blob.length);
@@ -179,6 +189,6 @@ const PM = (() => {
   }
 
   return { compile, crc32, hex, link, connect, disconnect, sendLine, writeConfig,
-    connected: () => !!link.kind, supported: () => 'serial' in navigator || 'usb' in navigator };
+    connected: () => !!link.kind, OLD, supported: () => 'serial' in navigator || 'usb' in navigator };
 })();
 if (typeof module !== 'undefined') module.exports = PM;
