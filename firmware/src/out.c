@@ -5,6 +5,7 @@
  * Aç/kapat:      Home + Select 1,5 sn basılı tut. Işık: mavi = gamepad, yeşil = eşleme.
  */
 #include <string.h>
+#include <stdlib.h>
 #include <zephyr/kernel.h>
 #include <zephyr/device.h>
 #include <zephyr/drivers/gpio.h>
