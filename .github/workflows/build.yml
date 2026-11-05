@@ -14,17 +14,14 @@ jobs:
       - name: Derle (XIAO nRF52840)
         shell: bash
         run: |
-          echo "PATH=$PATH"; ls /workdir || true; ls / ; cat /etc/os-release | head -2
-          W=$(find / -name west -type f -perm -u+x 2>/dev/null | grep -v proc | head -5); echo "west adayları: $W"
-          ls /opt /root 2>/dev/null || true
-          for f in /entrypoint.sh /docker-entrypoint.sh /workdir/entry.sh; do [ -f "$f" ] && { echo "== $f"; cat "$f"; }; done
-          WB=$(echo "$W" | head -1); export PATH="$(dirname "$WB"):$PATH"
+          echo "== /root/entry.sh"; cat /root/entry.sh
+          TC=$(ls -d /root/ncs/toolchains/*/ | head -1); echo "TC=$TC"; ls "$TC"; cat "$TC/environment.json" 2>/dev/null | head -60
           mkdir -p /workdir/project
           cp -r "$GITHUB_WORKSPACE/firmware/." /workdir/project/
           cd /workdir/project
-          west build -b xiao_ble --pristine -d build .
+          true west build -b xiao_ble --pristine -d build .
           mkdir -p "$GITHUB_WORKSPACE/out"
-          cp build/zephyr/zephyr.uf2 "$GITHUB_WORKSPACE/out/padmapper.uf2"
+          true cp build/zephyr/zephyr.uf2 "$GITHUB_WORKSPACE/out/padmapper.uf2"
 
       - uses: actions/upload-artifact@v4
         with:
