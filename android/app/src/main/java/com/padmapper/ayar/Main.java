@@ -13,6 +13,7 @@ import android.hardware.usb.UsbEndpoint;
 import android.hardware.usb.UsbInterface;
 import android.hardware.usb.UsbManager;
 import android.os.Build;
+import android.net.Uri;
 import android.os.Bundle;
 import android.webkit.JavascriptInterface;
 import android.webkit.WebChromeClient;
@@ -22,6 +23,11 @@ import android.webkit.WebView;
 import org.json.JSONObject;
 
 import java.io.ByteArrayOutputStream;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 
 /*
@@ -39,6 +45,58 @@ public class Main extends Activity {
     private UsbEndpoint epIn, epOut;
     private volatile boolean reading;
     private final Object wlock = new Object();
+    private static final int PICK = 7;
+
+    static String mimeOf(String n) {
+        if (n == null) return "application/octet-stream";
+        if (n.endsWith(".html")) return "text/html";
+        if (n.endsWith(".json")) return "application/json";
+        if (n.endsWith(".apk")) return "application/vnd.android.package-archive";
+        return "application/octet-stream";
+    }
+
+    private static void copy(InputStream in, OutputStream out) throws java.io.IOException {
+        byte[] b = new byte[16384];
+        int n;
+        while ((n = in.read(b)) > 0) out.write(b, 0, n);
+    }
+
+    private static byte[] readAll(InputStream in) throws java.io.IOException {
+        ByteArrayOutputStream o = new ByteArrayOutputStream();
+        copy(in, o);
+        in.close();
+        return o.toByteArray();
+    }
+
+    /* Paylaşım klasörüne yazılan dosyayı Android paylaşım menüsüyle gönderir */
+    private void shareFile(File f, String title) {
+        Uri u = Uri.parse("content://" + Share.AUTH + "/" + f.getName());
+        Intent i = new Intent(Intent.ACTION_SEND);
+        i.setType(mimeOf(f.getName()));
+        i.putExtra(Intent.EXTRA_STREAM, u);
+        i.putExtra(Intent.EXTRA_SUBJECT, f.getName());
+        i.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+        startActivity(Intent.createChooser(i, title));
+    }
+
+    private File shareDir() {
+        File d = new File(getCacheDir(), "share");
+        d.mkdirs();
+        return d;
+    }
+
+    @Override
+    protected void onActivityResult(int req, int res, Intent data) {
+        super.onActivityResult(req, res, data);
+        if (req != PICK) return;
+        if (res != RESULT_OK || data == null || data.getData() == null) { js("window.PM_native&&PM_native.picked(null)"); return; }
+        try {
+            String s = new String(readAll(getContentResolver().openInputStream(data.getData())), StandardCharsets.UTF_8);
+            js("window.PM_native&&PM_native.picked(" + JSONObject.quote(s) + ")");
+        } catch (Exception e) {
+            js("window.PM_native&&PM_native.picked(null)");
+        }
+    }
 
     private final BroadcastReceiver rx = new BroadcastReceiver() {
         @Override public void onReceive(Context c, Intent i) {
@@ -204,5 +262,71 @@ public class Main extends Activity {
         }
 
         @JavascriptInterface public void close() { closeLink(); }
+
+        /* Metin dosyası paylaş (profil yedeği vb.) */
+        @JavascriptInterface public boolean shareText(String name, String text) {
+            try {
+                File f = new File(shareDir(), name);
+                try (OutputStream o = new FileOutputStream(f)) { o.write(text.getBytes(StandardCharsets.UTF_8)); }
+                runOnUiThread(() -> shareFile(f, "Paylaş"));
+                return true;
+            } catch (Exception e) { return false; }
+        }
+
+        /* Ayar ekranını, içine verilen profilleri gömerek paylaş */
+        @JavascriptInterface public boolean shareHtml(String name, String presetJson) {
+            try {
+                String h = new String(readAll(getAssets().open("padmapper.html")), StandardCharsets.UTF_8);
+                String inj = "<script>window.PM_PRESET=" + presetJson.replace("</", "<\\/") + ";</script>";
+                int at = h.indexOf("<head>");
+                h = at >= 0 ? h.substring(0, at + 6) + inj + h.substring(at + 6) : inj + h;
+                File f = new File(shareDir(), name);
+                try (OutputStream o = new FileOutputStream(f)) { o.write(h.getBytes(StandardCharsets.UTF_8)); }
+                runOnUiThread(() -> shareFile(f, "Ayar ekranını paylaş"));
+                return true;
+            } catch (Exception e) { return false; }
+        }
+
+        /* Uygulamanın içindeki dosyayı paylaş: kart yazılımı */
+        @JavascriptInterface public boolean shareAsset(String asset, String name) {
+            try {
+                File f = new File(shareDir(), name);
+                try (InputStream in = getAssets().open(asset); OutputStream o = new FileOutputStream(f)) { copy(in, o); }
+                runOnUiThread(() -> shareFile(f, "Paylaş"));
+                return true;
+            } catch (Exception e) { return false; }
+        }
+
+        /* Uygulamanın kendisini paylaş (başka telefona kurmak için) */
+        @JavascriptInterface public boolean shareApk() {
+            try {
+                File f = new File(shareDir(), "PadMapper.apk");
+                try (InputStream in = new FileInputStream(getApplicationInfo().sourceDir); OutputStream o = new FileOutputStream(f)) { copy(in, o); }
+                runOnUiThread(() -> shareFile(f, "Uygulamayı paylaş"));
+                return true;
+            } catch (Exception e) { return false; }
+        }
+
+        @JavascriptInterface public boolean hasAsset(String asset) {
+            try { getAssets().open(asset).close(); return true; } catch (Exception e) { return false; }
+        }
+
+        @JavascriptInterface public void pickFile() {
+            Intent i = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+            i.addCategory(Intent.CATEGORY_OPENABLE);
+            i.setType("*/*");
+            runOnUiThread(() -> startActivityForResult(i, PICK));
+        }
+
+        @JavascriptInterface public void openUrl(String url) {
+            if (!url.startsWith("https://")) return;
+            Intent i = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
+            i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            runOnUiThread(() -> startActivity(i));
+        }
+
+        @JavascriptInterface public String version() {
+            try { return getPackageManager().getPackageInfo(getPackageName(), 0).versionName; } catch (Exception e) { return "?"; }
+        }
     }
 }

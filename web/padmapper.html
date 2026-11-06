@@ -471,7 +471,11 @@ function demoProf(){
 }
 /* eski kayıtlardaki "bekle" satırlarını önceki tuşun bekleme süresine çevir */
 function migrate(p){
-  p.gapMs=p.gapMs||50;
+  p.gapMs=p.gapMs||50;p.longMs=p.longMs||300;p.doubleMs=p.doubleMs||250;if(p.trigThr==null)p.trigThr=30;p.output=p.output||'all';
+  /* eksik katman / çubuk bilgisini tamamla (dışarıdan gelen yedekler için) */
+  if(!Array.isArray(p.layers))p.layers=[];
+  for(let i=0;i<4;i++){const d=newLayer(i===0);const l=p.layers[i]=p.layers[i]||d;l.btn=l.btn||{};l.sticks=l.sticks||{};
+    for(const s of ['LS','RS'])if(!l.sticks[s]||!l.sticks[s].mode)l.sticks[s]=d.sticks[s];}
   for(const l of p.layers)for(const id in l.btn)for(const k of Object.keys(l.btn[id])){
     const a=l.btn[id][k];if(!a||!a.steps)continue;
     const out=[];
@@ -486,6 +490,9 @@ function migrate(p){
 }
 let S;
 try{S=JSON.parse(localStorage.getItem('padmapper_v1'))}catch(e){S=null}
+/* paylaşılan ayar ekranı: içine gömülü profiller (bu bilgisayarda kayıt yoksa doğrudan kullanılır) */
+let presetPending=null;
+if(window.PM_PRESET&&window.PM_PRESET.profiles){if(!S||!S.profiles)S=JSON.parse(JSON.stringify(window.PM_PRESET));else presetPending=window.PM_PRESET;}
 if(!S||!S.profiles||!S.profiles.length)S={cur:0,profiles:[demoProf()]};
 S.profiles.forEach(migrate);
 if(!S.device)S.device={startMode:'map',comboA:'HOME',comboB:'SELECT',holdMs:1500,profSwitch:true};
@@ -787,6 +794,18 @@ function renderSheet(){
   <div class="sec"><div class="lbl">Yedek (bu profil)</div>
     <textarea id="jsonTa" spellcheck="false">${esc(snap(p,2))}</textarea>
     <div class="row" style="margin-top:6px"><button class="btn" onclick="copyJson()">Kopyala</button><button class="btn" onclick="importJson()">İçe aktar</button></div></div>
+  <div class="sec"><div class="lbl">Paylaş ve yedekle</div>
+    <div class="row" style="flex-wrap:wrap">
+      <button class="btn" onclick="shareHtml()" title="Arkadaşının bilgisayarında Chrome ile açılır; senin profillerin içinde gelir">🖥 Ayar ekranını paylaş (profillerimle)</button>
+      <button class="btn" onclick="backupProfiles()">💾 Profilleri yedekle</button>
+      <button class="btn" onclick="importProfiles()">📂 Yedekten yükle</button>
+      ${PM.native?`<button class="btn" onclick="shareUf2()">⬆ Kart yazılımını (UF2) paylaş</button><button class="btn" onclick="shareApk()">📱 Uygulamayı paylaş</button>`:''}
+    </div>
+    <p class="hint" style="margin:6px 0 0">${PM.native?'Paylaş menüsünden WhatsApp, Drive, e-posta veya Yakındakiyle Paylaş seçebilirsin. Uygulama verileri Android yedeğiyle Google Drive\'ına da otomatik yedeklenir.':'Dosyalar bu bilgisayara indirilir.'}</p>
+    <div class="row" style="margin-top:8px;flex-wrap:wrap">
+      <button class="btn" onclick="openLink('https://github.com/ImLegennD/padmapper/releases/tag/son-surum')">🔗 Son sürümler (indirme sayfası)</button>
+    </div>
+    <p class="hint" style="margin:6px 0 0">İndirme sayfası GitHub'da, giriş yapmış olman gerekir.${PM.native?' Uygulama sürümü '+esc(PMNative.version())+'.':''}</p></div>
   <div class="sec"><div class="lbl">Kart</div>
     <div class="row"><button class="btn" onclick="cardBtn()">${PM.connected()?'Bağlantıyı kes':'🔌 Karta bağlan'}</button><button class="btn pri" ${PM.connected()?'':'disabled'} onclick="writeCard()">Karta yaz</button></div>
     <p class="hint" style="margin:6px 0 0">${cardLine()}</p>
@@ -1054,7 +1073,45 @@ async function writeCard(){
 let awT=null;
 function autoWrite(){if(!PM.connected())return;clearTimeout(awT);awT=setTimeout(()=>{if(!cardSynced())writeCard();},700);}
 
+/* ---------- Paylaş / yedek ---------- */
+const stamp=()=>new Date().toISOString().slice(0,10);
+function exportState(){const c=JSON.parse(JSON.stringify(S));c.profiles.forEach(p=>{if(p._applied){const a=JSON.parse(p._applied);a.name=p.name;Object.assign(p,a);}delete p._applied;});return c;}
+function downloadText(name,text,type){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([text],{type}));a.download=name;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},1000);}
+async function shareHtml(){
+  const st=JSON.stringify(exportState());
+  if(PM.native){if(!PMNative.shareHtml('padmapper-ayar.html',st))toast('Paylaşılamadı');return;}
+  try{
+    const r=await fetch(location.href);let src=await r.text();
+    src=src.replace(/<script>window\.PM_PRESET=[\s\S]*?<\/script>/,'');
+    const inj='<script>window.PM_PRESET='+st.replace(/<\//g,'<\\/')+';<\/script>';
+    src=src.includes('<head>')?src.replace('<head>','<head>'+inj):inj+src;
+    downloadText('padmapper-ayar.html',src,'text/html');
+  }catch(e){toast('Bu tarayıcıda dosya oluşturulamadı; uygulamadan paylaş');}
+}
+function backupProfiles(){
+  const t=JSON.stringify({padmapper:1,tarih:new Date().toISOString(),ayar:exportState()},null,1),n='padmapper-yedek-'+stamp()+'.json';
+  if(PM.native){if(!PMNative.shareText(n,t))toast('Paylaşılamadı');}else downloadText(n,t,'application/json');
+}
+function loadBackup(text){
+  let d;try{d=JSON.parse(text);}catch(e){toast('Dosya okunamadı');return;}
+  const st=d&&d.ayar?d.ayar:d;
+  if(!st||!st.profiles||!st.profiles.length){toast('Bu bir PadMapper yedeği değil');return;}
+  ask(`Yedekte ${st.profiles.length} profil var (${st.profiles.map(p=>p.name).join(', ')}). Şimdiki profillerin yerine yüklensin mi?`,null).then(ok=>{
+    if(!ok)return;S=st;S.profiles.forEach(migrate);S.profiles.forEach(p=>p._applied=snap(p));S.cur=Math.min(S.cur||0,S.profiles.length-1);
+    if(!S.device.profMod){S.device.profMod='HOME';S.device.profPrev='LB';S.device.profNext='RB';}
+    ui.layer=0;save();render();if(document.getElementById('sheet').classList.contains('open'))renderSheet();toast('Yedek yüklendi'+(PM.connected()?', "Karta yaz" ile karta gönder':''));});
+}
+function importProfiles(){
+  if(PM.native){window.PM_native.picked=t=>{if(t)loadBackup(t);};PMNative.pickFile();return;}
+  const i=document.createElement('input');i.type='file';i.accept='.json,application/json';i.onchange=()=>{const f=i.files[0];if(f)f.text().then(loadBackup);};i.click();
+}
+function shareUf2(){if(!PMNative.hasAsset('padmapper.uf2')){toast('Bu uygulama sürümünde kart yazılımı yok');return;}if(!PMNative.shareAsset('padmapper.uf2','padmapper.uf2'))toast('Paylaşılamadı');}
+function shareApk(){if(!PMNative.shareApk())toast('Paylaşılamadı');}
+function openLink(u){if(PM.native)PMNative.openUrl(u);else window.open(u,'_blank','noopener');}
+
 drawPad();render();
+if(presetPending)setTimeout(()=>ask(`Bu ayar ekranı ${presetPending.profiles.length} profille geldi (${presetPending.profiles.map(p=>p.name).join(', ')}). Bu bilgisayardaki profillerin yerine kullanılsın mı?`,null).then(ok=>{if(ok){loadBackupDirect(presetPending);}}),300);
+function loadBackupDirect(st){S=JSON.parse(JSON.stringify(st));S.profiles.forEach(migrate);S.profiles.forEach(p=>p._applied=snap(p));S.cur=Math.min(S.cur||0,S.profiles.length-1);ui.layer=0;save();render();toast('Profiller yüklendi');}
 /* sayfa açılınca ya da kart takılınca, daha önce izin verildiyse kendiliğinden bağlan */
 PM.findKnown().then(k=>{if(k)cardBtn(k);}).catch(()=>{});
 PM.onPlug(k=>setTimeout(()=>cardBtn(k),800));

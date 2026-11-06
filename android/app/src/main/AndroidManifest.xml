@@ -4,7 +4,7 @@
     <application
         android:label="@string/app_name"
         android:icon="@android:drawable/sym_def_app_icon"
-        android:allowBackup="false">
+        android:allowBackup="true">
         <!-- Kart takılınca ya da simgeye dokununca ayar ekranı açılır -->
         <activity
             android:name=".Main"
@@ -23,5 +23,10 @@
                 android:name="android.hardware.usb.action.USB_DEVICE_ATTACHED"
                 android:resource="@xml/device_filter" />
         </activity>
+        <provider
+            android:name=".Share"
+            android:authorities="com.padmapper.ayar.share"
+            android:exported="false"
+            android:grantUriPermissions="true" />
     </application>
 </manifest>
