@@ -325,6 +325,22 @@ public class Main extends Activity {
             runOnUiThread(() -> startActivity(i));
         }
 
+        /* Üst ve alt çubuğu temaya uydur */
+        @JavascriptInterface public void setBars(String top, String bottom, boolean light) {
+            runOnUiThread(() -> {
+                try {
+                    android.view.Window w = getWindow();
+                    w.setStatusBarColor(android.graphics.Color.parseColor(top));
+                    w.setNavigationBarColor(android.graphics.Color.parseColor(bottom));
+                    android.view.View d = w.getDecorView();
+                    int f = d.getSystemUiVisibility();
+                    int bits = android.view.View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR
+                            | (Build.VERSION.SDK_INT >= 26 ? android.view.View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR : 0);
+                    d.setSystemUiVisibility(light ? (f | bits) : (f & ~bits));
+                } catch (Exception e) { }
+            });
+        }
+
         @JavascriptInterface public String version() {
             try { return getPackageManager().getPackageInfo(getPackageName(), 0).versionName; } catch (Exception e) { return "?"; }
         }

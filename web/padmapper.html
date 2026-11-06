@@ -7,7 +7,24 @@
 <style>
 :root{
   --bg:#121419; --panel:#1b1e25; --panel2:#242833; --line:#2f3442; --text:#e8eaef; --mute:#8b93a5;
-  --acc:#ff8a3d; --acc2:#3dd6c6; --l1:#ff5d6c; --l2:#5fd36a; --l3:#5b9bff; --warn:#ffcc4d;
+  --acc:#ff8a3d; --acctx:#1a1205; --acc2:#3dd6c6; --l1:#ff5d6c; --l2:#5fd36a; --l3:#5b9bff; --warn:#ffcc4d;
+  --grip:#232835; --gripl:#394052; --key:#323846; --keyl:#4a5266; --sel:#fff;
+  --inhf:#332e25; --inhl:#7a6a4a; --inht:#9a8a62;
+  --exb:#17231f; --exl:#28463c; --ext:#bfeee2; --nob:#2a2414; --nol:#5a4a1f; --not:#f3dfa6;
+  --inb:#16222e; --inl:#2b4660; --int:#cfe3ff; --recb:#5a1f26; --prevb:#3a2f12;
+  color-scheme:dark;
+}
+/* Siyah (AMOLED) */
+:root[data-theme=amoled]{--bg:#000;--panel:#0b0c0f;--panel2:#15171c;--line:#24272f;--grip:#101217;--gripl:#2a2f3a;--key:#1c1f26;--keyl:#3a404d}
+/* Açık */
+:root[data-theme=light]{
+  --bg:#f3f4f7; --panel:#ffffff; --panel2:#eef0f4; --line:#d5d9e2; --text:#1b1e25; --mute:#5c6475;
+  --acc2:#0f8f83; --l1:#d93f50; --l2:#23883a; --l3:#2f6fdc; --warn:#a05f00;
+  --grip:#e6e9ef; --gripl:#c3c9d5; --key:#ffffff; --keyl:#b3bac8; --sel:#1b1e25;
+  --inhf:#f6efe0; --inhl:#c7ad78; --inht:#8a7440;
+  --exb:#e8f6f1; --exl:#a5d9c8; --ext:#14584a; --nob:#fff6dd; --nol:#e6cd85; --not:#6b5210;
+  --inb:#e8f0fb; --inl:#abc6ec; --int:#1d4372; --recb:#ffd9dd; --prevb:#fff1cc;
+  color-scheme:light;
 }
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 body{margin:0;background:var(--bg);color:var(--text);font:15px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
@@ -15,7 +32,7 @@ button,select,input,textarea{font:inherit;color:inherit}
 select,input[type=number],input[type=text],textarea{background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:6px 8px;min-height:36px}
 .btn{background:var(--panel2);border:1px solid var(--line);border-radius:9px;padding:6px 12px;min-height:36px;cursor:pointer}
 .btn:hover{border-color:var(--acc)}
-.btn.pri{background:var(--acc);border-color:var(--acc);color:#1a1205;font-weight:600}
+.btn.pri{background:var(--acc);border-color:var(--acc);color:var(--acctx);font-weight:600}
 .btn:disabled{opacity:.45;cursor:not-allowed}
 .ico{width:38px;padding:0;font-size:18px}
 .hint{color:var(--mute);font-size:13px}
@@ -44,14 +61,14 @@ main{align-items:start;display:grid;grid-template-columns:minmax(0,1fr) minmax(0
 
 /* kontrolcü */
 svg{width:100%;height:auto;display:block;max-height:46vh}
-.grip{fill:#232835;stroke:#394052;stroke-width:2}
+.grip{fill:var(--grip);stroke:var(--gripl);stroke-width:2}
 .b{cursor:pointer}
-.b .s{fill:#323846;stroke:#4a5266;stroke-width:2}
-.b.map .s{fill:#5a3a22;stroke:var(--acc)}
-.b.inh .s{fill:#332e25;stroke:#7a6a4a;stroke-dasharray:4 3}
-.b.sel .s{stroke:#fff;stroke-width:3}
+.b .s{fill:var(--key);stroke:var(--keyl);stroke-width:2}
+.b.map .s{fill:color-mix(in srgb,var(--acc) 32%,var(--key));stroke:var(--acc)}
+.b.inh .s{fill:var(--inhf);stroke:var(--inhl);stroke-dasharray:4 3}
+.b.sel .s{stroke:var(--sel);stroke-width:3}
 .lb{font-size:10.5px;font-weight:600;fill:var(--acc2);pointer-events:none;dominant-baseline:central}
-.lb.inh{fill:#9a8a62}
+.lb.inh{fill:var(--inht)}
 .b text{fill:var(--text);font-size:13px;font-weight:700;text-anchor:middle;dominant-baseline:central;pointer-events:none}
 details.sum{margin-top:6px}
 details.sum summary{cursor:pointer;color:var(--mute);font-size:13px;padding:4px 2px}
@@ -71,7 +88,7 @@ details.sum summary{cursor:pointer;color:var(--mute);font-size:13px;padding:4px 
 .seg{display:flex;border:1px solid var(--line);border-radius:9px;overflow:hidden}
 .seg button{flex:1;border:0;background:var(--panel2);padding:6px 8px;min-height:36px;cursor:pointer;font-size:13px}
 .seg button+button{border-left:1px solid var(--line)}
-.seg button.on{background:var(--acc);color:#1a1205;font-weight:700}
+.seg button.on{background:var(--acc);color:var(--acctx);font-weight:700}
 .lbl{font-size:12px;color:var(--mute);text-transform:uppercase;letter-spacing:.5px;margin:12px 0 5px}
 .row{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
 
@@ -91,10 +108,10 @@ details.sum summary{cursor:pointer;color:var(--mute);font-size:13px;padding:4px 
 .gap.loop{color:var(--acc2)}
 .gap.loop::before{background:var(--acc2)}
 .empty{color:var(--mute);font-size:13px;padding:6px 2px}
-.explain{background:#17231f;border:1px solid #28463c;color:#bfeee2;border-radius:9px;padding:7px 10px;font-size:13px;margin-top:10px}
-.note{background:#2a2414;border:1px solid #5a4a1f;color:#f3dfa6;border-radius:9px;padding:7px 10px;font-size:13px;margin-top:8px}
+.explain{background:var(--exb);border:1px solid var(--exl);color:var(--ext);border-radius:9px;padding:7px 10px;font-size:13px;margin-top:10px}
+.note{background:var(--nob);border:1px solid var(--nol);color:var(--not);border-radius:9px;padding:7px 10px;font-size:13px;margin-top:8px}
 .k{display:inline-block;background:var(--bg);border:1px solid var(--line);border-bottom-width:2px;border-radius:5px;padding:0 5px;font-size:12px;margin:0 1px;font-family:ui-monospace,Consolas,monospace}
-.rec{background:#5a1f26!important;border-color:var(--l1)!important}
+.rec{background:var(--recb)!important;border-color:var(--l1)!important}
 input[type=range]{accent-color:var(--acc);flex:1;min-width:120px}
 .dir{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
 .dir label{display:flex;flex-direction:column;gap:2px;font-size:12px;color:var(--mute)}
@@ -117,7 +134,7 @@ input[type=range]{accent-color:var(--acc);flex:1;min-width:120px}
 .ok{color:var(--l2);font-size:12px}.bad{color:var(--mute);font-size:12px}
 .spin{display:inline-block;width:14px;height:14px;border:2px solid var(--line);border-top-color:var(--acc2);border-radius:50%;animation:sp 0.8s linear infinite;vertical-align:middle}
 @keyframes sp{to{transform:rotate(360deg)}}
-.prev{font-size:11px;padding:2px 8px;border-radius:20px;background:#3a2f12;color:var(--warn);border:1px solid #5a4a1f}
+.prev{font-size:11px;padding:2px 8px;border-radius:20px;background:var(--prevb);color:var(--warn);border:1px solid var(--nol)}
 .sheet h2{font-size:17px;margin:0;flex:1}
 .sec{border-top:1px solid var(--line);padding-top:4px;margin-top:10px}
 textarea{width:100%;min-height:140px;font-family:ui-monospace,Consolas,monospace;font-size:12px}
@@ -569,12 +586,12 @@ function shortStick(st){
 function drawPad(){
   let h=`<path class="grip" d="M40,60 Q14,60 14,95 L14,220 Q14,286 84,286 Q148,286 172,246 L296,246 L296,60 Z"/>
   <path class="grip" d="M600,60 Q626,60 626,95 L626,220 Q626,286 556,286 Q492,286 468,246 L344,246 L344,60 Z"/>
-  <line x1="296" y1="70" x2="344" y2="70" stroke="#394052" stroke-width="3"/>
-  <line x1="296" y1="236" x2="344" y2="236" stroke="#394052" stroke-width="3"/>`;
+  <line x1="296" y1="70" x2="344" y2="70" stroke="var(--gripl)" stroke-width="3"/>
+  <line x1="296" y1="236" x2="344" y2="236" stroke="var(--gripl)" stroke-width="3"/>`;
   for(const b of BTNS){
     const sh=b.sh==='c'?`<circle class="s" cx="${b.x}" cy="${b.y}" r="${b.r}"/>`:`<rect class="s" x="${b.x}" y="${b.y}" width="${b.w}" height="${b.h}" rx="6"/>`;
     const cx=b.sh==='c'?b.x:b.x+b.w/2,cy=b.sh==='c'?b.y:b.y+b.h/2;
-    const inner=b.stick?`<circle cx="${b.x}" cy="${b.y}" r="${b.r*.55}" fill="none" stroke="#4a5266" stroke-width="2" pointer-events="none"/>`:'';
+    const inner=b.stick?`<circle cx="${b.x}" cy="${b.y}" r="${b.r*.55}" fill="none" stroke="var(--keyl)" stroke-width="2" pointer-events="none"/>`:'';
     h+=`<g class="b" id="b-${b.id}" onclick="pick('${b.id}')"><title>${esc(b.name)}</title>${sh}${inner}<text x="${cx}" y="${cy}">${b.t}</text></g>`;
   }
   for(const b of BTNS){const [x,y,an]=LPOS[b.id];h+=`<text class="lb" id="l-${b.id}" x="${x}" y="${y}" text-anchor="${an}"></text>`;}
@@ -644,7 +661,7 @@ function renderPanel(){
   }
   h+=pills;
   if(ui.act.startsWith('c_')){const o=BY_ID[ui.act.slice(2)];
-    h+=`<div class="note" style="background:#16222e;border-color:#2b4660;color:#cfe3ff"><b>${esc(b.t)} + ${esc(o.t)}</b> birlikte basılınca çalışır. O sırada iki tuşun tek başına ayarları gönderilmez.
+    h+=`<div class="note" style="background:var(--inb);border-color:var(--inl);color:var(--int)"><b>${esc(b.t)} + ${esc(o.t)}</b> birlikte basılınca çalışır. O sırada iki tuşun tek başına ayarları gönderilmez.
       <div style="margin-top:6px"><button class="btn" onclick="delete cur()['${ui.act}'];ui.act='single';render()">Birleşimi sil</button></div></div>`;}
   if((ui.act==='single'||ui.act==='double')&&isSet(bd.single)&&isSet(bd.double))h+=`<div class="note">Bu tuşta hem tek hem çift basış var. Kart ikinci basışı beklediği için tek basış yaklaşık ${P().doubleMs} ms gecikmeli gider.</div>`;
   h+=`<div class="seg" style="margin-top:4px"><button class="${a.kind==='combo'?'on':''}" onclick="curA().kind='combo';render()">Tuş / Makro</button><button class="${a.kind==='layer'?'on':''}" onclick="curA().kind='layer';render()">Katman değiştir</button></div>`;
@@ -794,6 +811,10 @@ function renderSheet(){
   <div class="sec"><div class="lbl">Yedek (bu profil)</div>
     <textarea id="jsonTa" spellcheck="false">${esc(snap(p,2))}</textarea>
     <div class="row" style="margin-top:6px"><button class="btn" onclick="copyJson()">Kopyala</button><button class="btn" onclick="importJson()">İçe aktar</button></div></div>
+  <div class="sec"><div class="lbl">Görünüm</div>
+    <div class="seg">${[['dark','Koyu'],['amoled','Siyah'],['light','Açık'],['auto','Sistem']].map(([k,t])=>`<button class="${themeOf().mode===k?'on':''}" onclick="setTheme({mode:'${k}'})">${t}</button>`).join('')}</div>
+    <div class="row" style="margin-top:10px;gap:10px;flex-wrap:wrap">${ACCENTS.map(a=>`<button aria-label="${a.n}" title="${a.n}" onclick="setTheme({acc:'${a.k}'})" style="width:38px;height:38px;border-radius:50%;cursor:pointer;background:${a.c};border:3px solid ${themeOf().acc===a.k?'var(--text)':'transparent'};box-shadow:0 0 0 1px var(--line)"></button>`).join('')}</div>
+    <p class="hint" style="margin:6px 0 0">Vurgu rengi seçili düğmeleri, seçili tuşları ve başlıkları boyar.</p></div>
   <div class="sec"><div class="lbl">Paylaş ve yedekle</div>
     <div class="row" style="flex-wrap:wrap">
       <button class="btn" onclick="shareHtml()" title="Arkadaşının bilgisayarında Chrome ile açılır; senin profillerin içinde gelir">🖥 Ayar ekranını paylaş (profillerimle)</button>
@@ -1072,6 +1093,22 @@ async function writeCard(){
 }
 let awT=null;
 function autoWrite(){if(!PM.connected())return;clearTimeout(awT);awT=setTimeout(()=>{if(!cardSynced())writeCard();},700);}
+
+/* ---------- Tema ---------- */
+const ACCENTS=[{k:'orange',n:'Turuncu',c:'#ff8a3d',t:'#1a1205'},{k:'teal',n:'Turkuaz',c:'#2ec4b6',t:'#04201d'},{k:'blue',n:'Mavi',c:'#4c8dff',t:'#ffffff'},
+  {k:'purple',n:'Mor',c:'#9b6bff',t:'#ffffff'},{k:'green',n:'Yeşil',c:'#3fbf5a',t:'#06200c'},{k:'pink',n:'Pembe',c:'#ff5fa2',t:'#2a0716'},{k:'red',n:'Kırmızı',c:'#ff4d4d',t:'#ffffff'},{k:'yellow',n:'Sarı',c:'#f5c400',t:'#241c00'}];
+const themeOf=()=>Object.assign({mode:'dark',acc:'orange'},S.theme||{});
+const darkMq=window.matchMedia?matchMedia('(prefers-color-scheme: dark)'):null;
+function applyTheme(){
+  const t=themeOf(),mode=t.mode==='auto'?(darkMq&&!darkMq.matches?'light':'dark'):t.mode,a=ACCENTS.find(x=>x.k===t.acc)||ACCENTS[0],r=document.documentElement;
+  if(mode==='dark')r.removeAttribute('data-theme');else r.setAttribute('data-theme',mode);
+  r.style.setProperty('--acc',a.c);r.style.setProperty('--acctx',a.t);
+  /* uygulamada üst/alt çubuk rengi */
+  if(PM.native&&PMNative.setBars){const cs=getComputedStyle(r);PMNative.setBars(cs.getPropertyValue('--panel').trim(),cs.getPropertyValue('--bg').trim(),mode==='light');}
+}
+function setTheme(x){S.theme=Object.assign(themeOf(),x);applyTheme();save();renderSheet();drawPad();render();}
+if(darkMq&&darkMq.addEventListener)darkMq.addEventListener('change',()=>{if(themeOf().mode==='auto')applyTheme();});
+applyTheme();
 
 /* ---------- Paylaş / yedek ---------- */
 const stamp=()=>new Date().toISOString().slice(0,10);
