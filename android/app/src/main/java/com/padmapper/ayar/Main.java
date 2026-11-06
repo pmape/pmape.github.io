@@ -102,7 +102,7 @@ public class Main extends Activity {
         return null;
     }
 
-    private String open(UsbDevice d) {
+    private String openDev(UsbDevice d) {
         closeLink();
         UsbDeviceConnection c = um.openDevice(d);
         if (c == null) return "err:open";
@@ -186,7 +186,7 @@ public class Main extends Activity {
                 um.requestPermission(d, PendingIntent.getBroadcast(Main.this, 0, pi, fl));
                 return "perm";
             }
-            return open(d);
+            return openDev(d);
         }
 
         @JavascriptInterface public boolean write(String s) {
