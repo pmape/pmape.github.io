@@ -2,3 +2,4 @@ android/app/src/main/assets/
 android/**/build/
 android/.gradle/
 firmware/assets/
+android/*.keystore

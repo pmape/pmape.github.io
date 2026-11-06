@@ -27,6 +27,11 @@ static size_t blob_len;
 static uint8_t rx[CFG_MAX];
 static size_t rx_len, rx_expect;
 static int saved_prof = -1;
+/* Ayar ekranının profilleri (düzenlenebilir hali, sıkıştırılmış JSON): karttan geri alınabilsin */
+#define JMAX 8192
+static uint8_t jblob[JMAX];
+static size_t jlen;
+static bool rx_json;
 
 /* ---------- hafıza ---------- */
 
@@ -63,18 +68,55 @@ static int h_commit(void)
 
 SETTINGS_STATIC_HANDLER_DEFINE(pm, "pm", NULL, h_set, h_commit, NULL);
 
-static int store(const uint8_t *b, size_t len)
+static int hj_set(const char *key, size_t len, settings_read_cb read_cb, void *arg)
 {
-	char key[12];
+	if (!strcmp(key, "len")) {
+		uint16_t v = 0;
+
+		if (read_cb(arg, &v, sizeof(v)) == sizeof(v) && v <= JMAX) jlen = v;
+		return 0;
+	}
+	if (key[0] == 'c') {
+		int n = atoi(key + 1);
+
+		if (n >= 0 && (n + 1) * CHUNK <= JMAX && len <= CHUNK) read_cb(arg, jblob + n * CHUNK, len);
+		return 0;
+	}
+	return -ENOENT;
+}
+
+SETTINGS_STATIC_HANDLER_DEFINE(pmj, "pmj", NULL, hj_set, NULL, NULL);
+
+static int store_in(const char *pre, const uint8_t *b, size_t len)
+{
+	char key[16];
 	uint16_t l = len;
 	int err;
 
 	for (size_t off = 0, n = 0; off < len; off += CHUNK, n++) {
-		snprintk(key, sizeof(key), "pm/c%u", (unsigned)n);
+		snprintk(key, sizeof(key), "%s/c%u", pre, (unsigned)n);
 		err = settings_save_one(key, b + off, MIN(CHUNK, len - off));
 		if (err) return err;
 	}
-	return settings_save_one("pm/len", &l, sizeof(l));
+	snprintk(key, sizeof(key), "%s/len", pre);
+	return settings_save_one(key, &l, sizeof(l));
+}
+
+static int store(const uint8_t *b, size_t len) { return store_in("pm", b, len); }
+
+/* hex olarak parça parça yaz */
+static void dump(const char *ev, const uint8_t *b, size_t len)
+{
+	static const char hx[] = "0123456789abcdef";
+
+	for (size_t off = 0; off < len; off += 200) {
+		size_t n = MIN(200, len - off);
+
+		OUT("{\"ev\":\"%s\",\"d\":\"", ev);
+		for (size_t i = 0; i < n; i++) OUT("%c%c", hx[b[off + i] >> 4], hx[b[off + i] & 15]);
+		OUT("\"}\n");
+	}
+	OUT("{\"ev\":\"%s_end\",\"len\":%u}\n", ev, (unsigned)len);
 }
 
 static void prof_save(struct k_work *w);
@@ -103,9 +145,10 @@ static int hexval(char c)
 
 static void hello(void)
 {
-	OUT("{\"ev\":\"hello\",\"fw\":\"%s\",\"cfg\":%u,\"crc\":\"%08x\",\"prof\":%d,\"nprof\":%d,\"mapping\":%d}\n",
+	OUT("{\"ev\":\"hello\",\"fw\":\"%s\",\"cfg\":%u,\"crc\":\"%08x\",\"prof\":%d,\"nprof\":%d,\"mapping\":%d,\"jlen\":%u,\"jcrc\":\"%08x\"}\n",
 	    FW_VERSION, (unsigned)blob_len, blob_len ? crc32_ieee(blob, blob_len) : 0,
-	    engine_profile(), engine_profile_count(), engine_mapping());
+	    engine_profile(), engine_profile_count(), engine_mapping(),
+	    (unsigned)jlen, jlen ? crc32_ieee(jblob, jlen) : 0);
 }
 
 extern bool bt_cmd(char *l);
@@ -115,14 +158,39 @@ static void cmd(char *l)
 	if (bt_cmd(l)) return;
 	if (!strcmp(l, "hello")) {
 		hello();
+	} else if (!strcmp(l, "cr")) {
+		dump("cfgdata", blob, blob_len);
+	} else if (!strcmp(l, "jr")) {
+		dump("jdata", jblob, jlen);
+	} else if (!strncmp(l, "jb ", 3)) {
+		rx_expect = strtoul(l + 3, NULL, 10);
+		rx_len = 0;
+		rx_json = true;
+		if (rx_expect > JMAX) {
+			OUT("{\"ev\":\"json\",\"ok\":0,\"err\":\"büyük\"}\n");
+			rx_expect = 0;
+		}
+	} else if (!strncmp(l, "je ", 3)) {
+		uint32_t want = strtoul(l + 3, NULL, 16);
+
+		if (!rx_json || !rx_expect || rx_len != rx_expect || want != crc32_ieee(rx, rx_len)) {
+			OUT("{\"ev\":\"json\",\"ok\":0,\"err\":\"eksik\"}\n");
+			return;
+		}
+		memcpy(jblob, rx, rx_len);
+		jlen = rx_len;
+		rx_expect = 0;
+		rx_json = false;
+		OUT("{\"ev\":\"json\",\"ok\":1,\"saved\":%d}\n", store_in("pmj", jblob, jlen) == 0);
 	} else if (!strncmp(l, "cb ", 3)) {
+		rx_json = false;
 		rx_expect = strtoul(l + 3, NULL, 10);
 		rx_len = 0;
 		if (rx_expect > CFG_MAX) {
 			OUT("{\"ev\":\"cfg\",\"ok\":0,\"err\":\"büyük\"}\n");
 			rx_expect = 0;
 		}
-	} else if (!strncmp(l, "cd ", 3)) {
+	} else if (!strncmp(l, "cd ", 3) || !strncmp(l, "jd ", 3)) {
 		for (char *p = l + 3; p[0] && p[1] && rx_len < rx_expect; p += 2) {
 			int h = hexval(p[0]), lo = hexval(p[1]);
 

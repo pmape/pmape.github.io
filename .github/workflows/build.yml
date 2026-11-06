@@ -56,7 +56,11 @@ jobs:
         with:
           gradle-version: '8.7'
       - name: Android uygulamasını derle
+        env:
+          PM_KEY_PASS: ${{ secrets.PM_KEY_PASS }}
+          PM_KEYSTORE: ${{ secrets.PM_KEYSTORE }}
         run: |
+          if [ -n "$PM_KEYSTORE" ]; then echo "$PM_KEYSTORE" | base64 -d > android/padmapper.keystore; fi
           mkdir -p android/app/src/main/assets
           cp web/padmapper.html android/app/src/main/assets/padmapper.html
           cd android

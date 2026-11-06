@@ -246,6 +246,87 @@ const PM = (() => {
     return new Uint8Array(b);
   }
 
+  /* Karttaki ayardan profilleri geri çıkar (profil adları kartta yok: Profil 1, 2…) */
+  const inv = o => Object.fromEntries(Object.entries(o).map(([k, v]) => [v, k]));
+  function decompile(b) {
+    const HIDI = inv(HID), BTNI = inv(BTN), MOUSEI = inv(MOUSE), OUTI = inv(OUT), SMI = inv(SM), TRIGI = inv(TRIG), MODEI = inv(MODE), ACTSI = inv(ACTS);
+    let i = 0;
+    const u8 = () => b[i++], u16 = () => { const v = b[i] | (b[i + 1] << 8); i += 2; return v; };
+    if (b[0] !== 80 || b[1] !== 77 || b[2] !== 2) throw new Error('Karttaki ayar okunamadı');
+    i = 3;
+    const d = { startMode: u8() ? 'pad' : 'map', comboA: BTNI[u8()] || 'HOME', comboB: BTNI[u8()] || 'SELECT', holdMs: u16() };
+    const fl = u8(); d.profSwitch = !!(fl & 1); d.passUnmapped = !!(fl & 2);
+    const np = u8(); u8();
+    d.profMod = BTNI[u8()] || 'HOME'; d.profPrev = BTNI[u8()] || 'LB'; d.profNext = BTNI[u8()] || 'RB'; u8(); u8();
+    const profiles = [];
+    for (let n = 0; n < np; n++) {
+      const p = { name: 'Profil ' + (n + 1), output: OUTI[u8()] || 'all', trigThr: u8(), longMs: u16(), doubleMs: u16(), gapMs: 50, layers: [] };
+      for (let l = 0; l < 4; l++) {
+        const sticks = {};
+        for (const s of ['LS', 'RS']) {
+          const mode = SMI[u8()] || 'off', sens = u8(), dead = u8(), k = [u8(), u8(), u8(), u8()].map(x => HIDI[x] || '');
+          sticks[s] = { mode, sens, dead, keys: { up: k[0] || 'KeyW', down: k[1] || 'KeyS', left: k[2] || 'KeyA', right: k[3] || 'KeyD' } };
+        }
+        p.layers.push({ btn: {}, sticks });
+      }
+      const nb = u16();
+      for (let k = 0; k < nb; k++) {
+        const li = u8(), btn = BTNI[u8()], trig = u8(), other = u8(), kind = u8(), mode = u8(), loop = u16(), tl = u8(), how = u8(), ns = u8();
+        const a = { kind: kind ? 'layer' : 'combo', mode: MODEI[mode] || 'normal', turbo: loop, layer: tl || 1, how: how ? 'toggle' : 'hold', steps: [] };
+        for (let s = 0; s < ns; s++) {
+          const t = u8(), c = u8(), ac = ACTSI[u8()] || 'press', after = u16();
+          a.steps.push(t === 0 ? { t: 'key', k: HIDI[c] || '', a: ac, after } : t === 1 ? { t: 'mouse', b: MOUSEI[c] || 'left', a: ac, after } : { t: 'pad', p: BTNI[c] || 'A', a: ac, after });
+        }
+        if (!btn) continue;
+        const key = trig === 5 ? 'c_' + (BTNI[other] || '') : TRIGI[trig];
+        if (!key || key === 'c_') continue;
+        (p.layers[li].btn[btn] = p.layers[li].btn[btn] || {})[key] = a;
+      }
+      profiles.push(p);
+    }
+    return { cur: 0, profiles, device: d };
+  }
+
+  /* Profillerin düzenlenebilir hali: sıkıştırıp karta da yazılır */
+  async function pack(obj) {
+    const raw = new TextEncoder().encode(JSON.stringify(obj));
+    if (typeof CompressionStream === 'undefined') return Uint8Array.from([74, ...raw]); /* 'J' */
+    const z = new Uint8Array(await new Response(new Blob([raw]).stream().pipeThrough(new CompressionStream('gzip'))).arrayBuffer());
+    const out = new Uint8Array(z.length + 1); out[0] = 71; out.set(z, 1); return out; /* 'G' */
+  }
+  async function unpack(b) {
+    if (b[0] === 74) return JSON.parse(new TextDecoder().decode(b.slice(1)));
+    const r = await new Response(new Blob([b.slice(1)]).stream().pipeThrough(new DecompressionStream('gzip'))).arrayBuffer();
+    return JSON.parse(new TextDecoder().decode(r));
+  }
+  const unhex = s => Uint8Array.from((s.match(/../g) || []).map(x => parseInt(x, 16)));
+
+  function collect(cmd, ev, ms) {
+    return new Promise((res, rej) => {
+      const prev = link.onLine; let acc = '';
+      const t = setTimeout(() => { link.onLine = prev; rej(new Error('Kart cevap vermedi')); }, ms);
+      link.onLine = e => { prev(e); if (e.ev === ev) acc += e.d; if (e.ev === ev + '_end') { clearTimeout(t); link.onLine = prev; res(unhex(acc)); } };
+      sendLine(cmd).catch(rej);
+    });
+  }
+  async function readCard() {
+    const info = link.info || {};
+    if (info.jlen) { try { return { state: await unpack(await collect('jr', 'jdata', 8000)), full: true }; } catch (e) { } }
+    if (info.cfg) return { state: decompile(await collect('cr', 'cfgdata', 8000)), full: false };
+    return null;
+  }
+  async function writeJson(state) {
+    const b = await pack(state);
+    if (b.length > 8192) return false;
+    const w = waitEv('json', 8000);
+    await sendLine('jb ' + b.length);
+    for (let i = 0; i < b.length; i += 200) { await sendLine('jd ' + hex(b.slice(i, i + 200))); await new Promise(r => setTimeout(r, 15)); }
+    await sendLine('je ' + crc32(b).toString(16).padStart(8, '0'));
+    const r = await w;
+    if (r.ok && link.info) { link.info.jlen = b.length; link.info.jcrc = crc32(b).toString(16).padStart(8, '0'); }
+    return !!r.ok;
+  }
+
   const CRC = (() => { const t = []; for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1; t[n] = c >>> 0; } return t; })();
   function crc32(a) { let c = 0xffffffff; for (const x of a) c = CRC[(c ^ x) & 255] ^ (c >>> 8); return (c ^ 0xffffffff) >>> 0; }
   const hex = a => Array.from(a, x => x.toString(16).padStart(2, '0')).join('');
@@ -410,7 +491,7 @@ const PM = (() => {
     else if ('serial' in navigator) navigator.serial.addEventListener('connect', e => { const p = e.target; if (p.getInfo && p.getInfo().usbVendorId === 0x2fe3) cb({ serial: p }); });
   }
 
-  return { findKnown, onPlug, compile, crc32, hex, link, connect, disconnect, sendLine, writeConfig,
+  return { decompile, readCard, writeJson, findKnown, onPlug, compile, crc32, hex, link, connect, disconnect, sendLine, writeConfig,
     connected: () => !!link.kind, OLD, supported: () => native || 'serial' in navigator || 'usb' in navigator, native };
 })();
 if (typeof module !== 'undefined') module.exports = PM;
@@ -828,7 +909,7 @@ function renderSheet(){
     </div>
     <p class="hint" style="margin:6px 0 0">İndirme sayfası GitHub'da, giriş yapmış olman gerekir.${PM.native?' Uygulama sürümü '+esc(PMNative.version())+'.':''}</p></div>
   <div class="sec"><div class="lbl">Kart</div>
-    <div class="row"><button class="btn" onclick="cardBtn()">${PM.connected()?'Bağlantıyı kes':'🔌 Karta bağlan'}</button><button class="btn pri" ${PM.connected()?'':'disabled'} onclick="writeCard()">Karta yaz</button></div>
+    <div class="row"><button class="btn" onclick="cardBtn()">${PM.connected()?'Bağlantıyı kes':'🔌 Karta bağlan'}</button><button class="btn pri" ${PM.connected()?'':'disabled'} onclick="writeCard()">Karta yaz</button><button class="btn" ${PM.connected()&&PM.link.info&&(PM.link.info.cfg||PM.link.info.jlen)?'':'disabled'} onclick="takeFromCard(false)">Karttakileri al</button></div>
     <p class="hint" style="margin:6px 0 0">${cardLine()}</p>
     <p class="hint" style="margin:6px 0 0">Bütün profiller ve bu ayarlar kartın içine kaydedilir. Kart ondan sonra bağlantı olmadan da aynı şekilde çalışır.</p></div>`;
 }
@@ -1066,7 +1147,7 @@ async function cardBtn(known){
     PM.link.onLine=ev=>{
       if(ev.ev==='prof'&&ev.cur<S.profiles.length&&ev.cur!==S.cur){S.cur=ev.cur;ui.layer=0;render();toast('Profil: '+P().name);}
       if(ev.ev==='mode')toast(ev.mapping?'Eşleme açık':'Normal gamepad');
-      if(ev.ev==='hello'){renderCard();PM.sendLine('ctrls').catch(()=>{});if(document.getElementById('sheet').classList.contains('open'))renderSheet();}
+      if(ev.ev==='hello'){renderCard();setTimeout(cardProfilesCheck,300);PM.sendLine('ctrls').catch(()=>{});if(document.getElementById('sheet').classList.contains('open'))renderSheet();}
       if(ev.ev==='ctrls'){cardCtl=ev;if(ev.cur&&ev.name)rememberName(ev.cur,ev.name);if(document.getElementById('sheet').classList.contains('open'))renderSheet();}
       if(ev.ev==='connected'){rememberName(ev.addr,ev.name);PM.sendLine('ctrls').catch(()=>{});}
       if(ev.ev==='disconnected'||ev.ev==='lm')PM.sendLine('ctrls').catch(()=>{});
@@ -1085,7 +1166,9 @@ async function writeCard(){
   if(!PM.connected()){toast('Önce karta bağlan');return;}
   if(card.busy){card.again=true;return;}
   card.busy=true;renderCard();
-  try{const r=await PM.writeConfig(S);if(PM.link.info)PM.link.info.crc=r.crc.toString(16);toast('Karta yazıldı ✓');}
+  try{const r=await PM.writeConfig(S);if(PM.link.info)PM.link.info.crc=r.crc.toString(16);
+    let j=false;try{j=await PM.writeJson(exportState());}catch(e){}
+    toast(j?'Karta yazıldı ✓':'Karta yazıldı ✓ (profillerin düzenlenebilir kopyası sığmadı)');}
   catch(e){toast(e.message||'Yazılamadı');}
   card.busy=false;renderCard();
   if(document.getElementById('sheet').classList.contains('open'))renderSheet();
@@ -1110,6 +1193,26 @@ function setTheme(x){S.theme=Object.assign(themeOf(),x);applyTheme();save();rend
 if(darkMq&&darkMq.addEventListener)darkMq.addEventListener('change',()=>{if(themeOf().mode==='auto')applyTheme();});
 applyTheme();
 
+/* ---------- Karttan profilleri alma ---------- */
+const isFresh=()=>S.profiles.length===1&&snap(S.profiles[0])===snap(migrate(demoProf()));
+let cardChecked=false;
+async function cardProfilesCheck(){
+  const i=PM.link.info;if(!i||cardChecked||card.busy)return;cardChecked=true;
+  if(!(i.jlen||i.cfg)||cardSynced())return;
+  if(isFresh()){await takeFromCard(true);return;}
+  toast('Karttaki ayarlar buradakinden farklı. ⚙ → Kart bölümünden karttakileri alabilir ya da buradakileri yazabilirsin');
+}
+async function takeFromCard(auto){
+  try{
+    const r=await PM.readCard();if(!r){toast('Kartta kayıtlı ayar yok');return;}
+    if(!auto&&!await ask(`Kartta ${r.state.profiles.length} profil var. Buradaki profillerin yerine alınsın mı?`+(r.full?'':' (Bu kartta profil adları saklanmamış; Profil 1, 2… olarak gelir.)'),null))return;
+    loadBackupDirect(r.state);
+    if(PM.link.info&&PM.link.info.prof<S.profiles.length){S.cur=PM.link.info.prof;render();}
+    toast('Profiller karttan alındı'+(r.full?'':' (adları Profil 1, 2…)'));renderCard();
+    if(document.getElementById('sheet').classList.contains('open'))renderSheet();
+  }catch(e){toast('Karttan okunamadı: '+(e.message||e));}
+}
+
 /* ---------- Paylaş / yedek ---------- */
 const stamp=()=>new Date().toISOString().slice(0,10);
 function exportState(){const c=JSON.parse(JSON.stringify(S));c.profiles.forEach(p=>{if(p._applied){const a=JSON.parse(p._applied);a.name=p.name;Object.assign(p,a);}delete p._applied;});return c;}
@@ -1131,15 +1234,19 @@ function backupProfiles(){
 }
 function loadBackup(text){
   let d;try{d=JSON.parse(text);}catch(e){toast('Dosya okunamadı');return;}
-  const st=d&&d.ayar?d.ayar:d;
-  if(!st||!st.profiles||!st.profiles.length){toast('Bu bir PadMapper yedeği değil');return;}
+  let st=d&&d.ayar?d.ayar:d;
+  if(Array.isArray(st))st={profiles:st};
+  else if(st&&st.layers)st={profiles:[st]};
+  if(st&&st.profiles)st.device=Object.assign({},JSON.parse(JSON.stringify(S.device)),st.device||{});
+  if(!st||!st.profiles||!st.profiles.length){toast('Bu dosyada PadMapper profili bulunamadı');return;}
+  st.profiles.forEach((p,i)=>{if(!p.name)p.name='Profil '+(i+1);});
   ask(`Yedekte ${st.profiles.length} profil var (${st.profiles.map(p=>p.name).join(', ')}). Şimdiki profillerin yerine yüklensin mi?`,null).then(ok=>{
     if(!ok)return;S=st;S.profiles.forEach(migrate);S.profiles.forEach(p=>p._applied=snap(p));S.cur=Math.min(S.cur||0,S.profiles.length-1);
     if(!S.device.profMod){S.device.profMod='HOME';S.device.profPrev='LB';S.device.profNext='RB';}
     ui.layer=0;save();render();if(document.getElementById('sheet').classList.contains('open'))renderSheet();toast('Yedek yüklendi'+(PM.connected()?', "Karta yaz" ile karta gönder':''));});
 }
 function importProfiles(){
-  if(PM.native){window.PM_native.picked=t=>{if(t)loadBackup(t);};PMNative.pickFile();return;}
+  if(PM.native){window.PM_native.picked=t=>{if(t)loadBackup(t);else toast('Dosya seçilmedi ya da okunamadı');};PMNative.pickFile();return;}
   const i=document.createElement('input');i.type='file';i.accept='.json,application/json';i.onchange=()=>{const f=i.files[0];if(f)f.text().then(loadBackup);};i.click();
 }
 function shareUf2(){if(!PMNative.hasAsset('padmapper.uf2')){toast('Bu uygulama sürümünde kart yazılımı yok');return;}if(!PMNative.shareAsset('padmapper.uf2','padmapper.uf2'))toast('Paylaşılamadı');}
@@ -1148,7 +1255,7 @@ function openLink(u){if(PM.native)PMNative.openUrl(u);else window.open(u,'_blank
 
 drawPad();render();
 if(presetPending)setTimeout(()=>ask(`Bu ayar ekranı ${presetPending.profiles.length} profille geldi (${presetPending.profiles.map(p=>p.name).join(', ')}). Bu bilgisayardaki profillerin yerine kullanılsın mı?`,null).then(ok=>{if(ok){loadBackupDirect(presetPending);}}),300);
-function loadBackupDirect(st){S=JSON.parse(JSON.stringify(st));S.profiles.forEach(migrate);S.profiles.forEach(p=>p._applied=snap(p));S.cur=Math.min(S.cur||0,S.profiles.length-1);ui.layer=0;save();render();toast('Profiller yüklendi');}
+function loadBackupDirect(st){st=JSON.parse(JSON.stringify(st));st.device=Object.assign({},S.device,st.device||{});if(S.theme&&!st.theme)st.theme=S.theme;S=st;if(!S.device.profMod){S.device.profMod='HOME';S.device.profPrev='LB';S.device.profNext='RB';}S.profiles.forEach(migrate);S.profiles.forEach(p=>p._applied=snap(p));S.cur=Math.min(S.cur||0,S.profiles.length-1);ui.layer=0;save();render();toast('Profiller yüklendi');}
 /* sayfa açılınca ya da kart takılınca, daha önce izin verildiyse kendiliğinden bağlan */
 PM.findKnown().then(k=>{if(k)cardBtn(k);}).catch(()=>{});
 PM.onPlug(k=>setTimeout(()=>cardBtn(k),800));

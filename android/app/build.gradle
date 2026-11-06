@@ -7,13 +7,24 @@ android {
         applicationId 'com.padmapper.ayar'
         minSdk 24
         targetSdk 34
-        versionCode 3
-        versionName '0.7'
+        versionCode 4
+        versionName '0.8'
+    }
+    /* Sabit imza: güncellemeler eskisinin üstüne kurulur, veriler silinmez */
+    signingConfigs {
+        pm {
+            storeFile rootProject.file('padmapper.keystore')
+            storePassword System.getenv('PM_KEY_PASS')
+            keyAlias 'padmapper'
+            keyPassword System.getenv('PM_KEY_PASS')
+        }
     }
     buildTypes {
         release {
             minifyEnabled false
-            signingConfig signingConfigs.debug
+            /* sabit anahtar varsa onu kullan, yoksa geçici anahtar */
+            def ks = rootProject.file('padmapper.keystore')
+            signingConfig (ks.exists() && ks.length() > 0 && System.getenv('PM_KEY_PASS') ? signingConfigs.pm : signingConfigs.debug)
         }
     }
 }

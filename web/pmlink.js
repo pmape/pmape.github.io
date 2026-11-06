@@ -76,6 +76,87 @@ const PM = (() => {
     return new Uint8Array(b);
   }
 
+  /* Karttaki ayardan profilleri geri çıkar (profil adları kartta yok: Profil 1, 2…) */
+  const inv = o => Object.fromEntries(Object.entries(o).map(([k, v]) => [v, k]));
+  function decompile(b) {
+    const HIDI = inv(HID), BTNI = inv(BTN), MOUSEI = inv(MOUSE), OUTI = inv(OUT), SMI = inv(SM), TRIGI = inv(TRIG), MODEI = inv(MODE), ACTSI = inv(ACTS);
+    let i = 0;
+    const u8 = () => b[i++], u16 = () => { const v = b[i] | (b[i + 1] << 8); i += 2; return v; };
+    if (b[0] !== 80 || b[1] !== 77 || b[2] !== 2) throw new Error('Karttaki ayar okunamadı');
+    i = 3;
+    const d = { startMode: u8() ? 'pad' : 'map', comboA: BTNI[u8()] || 'HOME', comboB: BTNI[u8()] || 'SELECT', holdMs: u16() };
+    const fl = u8(); d.profSwitch = !!(fl & 1); d.passUnmapped = !!(fl & 2);
+    const np = u8(); u8();
+    d.profMod = BTNI[u8()] || 'HOME'; d.profPrev = BTNI[u8()] || 'LB'; d.profNext = BTNI[u8()] || 'RB'; u8(); u8();
+    const profiles = [];
+    for (let n = 0; n < np; n++) {
+      const p = { name: 'Profil ' + (n + 1), output: OUTI[u8()] || 'all', trigThr: u8(), longMs: u16(), doubleMs: u16(), gapMs: 50, layers: [] };
+      for (let l = 0; l < 4; l++) {
+        const sticks = {};
+        for (const s of ['LS', 'RS']) {
+          const mode = SMI[u8()] || 'off', sens = u8(), dead = u8(), k = [u8(), u8(), u8(), u8()].map(x => HIDI[x] || '');
+          sticks[s] = { mode, sens, dead, keys: { up: k[0] || 'KeyW', down: k[1] || 'KeyS', left: k[2] || 'KeyA', right: k[3] || 'KeyD' } };
+        }
+        p.layers.push({ btn: {}, sticks });
+      }
+      const nb = u16();
+      for (let k = 0; k < nb; k++) {
+        const li = u8(), btn = BTNI[u8()], trig = u8(), other = u8(), kind = u8(), mode = u8(), loop = u16(), tl = u8(), how = u8(), ns = u8();
+        const a = { kind: kind ? 'layer' : 'combo', mode: MODEI[mode] || 'normal', turbo: loop, layer: tl || 1, how: how ? 'toggle' : 'hold', steps: [] };
+        for (let s = 0; s < ns; s++) {
+          const t = u8(), c = u8(), ac = ACTSI[u8()] || 'press', after = u16();
+          a.steps.push(t === 0 ? { t: 'key', k: HIDI[c] || '', a: ac, after } : t === 1 ? { t: 'mouse', b: MOUSEI[c] || 'left', a: ac, after } : { t: 'pad', p: BTNI[c] || 'A', a: ac, after });
+        }
+        if (!btn) continue;
+        const key = trig === 5 ? 'c_' + (BTNI[other] || '') : TRIGI[trig];
+        if (!key || key === 'c_') continue;
+        (p.layers[li].btn[btn] = p.layers[li].btn[btn] || {})[key] = a;
+      }
+      profiles.push(p);
+    }
+    return { cur: 0, profiles, device: d };
+  }
+
+  /* Profillerin düzenlenebilir hali: sıkıştırıp karta da yazılır */
+  async function pack(obj) {
+    const raw = new TextEncoder().encode(JSON.stringify(obj));
+    if (typeof CompressionStream === 'undefined') return Uint8Array.from([74, ...raw]); /* 'J' */
+    const z = new Uint8Array(await new Response(new Blob([raw]).stream().pipeThrough(new CompressionStream('gzip'))).arrayBuffer());
+    const out = new Uint8Array(z.length + 1); out[0] = 71; out.set(z, 1); return out; /* 'G' */
+  }
+  async function unpack(b) {
+    if (b[0] === 74) return JSON.parse(new TextDecoder().decode(b.slice(1)));
+    const r = await new Response(new Blob([b.slice(1)]).stream().pipeThrough(new DecompressionStream('gzip'))).arrayBuffer();
+    return JSON.parse(new TextDecoder().decode(r));
+  }
+  const unhex = s => Uint8Array.from((s.match(/../g) || []).map(x => parseInt(x, 16)));
+
+  function collect(cmd, ev, ms) {
+    return new Promise((res, rej) => {
+      const prev = link.onLine; let acc = '';
+      const t = setTimeout(() => { link.onLine = prev; rej(new Error('Kart cevap vermedi')); }, ms);
+      link.onLine = e => { prev(e); if (e.ev === ev) acc += e.d; if (e.ev === ev + '_end') { clearTimeout(t); link.onLine = prev; res(unhex(acc)); } };
+      sendLine(cmd).catch(rej);
+    });
+  }
+  async function readCard() {
+    const info = link.info || {};
+    if (info.jlen) { try { return { state: await unpack(await collect('jr', 'jdata', 8000)), full: true }; } catch (e) { } }
+    if (info.cfg) return { state: decompile(await collect('cr', 'cfgdata', 8000)), full: false };
+    return null;
+  }
+  async function writeJson(state) {
+    const b = await pack(state);
+    if (b.length > 8192) return false;
+    const w = waitEv('json', 8000);
+    await sendLine('jb ' + b.length);
+    for (let i = 0; i < b.length; i += 200) { await sendLine('jd ' + hex(b.slice(i, i + 200))); await new Promise(r => setTimeout(r, 15)); }
+    await sendLine('je ' + crc32(b).toString(16).padStart(8, '0'));
+    const r = await w;
+    if (r.ok && link.info) { link.info.jlen = b.length; link.info.jcrc = crc32(b).toString(16).padStart(8, '0'); }
+    return !!r.ok;
+  }
+
   const CRC = (() => { const t = []; for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1; t[n] = c >>> 0; } return t; })();
   function crc32(a) { let c = 0xffffffff; for (const x of a) c = CRC[(c ^ x) & 255] ^ (c >>> 8); return (c ^ 0xffffffff) >>> 0; }
   const hex = a => Array.from(a, x => x.toString(16).padStart(2, '0')).join('');
@@ -240,7 +321,7 @@ const PM = (() => {
     else if ('serial' in navigator) navigator.serial.addEventListener('connect', e => { const p = e.target; if (p.getInfo && p.getInfo().usbVendorId === 0x2fe3) cb({ serial: p }); });
   }
 
-  return { findKnown, onPlug, compile, crc32, hex, link, connect, disconnect, sendLine, writeConfig,
+  return { decompile, readCard, writeJson, findKnown, onPlug, compile, crc32, hex, link, connect, disconnect, sendLine, writeConfig,
     connected: () => !!link.kind, OLD, supported: () => native || 'serial' in navigator || 'usb' in navigator, native };
 })();
 if (typeof module !== 'undefined') module.exports = PM;
