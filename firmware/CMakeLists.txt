@@ -3,7 +3,10 @@ cmake_minimum_required(VERSION 3.20.0)
 find_package(Zephyr REQUIRED HINTS $ENV{ZEPHYR_BASE})
 project(padmapper)
 
-target_sources(app PRIVATE src/main.c src/pad.c src/out.c src/engine.c src/cfg.c src/vdisk.c)
+target_sources(app PRIVATE src/main.c src/pad.c src/out.c src/engine.c src/cfg.c)
+if(CONFIG_USB_MASS_STORAGE)
+  target_sources(app PRIVATE src/vdisk.c)
+endif()
 
 # Kartın USB belleğine gömülen dosyalar (derleme sırasında assets/ içine konur)
 set(ASSETS ${CMAKE_CURRENT_SOURCE_DIR}/assets)
