@@ -53,7 +53,8 @@ static const char *names[NF] = { "PADMAPPRAPK", "AYAR    HTM", "KART    UF2", "B
 static uint32_t fsize[NF], fstart[NF], fclus[NF];
 static uint8_t fat[FATSZ * SEC];
 static uint8_t root[(ROOTENT * 32)];
-static uint32_t uf2_base, uf2_blocks;
+static uintptr_t uf2_base;
+static uint32_t uf2_blocks;
 
 static void fat_set(uint32_t k, uint16_t v)
 {
@@ -74,8 +75,8 @@ static void put32(uint8_t *p, uint32_t v) { p[0] = v; p[1] = v >> 8; p[2] = v >>
 
 static void build(void)
 {
-	uf2_base = (uint32_t)__rom_region_start;
-	uf2_blocks = ((uint32_t)_flash_used + 255) / 256;
+	uf2_base = (uintptr_t)__rom_region_start;
+	uf2_blocks = ((uint32_t)(uintptr_t)_flash_used + 255) / 256;
 	fsize[F_APK] = sizeof(apk_raw) - 1;
 	fsize[F_HTML] = sizeof(html_raw) - 1;
 	fsize[F_UF2] = uf2_blocks * 512;
@@ -144,12 +145,12 @@ static void uf2_block(uint8_t *b, uint32_t i)
 	put32(b + 0, 0x0A324655);
 	put32(b + 4, 0x9E5D5157);
 	put32(b + 8, 0x00002000);          /* aile kimliği var */
-	put32(b + 12, uf2_base + i * 256);
+	put32(b + 12, (uint32_t)(uf2_base + i * 256));
 	put32(b + 16, 256);
 	put32(b + 20, i);
 	put32(b + 24, uf2_blocks);
 	put32(b + 28, 0xADA52840);         /* nRF52840 */
-	uint32_t len = MIN(256, (uint32_t)_flash_used - i * 256);
+	uint32_t len = MIN(256, (uint32_t)(uintptr_t)_flash_used - i * 256);
 
 	memcpy(b + 32, (const void *)(uf2_base + i * 256), len);
 	put32(b + 508, 0x0AB16F30);
