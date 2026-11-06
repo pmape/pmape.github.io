@@ -1,3 +1,4 @@
 android/app/src/main/assets/
 android/**/build/
 android/.gradle/
+firmware/assets/

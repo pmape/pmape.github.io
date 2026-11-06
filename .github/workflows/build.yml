@@ -9,10 +9,21 @@ permissions:
 
 jobs:
   build:
+    needs: android
     runs-on: ubuntu-latest
     container: nordicplayground/nrfconnect-sdk:v2.6-branch
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: padmapper-apk
+          path: firmware/assets
+      - name: Kart belleğine konacak dosyalar
+        shell: bash
+        run: |
+          mv firmware/assets/padmapper-ayar.apk firmware/assets/padmapper.apk
+          cp web/padmapper.html firmware/assets/padmapper.html
+          ls -l firmware/assets
 
       - name: Derle (XIAO nRF52840)
         shell: bash
