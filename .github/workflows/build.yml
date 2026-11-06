@@ -67,6 +67,8 @@ jobs:
           gradle assembleRelease --no-daemon -q
           mkdir -p ../out
           cp app/build/outputs/apk/release/app-release.apk ../out/padmapper-ayar.apk
+          AS=$(ls -d $ANDROID_HOME/build-tools/*/ | sort -V | tail -1)apksigner
+          $AS verify --print-certs ../out/padmapper-ayar.apk | grep -i "subject" | head -1
       - uses: actions/upload-artifact@v4
         with:
           name: padmapper-apk
