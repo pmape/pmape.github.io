@@ -63,6 +63,8 @@ jobs:
           if [ -n "$PM_KEYSTORE" ]; then echo "$PM_KEYSTORE" | base64 -d > android/padmapper.keystore; fi
           mkdir -p android/app/src/main/assets
           cp web/padmapper.html android/app/src/main/assets/padmapper.html
+          grep -o 'FW_VERSION "[^"]*"' firmware/src/cfg.h | cut -d'"' -f2 > android/app/src/main/assets/fw_version.txt
+          cat android/app/src/main/assets/fw_version.txt
           cd android
           gradle assembleRelease --no-daemon -q
           mkdir -p ../out

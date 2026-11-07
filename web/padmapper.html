@@ -906,7 +906,7 @@ function renderSheet(){
       <div class="scard"><span class="dot ${!c?'':cardSynced()?'on':'warn'}"></span><div style="flex:1;min-width:0"><b>${!c?'Kart bağlı değil':cardSynced()?'Karttaki ayar güncel':'Karttaki ayar farklı'}</b><div class="hint">${c?'Yazılım '+esc(i.fw||'?'):'USB ile tak'}</div></div>
         <button class="btn" onclick="cardBtn()">${c?'Kes':'Bağlan'}</button></div>
       <div class="sbtns"><button class="btn pri" ${c?'':'disabled'} onclick="writeCard()">Karta yaz</button><button class="btn" ${c&&(i.cfg||i.jlen)?'':'disabled'} onclick="takeFromCard(false)">Karttakileri al</button></div>`)+
-      sgroup('Tuşlar nereye',routeHtml());
+      sgroup('Tuşlar nereye',routeHtml())+sgroup('Güncelleme',updHtml());
   }else if(stab==='pad'){
     body=sgroup('Kontrolcüler',ctrlListHtml()+`<div class="sbtns"><button class="btn pri" onclick="openScan()" ${PM.connected()?'':'disabled'}>🔍 Cihaz ara</button><button class="btn" onclick="openLearn()" ${PM.connected()&&cardCtl.cur?'':'disabled'}>🎯 Tuşları tanıt</button></div>`)+
     sgroup('Eşleme',
@@ -1172,13 +1172,14 @@ function renderCard(){
   document.getElementById('card').title=cardLine();
 }
 async function cardBtn(known){
+  if(updating)return;
   if(PM.connected()&&known)return;
   if(PM.connected()){await PM.disconnect();renderCard();if(document.getElementById('sheet').classList.contains('open'))renderSheet();toast('Kart bağlantısı kesildi');return;}
   try{
     PM.link.onLine=ev=>{
       if(ev.ev==='prof'&&ev.cur<S.profiles.length&&ev.cur!==S.cur){S.cur=ev.cur;ui.layer=0;render();toast('Profil: '+P().name);}
       if(ev.ev==='mode')toast(ev.mapping?'Eşleme açık':'Normal gamepad');
-      if(ev.ev==='hello'){renderCard();setTimeout(cardProfilesCheck,300);PM.sendLine('ctrls').catch(()=>{});setTimeout(()=>PM.sendLine('targets').catch(()=>{}),150);if(document.getElementById('sheet').classList.contains('open'))renderSheet();}
+      if(ev.ev==='hello'){renderCard();setTimeout(cardProfilesCheck,300);if(!updating&&cardNeedsUpdate()&&!window._updAsked){window._updAsked=true;setTimeout(()=>ask('Kart için yeni yazılım var ('+ev.fw+' → '+bundledFw()+'). Şimdi kurulsun mu?',null).then(ok=>{if(ok)updCard(true);}),1500);}PM.sendLine('ctrls').catch(()=>{});setTimeout(()=>PM.sendLine('targets').catch(()=>{}),150);if(document.getElementById('sheet').classList.contains('open'))renderSheet();}
       if(ev.ev==='targets'){cardBT=ev;renderCard();if(document.getElementById('sheet').classList.contains('open'))renderSheet();}
       if(ev.ev==='ble'){if(ev.paired)toast('Yeni cihaz eşleşti');if(ev.host&&ev.host!=='connecting')toast('Bluetooth hedefe bağlandı: '+tName(ev.host));PM.sendLine('targets').catch(()=>{});}
       if(ev.ev==='ctrls'){cardCtl=ev;if(ev.cur&&ev.name)rememberName(ev.cur,ev.name);if(document.getElementById('sheet').classList.contains('open'))renderSheet();}
@@ -1196,6 +1197,7 @@ async function cardBtn(known){
   renderCard();
 }
 async function writeCard(){
+  if(updating)return;
   if(!PM.connected()){toast('Önce karta bağlan');return;}
   if(card.busy){card.again=true;return;}
   card.busy=true;renderCard();
@@ -1208,7 +1210,7 @@ async function writeCard(){
   if(card.again){card.again=false;writeCard();}
 }
 let awT=null;
-function autoWrite(){if(!PM.connected())return;clearTimeout(awT);awT=setTimeout(()=>{if(!cardSynced())writeCard();},700);}
+function autoWrite(){if(!PM.connected()||updating)return;clearTimeout(awT);awT=setTimeout(()=>{if(!cardSynced())writeCard();},700);}
 
 /* ---------- Tema ---------- */
 const ACCENTS=[{k:'orange',n:'Turuncu',c:'#ff8a3d',t:'#1a1205'},{k:'teal',n:'Turkuaz',c:'#2ec4b6',t:'#04201d'},{k:'blue',n:'Mavi',c:'#4c8dff',t:'#ffffff'},
@@ -1225,6 +1227,66 @@ function applyTheme(){
 function setTheme(x){S.theme=Object.assign(themeOf(),x);applyTheme();save();renderSheet();drawPad();render();}
 if(darkMq&&darkMq.addEventListener)darkMq.addEventListener('change',()=>{if(themeOf().mode==='auto')applyTheme();});
 applyTheme();
+
+/* ---------- Güncelleme ---------- */
+const APK_URL='https://github.com/ImLegennD/padmapper/releases/download/son-surum/padmapper-ayar.apk';
+const vnum=v=>String(v||'0').split('.').map(x=>parseInt(x)||0).reduce((a,x)=>a*1000+x,0);
+const bundledFw=()=>PM.native&&PMNative.assetText?PMNative.assetText('fw_version.txt'):'';
+function cardNeedsUpdate(){const i=PM.link.info,b=bundledFw();return !!(PM.connected()&&i&&i.fw&&b&&vnum(b)>vnum(i.fw));}
+function updHtml(){
+  if(!PM.native)return srow('Uygulama ve kart','<button class="btn" onclick="openLink(\'https://github.com/ImLegennD/padmapper/releases/tag/son-surum\')">İndirme sayfası</button>');
+  const i=PM.link.info||{},b=bundledFw(),need=cardNeedsUpdate();
+  return srow('Uygulama <span class="hint">'+esc(PMNative.version())+'</span>','<button class="btn" onclick="updApp()">Güncelle</button>','Tarayıcında GitHub\'a giriş yapmış olman gerekir. İndirme bitince aç → Güncelle. Profillerin korunur. Yeni uygulama yeni kart yazılımını da içinde getirir.')+
+    srow('Kart yazılımı <span class="hint">'+(PM.connected()?'kartta '+esc(i.fw||'?')+' · ':'')+'uygulamada '+esc(b||'?')+'</span>',
+      `<button class="btn ${need?'pri':''}" ${PM.connected()&&b&&PM.link.kind==='native'?'':'disabled'} onclick="updCard()">${need?'Yeni sürümü kur':'Yeniden kur'}</button>`,
+      'Kart yükleme moduna geçer, uygulama yazılımı karta yazar, kart yeniden başlar. Ayarların ve profillerin kartta kalır. Yarıda kesilirse kart bozulmaz; tekrar denersin.');
+}
+/* tam ekran güncelleme penceresi: bu sırada başka hiçbir şey çalışmaz */
+let updating=false;
+function updModal(steps,cur,p,msg,btns){
+  let d=document.getElementById('upd');
+  if(!d){d=document.createElement('div');d.id='upd';d.className='sheet open';d.style.zIndex=40;document.body.appendChild(d);}
+  d.innerHTML=`<div class="in" style="max-width:420px"><h2 style="margin:0 0 12px">Kart güncelleniyor</h2>
+    ${steps.map((s,k)=>`<div class="row" style="margin:6px 0;opacity:${k>cur?.45:1}"><span style="width:22px;text-align:center">${k<cur?'✓':k===cur?(btns?'⚠':'<span class="spin"></span>'):'○'}</span><span style="flex:1">${s}</span></div>`).join('')}
+    ${p!=null?`<div style="height:8px;background:var(--panel2);border-radius:4px;margin:12px 0 4px"><i style="display:block;height:8px;border-radius:4px;background:var(--acc);width:${p}%"></i></div><div class="hint">%${p}</div>`:''}
+    ${msg?`<p class="hint" style="margin:10px 0 0">${msg}</p>`:''}
+    ${btns?`<div class="sbtns">${btns}</div>`:'<p class="hint" style="margin:10px 0 0">Kartı çıkarma, uygulamayı kapatma.</p>'}</div>`;
+}
+function updClose(){updating=false;const d=document.getElementById('upd');if(d)d.remove();}
+const UPD_STEPS=['Kart yükleme moduna geçiyor','Kartın sürücüsü bekleniyor','Yeni yazılım yazılıyor','Kart yeniden başlıyor','Bitti'];
+async function updCard(skip){
+  if(updating)return;
+  if(!skip&&!await ask('Kart yazılımı '+bundledFw()+' kurulsun mu? Yaklaşık 30 sn sürer. Bu sırada kartı çıkarma.',null))return;
+  updating=true;closeSheet();
+  const want=bundledFw();
+  updModal(UPD_STEPS,0);
+  try{await PM.sendLine('dfu');}catch(e){}
+  await new Promise(r=>setTimeout(r,1500));
+  try{await PM.disconnect();}catch(e){}
+  updModal(UPD_STEPS,1,null,'İlk seferde Android, kartın sürücüsüne erişim izni ister.');
+  window.PM_native.drive=ok=>{if(ok)PMNative.flashUf2();else updModal(UPD_STEPS,1,null,'Sürücü seçilmedi.',`<button class="btn pri" onclick="PMNative.pickDrive()">Sürücüyü seç</button><button class="btn" onclick="updClose()">Vazgeç</button>`);};
+  window.PM_native.flash=ev=>{
+    if(ev.state==='wait')updModal(UPD_STEPS,1);
+    else if(ev.state==='nodrive')updModal(UPD_STEPS,1,null,'Açılan kart sürücüsünü seç (adı genelde <b>XIAO</b> ile başlar), sonra <b>Bu klasörü kullan</b> de. Bu izin bir kere istenir.',`<button class="btn pri" onclick="PMNative.pickDrive()">Sürücüyü seç</button><button class="btn" onclick="updClose()">Vazgeç</button>`);
+    else if(ev.state==='write')updModal(UPD_STEPS,2,ev.p);
+    else if(ev.state==='err')updModal(UPD_STEPS,2,ev.p,'Yazılamadı: '+esc(ev.msg||'')+'. Kart bozulmaz; kartı çıkarıp takıp tekrar dene ya da bilgisayardan UF2 at.',`<button class="btn pri" onclick="PMNative.flashUf2()">Tekrar dene</button><button class="btn" onclick="updClose()">Kapat</button>`);
+    else if(ev.state==='done'){
+      updModal(UPD_STEPS,3,100);
+      const t0=Date.now();
+      const chk=setInterval(async()=>{
+        if(PM.connected()&&PM.link.info){clearInterval(chk);const ok=vnum(PM.link.info.fw)>=vnum(want);
+          updModal(UPD_STEPS,ok?5:4,null,ok?'Kart yazılımı '+esc(PM.link.info.fw)+' kuruldu ✓':'Kart bağlandı ama sürümü '+esc(PM.link.info.fw)+'.',`<button class="btn pri" onclick="updClose()">Tamam</button>`);}
+        else if(!PM.connected()&&PMNative.present()){try{await PM.connect({native:true});}catch(e){}}
+        if(Date.now()-t0>40000){clearInterval(chk);updModal(UPD_STEPS,3,null,'Kart henüz geri bağlanmadı. Kartı çıkarıp tak.',`<button class="btn" onclick="updClose()">Kapat</button>`);}
+      },1500);
+    }
+  };
+  PMNative.flashUf2();
+}
+function updApp(){
+  updModal(['Tarayıcıda indiriliyor','İndirme bitince bildirime dokun ya da İndirilenler\'den aç','Android sorunca Güncelle de'],0,null,'İndirme tarayıcıda olur, ilerlemesini orada görürsün. Profillerin ve ayarların korunur. Yeni uygulama açılınca kart eskiyse kart güncellemesini önerir.',`<button class="btn pri" onclick="openLink(APK_URL)">Tarayıcıda indir</button><button class="btn" onclick="updClose()">Kapat</button>`);
+  document.querySelector('#upd h2').textContent='Uygulama güncellemesi';
+}
 
 /* ---------- Tuşlar nereye: kablo / Bluetooth hedefleri ---------- */
 let cardBT=null;
@@ -1252,7 +1314,7 @@ async function unpairTarget(a){if(!await ask(`"${tName(a)}" unutulsun mu? Tekrar
 const isFresh=()=>S.profiles.length===1&&snap(S.profiles[0])===snap(migrate(demoProf()));
 let cardChecked=false;
 async function cardProfilesCheck(){
-  const i=PM.link.info;if(!i||cardChecked||card.busy)return;cardChecked=true;
+  const i=PM.link.info;if(!i||cardChecked||card.busy||updating)return;cardChecked=true;
   if(!(i.jlen||i.cfg)||cardSynced())return;
   if(isFresh()){await takeFromCard(true);return;}
   toast('Karttaki ayarlar buradakinden farklı. ⚙ → Kart bölümünden karttakileri alabilir ya da buradakileri yazabilirsin');

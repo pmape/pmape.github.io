@@ -16,6 +16,8 @@
 #include <zephyr/drivers/uart.h>
 #include <zephyr/settings/settings.h>
 #include <zephyr/sys/crc.h>
+#include <zephyr/sys/reboot.h>
+#include <soc.h>
 #include "log.h"
 #include "engine.h"
 #include "cfg.h"
@@ -160,6 +162,12 @@ static void cmd(char *l)
 	if (ble_cmd(l)) return;
 	if (!strcmp(l, "hello")) {
 		hello();
+	} else if (!strcmp(l, "dfu")) {
+		/* Yükleme moduna geç: kart USB sürücü olarak açılır, yeni UF2 oraya yazılır */
+		OUT("{\"ev\":\"dfu\",\"ok\":1}\n");
+		k_sleep(K_MSEC(300));
+		NRF_POWER->GPREGRET = 0x57; /* UF2 yükleyicisi */
+		sys_reboot(SYS_REBOOT_COLD);
 	} else if (!strcmp(l, "cr")) {
 		dump("cfgdata", blob, blob_len);
 	} else if (!strcmp(l, "jr")) {

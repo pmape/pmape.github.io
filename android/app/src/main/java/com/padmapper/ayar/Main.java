@@ -46,6 +46,8 @@ public class Main extends Activity {
     private volatile boolean reading;
     private final Object wlock = new Object();
     private static final int PICK = 7;
+    private static final int DRIVE = 8;
+    private volatile boolean flashing;
 
     static String mimeOf(String n) {
         if (n == null) return "application/octet-stream";
@@ -88,6 +90,16 @@ public class Main extends Activity {
     @Override
     protected void onActivityResult(int req, int res, Intent data) {
         super.onActivityResult(req, res, data);
+        if (req == DRIVE) {
+            boolean ok = res == RESULT_OK && data != null && data.getData() != null;
+            if (ok) {
+                Uri t = data.getData();
+                try { getContentResolver().takePersistableUriPermission(t, Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_WRITE_URI_PERMISSION); } catch (Exception e) { }
+                getSharedPreferences("pm", MODE_PRIVATE).edit().putString("drive", t.toString()).apply();
+            }
+            js("window.PM_native&&PM_native.drive&&PM_native.drive(" + ok + ")");
+            return;
+        }
         if (req != PICK) return;
         if (res != RESULT_OK || data == null || data.getData() == null) { js("window.PM_native&&PM_native.picked(null)"); return; }
         try {
@@ -217,6 +229,44 @@ public class Main extends Activity {
         if (reading) { reading = false; js("window.PM_native&&PM_native.closed()"); }
     }
 
+    private void flashEv(String state, int p, String msg) {
+        js("window.PM_native&&PM_native.flash&&PM_native.flash({state:" + JSONObject.quote(state) + ",p:" + p + ",msg:" + JSONObject.quote(msg == null ? "" : msg) + "})");
+    }
+
+    private void doFlash() {
+        String ds = getSharedPreferences("pm", MODE_PRIVATE).getString("drive", null);
+        if (ds == null) { flashEv("nodrive", 0, null); return; }
+        byte[] fw;
+        try { fw = readAll(getAssets().open("padmapper.uf2")); } catch (Exception e) { flashEv("err", 0, "Uygulamada kart yazılımı yok"); return; }
+        Uri tree = Uri.parse(ds);
+        Uri dir = android.provider.DocumentsContract.buildDocumentUriUsingTree(tree, android.provider.DocumentsContract.getTreeDocumentId(tree));
+        /* sürücü takılıp açılana kadar bekle (en fazla 25 sn) */
+        Uri file = null;
+        String last = null;
+        for (int t = 0; t < 50 && file == null; t++) {
+            flashEv("wait", t * 2, null);
+            try {
+                file = android.provider.DocumentsContract.createDocument(getContentResolver(), dir, "application/octet-stream", "padmapper.uf2");
+            } catch (Exception e) { last = e.getMessage(); }
+            if (file == null) { try { Thread.sleep(500); } catch (InterruptedException e) { } }
+        }
+        if (file == null) { flashEv("nodrive", 0, last); return; }
+        int done = 0;
+        try (OutputStream o = getContentResolver().openOutputStream(file, "w")) {
+            for (int off = 0; off < fw.length; off += 4096) {
+                int n = Math.min(4096, fw.length - off);
+                o.write(fw, off, n);
+                done = off + n;
+                flashEv("write", (int) (done * 100L / fw.length), null);
+            }
+            o.flush();
+        } catch (Exception e) {
+            /* son bloktan sonra kart hemen yeniden başlar; yazma sonunda kopma normal */
+            if (done < fw.length * 97 / 100) { flashEv("err", done * 100 / fw.length, e.getMessage()); return; }
+        }
+        flashEv("done", 100, null);
+    }
+
     private void closeLink() {
         boolean was = reading;
         reading = false;
@@ -341,7 +391,29 @@ public class Main extends Activity {
             });
         }
 
-        @JavascriptInterface public String version() {
+        @JavascriptInterface public String assetText(String name) {
+            try { return new String(readAll(getAssets().open(name)), StandardCharsets.UTF_8).trim(); } catch (Exception e) { return ""; }
+        }
+
+        /* Kartın yükleme sürücüsünü seç (bir kere; izin saklanır) */
+        @JavascriptInterface public void pickDrive() {
+            Intent i = new Intent(Intent.ACTION_OPEN_DOCUMENT_TREE);
+            i.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_WRITE_URI_PERMISSION | Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION);
+            runOnUiThread(() -> startActivityForResult(i, DRIVE));
+        }
+
+        @JavascriptInterface public boolean hasDrive() {
+            return getSharedPreferences("pm", MODE_PRIVATE).getString("drive", null) != null;
+        }
+
+        /* Gömülü kart yazılımını kartın yükleme sürücüsüne yaz; ilerleme PM_native.flash({...}) ile */
+        @JavascriptInterface public void flashUf2() {
+            if (flashing) return;
+            flashing = true;
+            new Thread(() -> {
+                try { doFlash(); } finally { flashing = false; }
+            }, "pm-flash").start();
+        }
             try { return getPackageManager().getPackageInfo(getPackageName(), 0).versionName; } catch (Exception e) { return "?"; }
         }
     }
