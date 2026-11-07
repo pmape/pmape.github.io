@@ -48,7 +48,7 @@ class BleLink {
     static final UUID CCC = UUID.fromString("00002902-0000-1000-8000-00805f9b34fb");
 
     private final Context ctx;
-    private final Cb cb;
+    private Cb cb;
     private final byte[] key;
     private final Handler h = new Handler(Looper.getMainLooper());
     private BluetoothLeScanner scanner;

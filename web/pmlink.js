@@ -365,7 +365,7 @@ const PM = (() => {
     else if ('serial' in navigator) navigator.serial.addEventListener('connect', e => { const p = e.target; if (p.getInfo && p.getInfo().usbVendorId === 0x2fe3) cb({ serial: p }); });
   }
 
-  return { decompile, readCard, writeJson, findKnown, onPlug, compile, crc32, hex, link, connect, disconnect, sendLine, writeConfig,
+  return { HID, decompile, readCard, writeJson, findKnown, onPlug, compile, crc32, hex, link, connect, disconnect, sendLine, writeConfig,
     connected: () => !!link.kind, OLD, bleOk, supported: () => native || 'serial' in navigator || 'usb' in navigator, native };
 })();
 if (typeof module !== 'undefined') module.exports = PM;

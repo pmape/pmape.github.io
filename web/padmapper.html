@@ -568,7 +568,7 @@ const PM = (() => {
     else if ('serial' in navigator) navigator.serial.addEventListener('connect', e => { const p = e.target; if (p.getInfo && p.getInfo().usbVendorId === 0x2fe3) cb({ serial: p }); });
   }
 
-  return { decompile, readCard, writeJson, findKnown, onPlug, compile, crc32, hex, link, connect, disconnect, sendLine, writeConfig,
+  return { HID, decompile, readCard, writeJson, findKnown, onPlug, compile, crc32, hex, link, connect, disconnect, sendLine, writeConfig,
     connected: () => !!link.kind, OLD, bleOk, supported: () => native || 'serial' in navigator || 'usb' in navigator, native };
 })();
 if (typeof module !== 'undefined') module.exports = PM;
@@ -986,6 +986,7 @@ function renderSheet(){
       (PM.native&&PMNative.accessOn?sgroup('Bu tablet',srow('🎤 Google Sesle Yazma izni',PMNative.accessOn()?'<span class="ok">Açık ✓</span>':'<button class="btn" onclick="gvoiceSetup()">Aç</button>','Pad\'deki sesli yazma tuşu klavyeyi Google Sesle Yazma\'ya çevirebilsin diye. Uygulama sadece o tuşa bakar.')):'');
   }else if(stab==='pad'){
     body=sgroup('Kontrolcüler',ctrlListHtml()+`<div class="sbtns"><button class="btn pri" onclick="openScan()" ${PM.connected()?'':'disabled'}>🔍 Cihaz ara</button><button class="btn" onclick="openLearn()" ${PM.connected()&&cardCtl.cur?'':'disabled'}>🎯 Tuşları tanıt</button></div>`)+
+    sgroup('Bluetooth klavye / fare',hidHtml())+
     sgroup('Eşleme',
       (PM.connected()&&PM.link.info?srow('Şu an',`<div class="seg sm"><button class="${PM.link.info.mapping!==0?'on':''}" onclick="PM.sendLine('map 1')">Açık</button><button class="${PM.link.info.mapping===0?'on':''}" onclick="PM.sendLine('map 0')">Kapalı (gamepad)</button></div>`,'Pad\'den aç/kapat tuşlarıyla değiştirdiğinde burası da değişir.'):'')+
       srow('Açılışta',`<div class="seg sm"><button class="${d.startMode==='map'?'on':''}" onclick="S.device.startMode='map';save();renderSheet()">Açık</button><button class="${d.startMode==='pad'?'on':''}" onclick="S.device.startMode='pad';save();renderSheet()">Gamepad</button></div>`,'Eşleme kapalıyken pad tablete normal gamepad olarak gider. Işık: yeşil açık, mavi gamepad.')+
@@ -1036,14 +1037,41 @@ function ctrlListHtml(){
 async function useCtrl(a){if(a===cardCtl.list[0]?.addr&&a===cardCtl.cur)return;await PM.sendLine('use '+a);toast(ctrlName(a)+' seçildi, bağlanılıyor…');}
 async function forgetCtrl(a){if(!await ask(`"${ctrlName(a)}" unutulsun mu? (Öğretilen tuşları da silinir)`,null))return;await PM.sendLine('forget '+a);}
 
-let scan={on:false,found:[],onlyPad:true,pairing:null};
-function openScan(){if(!PM.connected()){toast('Önce karta bağlan');return;}document.getElementById('scan').classList.add('open');startScan();}
+let scan={on:false,found:[],onlyPad:true,pairing:null,mode:'pad'};
+function openScan(mode){if(!PM.connected()){toast('Önce karta bağlan');return;}scan.mode=mode==='hid'?'hid':'pad';document.getElementById('scan').classList.add('open');startScan();}
+
+/* ---------- Bluetooth klavye / fare (kartta) ---------- */
+let cardHid=null;
+const HTGT=[[0,'A'],[1,'B'],[3,'X'],[4,'Y'],[6,'LB'],[7,'RB'],[8,'LT'],[9,'RT'],[10,'Select'],[11,'Start'],[12,'Home'],[13,'L3'],[14,'R3'],[15,'Ekran görüntüsü'],
+  [16,'Yön ↑'],[17,'Yön ↓'],[18,'Yön ←'],[19,'Yön →'],[20,'Sol çubuk ↑'],[21,'Sol çubuk ↓'],[22,'Sol çubuk ←'],[23,'Sol çubuk →'],[24,'Sağ çubuk ↑'],[25,'Sağ çubuk ↓'],[26,'Sağ çubuk ←'],[27,'Sağ çubuk →']];
+const HSRC_M=[[0xf0,'🖱 Sol tık'],[0xf1,'🖱 Sağ tık'],[0xf2,'🖱 Orta tık'],[0xf3,'🖱 Yan geri'],[0xf4,'🖱 Yan ileri']];
+function hidSrcList(){const l=[];for(const [c] of KEYS){const v=PM.HID[c];if(v)l.push([v,'⌨ '+keyName(c)]);}return l.concat(HSRC_M);}
+const hidSrcName=v=>(hidSrcList().find(x=>x[0]===v)||[0,'0x'+v.toString(16)])[1];
+function hidMap(){const m=[],s=(cardHid&&cardHid.map)||'';for(let i=0;i+4<=s.length;i+=4)m.push([parseInt(s.slice(i,i+2),16),parseInt(s.slice(i+2,i+4),16)]);return m;}
+async function hidSend(cmd){try{await PM.sendLine(cmd);}catch(e){toast(e.message);}}
+function hidSetMap(m){hidSend('hid map '+m.map(([a,b])=>a.toString(16).padStart(2,'0')+b.toString(16).padStart(2,'0')).join(''));}
+function hidHtml(){
+  if(!PM.connected())return '<div class="empty">Kart bağlı değil.</div>';
+  if(!cardHid)return '<div class="empty">Kart yazılımı bu özelliği desteklemiyor ya da bilgi bekleniyor. Kartı güncelle.</div>';
+  const m=hidMap(),src=hidSrcList();
+  return (cardHid.list.length?cardHid.list.map(d=>`<div class="dev"><span class="ic">${d.kb&&d.ms?'⌨🖱':d.ms?'🖱':'⌨'}</span><div style="flex:1;min-width:0"><b>${esc(d.name||'Cihaz')}</b><div class="hint">${esc(shortAddr(d.addr))} · ${d.on?'<span class="ok">bağlı</span>':'bekleniyor'}</div></div><button class="x" title="Unut" onclick="hidForget('${d.addr}')">✕</button></div>`).join('')
+      :'<div class="empty">Kayıtlı klavye/fare yok. En fazla 2 tane eklenebilir (pad\'e ek olarak).</div>')+
+    (cardHid.pending?'<p class="hint"><span class="spin"></span> Seçilen cihaz bekleniyor: eşleşme modunda olsun.</p>':'')+
+    `<div class="sbtns"><button class="btn" onclick="openScan('hid')">＋ Klavye / fare ekle</button></div>`+
+    srow('Kullanım',`<div class="seg sm"><button class="${cardHid.mode?'':'on'}" onclick="hidSend('hid mode 0')">Doğrudan geçir</button><button class="${cardHid.mode?'on':''}" onclick="hidSend('hid mode 1')">🎮 Gamepad'e çevir</button></div>`,
+      'Doğrudan geçir: klavye ve fare, kartın bağlı olduğu cihaza aynen gider. Gamepad\'e çevir: tuşlar pad tuşlarına, fare sağ çubuğa çevrilir (konsol/oyun için); atanmamış tuşlar klavye olarak gider. Profildeki eşlemeler bunlara da uygulanır.')+
+    (cardHid.mode?srow('Fare hassasiyeti',`<input type="range" min="1" max="100" value="${cardHid.sens}" onchange="hidSend('hid sens '+this.value)"><span class="hint">${cardHid.sens}</span>`)+
+      `<details class="sinfo2"><summary>Tuş atamaları (${m.length})</summary>${m.map(([s,t],i)=>`<div class="row" style="gap:6px;margin:4px 0"><select onchange="hidEdit(${i},0,this.value)">${src.map(([v,n])=>`<option value="${v}" ${v===s?'selected':''}>${esc(n)}</option>`).join('')}</select><span>→</span><select onchange="hidEdit(${i},1,this.value)">${HTGT.map(([v,n])=>`<option value="${v}" ${v===t?'selected':''}>${esc(n)}</option>`).join('')}</select><button class="x" onclick="hidEdit(${i},-1)">✕</button></div>`).join('')}
+        <div class="sbtns"><button class="btn" onclick="hidEdit(-1)" ${m.length>=48?'disabled':''}>＋ Atama</button><button class="btn" onclick="hidSend('hid map')">Varsayılan (WASD)</button></div></details>`:'');
+}
+function hidEdit(i,f,v){const m=hidMap();if(i<0)m.push([0x2c,0]);else if(f<0)m.splice(i,1);else m[i][f]=parseInt(v);hidSetMap(m);}
+async function hidForget(a){if(!await ask('Bu klavye/fare unutulsun mu?',null))return;hidSend('hid forget '+a);}
 function closeScan(){stopScan();lw=null;document.getElementById('scan').classList.remove('open');}
 function startScan(){scan.on=true;scan.found=[];scan.pairing=null;PM.sendLine('scan').catch(()=>{});renderScan();}
 function stopScan(){if(scan.on)PM.sendLine('scan_stop').catch(()=>{});scan.on=false;}
 const bars=r=>{const n=r>-60?4:r>-70?3:r>-80?2:1;return `<span class="bars">${[6,9,12,14].map((hh,i)=>`<i class="${i<n?'on':''}" style="height:${hh}px"></i>`).join('')}</span>`;};
 function scanEv(ev){
-  if(ev.ev==='dev'){const f=scan.found.find(x=>x.addr===ev.addr);if(f){f.rssi=ev.rssi;if(ev.name)f.name=ev.name;}else scan.found.push({addr:ev.addr,name:ev.name,rssi:ev.rssi,hid:!!ev.hid});
+  if(ev.ev==='dev'){const f=scan.found.find(x=>x.addr===ev.addr);if(f){f.rssi=ev.rssi;if(ev.name)f.name=ev.name;}else scan.found.push({addr:ev.addr,name:ev.name,rssi:ev.rssi,hid:!!ev.hid,app:ev.app||0});
     if(ev.hid&&ev.name)rememberName(ev.addr,ev.name);}
   if(ev.ev==='scan_end')scan.on=false;
   if(ev.ev==='connected'&&scan.pairing&&ev.addr===scan.pairing){scan.pairing=null;toast((ev.name||'Kontrolcü')+' bağlandı');}
@@ -1053,18 +1081,20 @@ function renderScan(){
   const saved=new Set(cardCtl.list.map(c=>c.addr));
   const list=scan.found.filter(d=>!scan.onlyPad||d.hid).sort((a,b)=>b.hid-a.hid||b.rssi-a.rssi);
   document.getElementById('scanIn').innerHTML=`
-  <div class="row"><h2>Cihaz ara</h2><button class="btn ico" onclick="closeScan()">✕</button></div>
-  <p class="hint" style="margin:6px 0">Kontrolcünü eşleşme moduna al (D8 Pro'da X + Home). Listede görününce üstüne dokun.</p>
+  <div class="row"><h2>${scan.mode==='hid'?'Klavye / fare ekle':'Cihaz ara'}</h2><button class="btn ico" onclick="closeScan()">✕</button></div>
+  <p class="hint" style="margin:6px 0">${scan.mode==='hid'?'Klavyeni/fareni Bluetooth eşleşme moduna al. Listede görününce üstüne dokun.':'Kontrolcünü eşleşme moduna al (D8 Pro\'da X + Home). Listede görününce üstüne dokun.'}</p>
   <div class="row"><span>${scan.on?'<span class="spin"></span> Aranıyor…':'Arama bitti'}</span><span style="flex:1"></span>
     <label class="hint"><input type="checkbox" ${scan.onlyPad?'checked':''} onchange="scan.onlyPad=this.checked;renderScan()"> Sadece uyumlu</label>
     <button class="btn" onclick="${scan.on?'stopScan();renderScan()':'startScan()'}">${scan.on?'Durdur':'Yeniden ara'}</button></div>
   ${list.map(d=>{const s=saved.has(d.addr),pr=scan.pairing===d.addr,on=cardCtl.cur===d.addr;
-    return `<div class="dev ${d.hid?'':'no'}" ${d.hid&&!on&&!pr?`onclick="pair('${d.addr}')"`:''}><span class="ic">${d.hid?'🎮':'❔'}</span>
+    return `<div class="dev ${d.hid?'':'no'}" ${d.hid&&!on&&!pr?`onclick="pair('${d.addr}')"`:''}><span class="ic">${!d.hid?'❔':d.app===961?'⌨':d.app===962?'🖱':'🎮'}</span>
       <div style="flex:1;min-width:0"><b>${esc(d.name||'(adsız)')}</b><div class="hint">${esc(shortAddr(d.addr))}</div>
       <div>${d.hid?'<span class="ok">✓ Uyumlu (Bluetooth HID)</span>':'<span class="bad">Uyumsuz: giriş cihazı değil</span>'}</div></div>
       ${bars(d.rssi)}<span style="min-width:74px;text-align:right">${pr?'<span class="spin"></span>':on?'<span class="ok">bağlı</span>':s?'<span class="hint">kayıtlı</span>':d.hid?'<span class="btn" style="display:inline-flex;align-items:center">Eşle</span>':''}</span></div>`;}).join('')||`<div class="empty">${scan.on?'Henüz bir şey bulunmadı…':'Uyumlu cihaz bulunamadı. Kontrolcü eşleşme modunda mı?'}</div>`}`;
 }
-async function pair(a){scan.pairing=a;renderScan();await PM.sendLine('use '+a);}
+async function pair(a){
+  if(scan.mode==='hid'){await hidSend('hid use '+a);toast('Eklendi, bağlanılıyor… (cihaz eşleşme modunda olsun)');closeScan();return;}
+  scan.pairing=a;renderScan();await PM.sendLine('use '+a);}
 
 /* ---------- Tuş tanıtma ---------- */
 function parseMap(hex){
@@ -1248,7 +1278,7 @@ function renderCard(){
   const d=document.querySelector('#card .dot'),t=document.getElementById('cardTxt');if(!d)return;
   const c=PM.connected(),s=c&&cardSynced();
   d.className='dot '+(!c?'':card.busy?'warn':s?'on':'warn');
-  t.textContent=(!c?(connMsg||'Kart'):card.busy?'Yazılıyor…':s?'Kart ✓':'Kart ●')+(c?(cardState?stateText():(PM.link.info&&PM.link.info.mapping===0?' · 🎮 eşleme kapalı':'')):'');
+  t.textContent=(c&&PM.link.via==='ble'?'📶 ':'')+(!c?(connMsg||'Kart'):card.busy?'Yazılıyor…':s?'Kart ✓':'Kart ●')+(c?(cardState?stateText():(PM.link.info&&PM.link.info.mapping===0?' · 🎮 eşleme kapalı':'')):'');
   document.getElementById('card').title=cardLine();
 }
 const sheetOpen=()=>document.getElementById('sheet').classList.contains('open');
@@ -1265,8 +1295,10 @@ async function cardBtn(known){
     PM.link.onLine=ev=>{
       if(ev.ev==='prof'&&ev.cur<S.profiles.length&&ev.cur!==S.cur){S.cur=ev.cur;ui.layer=0;render();toast('Profil: '+P().name);}
       if(ev.ev==='mode'){if(PM.link.info)PM.link.info.mapping=ev.mapping;toast(ev.mapping?'Eşleme açık':'Eşleme kapalı · normal gamepad');renderCard();if(document.getElementById('sheet').classList.contains('open'))renderSheet();}
-      if(ev.ev==='hello'){renderCard();setTimeout(cardProfilesCheck,300);if(!updating&&PM.link.via!=='ble'&&cardNeedsUpdate()&&!window._updAsked){window._updAsked=true;setTimeout(()=>ask('Kart için yeni yazılım var ('+ev.fw+' → '+bundledFw()+'). Şimdi kurulsun mu?',null).then(ok=>{if(ok)updCard(true);}),1500);}PM.sendLine('ctrls').catch(()=>{});setTimeout(()=>PM.sendLine('targets').catch(()=>{}),150);if(document.getElementById('sheet').classList.contains('open'))renderSheet();}
+      if(ev.ev==='hello'){renderCard();setTimeout(cardProfilesCheck,300);if(!updating&&PM.link.via!=='ble'&&cardNeedsUpdate()&&!window._updAsked){window._updAsked=true;setTimeout(()=>ask('Kart için yeni yazılım var ('+ev.fw+' → '+bundledFw()+'). Şimdi kurulsun mu?',null).then(ok=>{if(ok)updCard(true);}),1500);}PM.sendLine('ctrls').catch(()=>{});setTimeout(()=>PM.sendLine('targets').catch(()=>{}),150);setTimeout(()=>PM.sendLine('hid list').catch(()=>{}),300);if(document.getElementById('sheet').classList.contains('open'))renderSheet();}
       if(ev.ev==='state')applyState(ev);
+      if(ev.ev==='hids'){cardHid=ev;if(sheetOpen())renderSheet();}
+      if(ev.ev==='hid'){if(ev.ready)toast((ev.kb?'⌨ Klavye':'')+(ev.kb&&ev.ms?' + ':'')+(ev.ms?'🖱 Fare':'')+' hazır');if(ev.connected===0||ev.ready||ev.fail!=null)PM.sendLine('hid list').catch(()=>{});}
       if(ev.ev==='secret'&&ev.new)toast('Bu telefon karta tanıtıldı: artık Bluetooth ile de bağlanabilirsin');
       if(ev.ev==='targets'){cardBT=ev;renderCard();if(document.getElementById('sheet').classList.contains('open'))renderSheet();}
       if(ev.ev==='ble'){if(ev.paired)toast('Yeni cihaz eşleşti');if(ev.host&&ev.host!=='connecting')toast('Bluetooth hedefe bağlandı: '+tName(ev.host));PM.sendLine('targets').catch(()=>{});}
@@ -1276,7 +1308,7 @@ async function cardBtn(known){
       if(['dev','scan_end','connected'].includes(ev.ev))scanEv(ev);
       if(['ctrl','map','map_end','rep'].includes(ev.ev))learnEv(ev);
     };
-    PM.link.onClose=()=>{const ble=lastVia==='ble';cardState=null;connMsg='';renderCard();if(sheetOpen())renderSheet();
+    PM.link.onClose=()=>{const ble=lastVia==='ble';cardState=null;cardHid=null;connMsg='';renderCard();if(sheetOpen())renderSheet();
       toast(ble?'Bluetooth bağlantısı koptu':'Kart bağlantısı koptu');
       /* Bluetooth koptuysa bir kez sessizce yeniden dene */
       if(ble&&!updating)setTimeout(()=>{if(!PM.connected()&&!connMsg)cardBtn({ble:true,auto:true});},2500);};
