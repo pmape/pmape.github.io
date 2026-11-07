@@ -10,6 +10,9 @@
 #ifndef BIT
 #define BIT(n) (1UL << (n))
 #endif
+#ifndef CLAMP
+#define CLAMP(v, l, h) ((v) < (l) ? (l) : (v) > (h) ? (h) : (v))
+#endif
 #else
 #include <zephyr/kernel.h>
 #include "log.h"
@@ -26,7 +29,8 @@ static K_MUTEX_DEFINE(mtx);
 #define STEP 5
 
 enum { TR_SINGLE, TR_DOUBLE, TR_LONG, TR_START, TR_RELEASE, TR_COMBO, TR_N };
-enum { ST_KEY, ST_MOUSE, ST_PAD, ST_CC };
+/* ST_MOVE: fareyi kaydır — kod = x (int8), hareket baytı = y (int8) */
+enum { ST_KEY, ST_MOUSE, ST_PAD, ST_CC, ST_MOVE };
 /* medya tuşları: ayar ekranındaki sırayla */
 static const uint16_t cc_usage[] = { 0, 0x0cf, 0x221, 0x0e9, 0x0ea, 0x0e2, 0x0cd, 0x0b5, 0x0b6, 0x06f, 0x070, 0x223, 0x224 };
 #define NCC (sizeof(cc_usage) / sizeof(cc_usage[0]))
@@ -175,6 +179,7 @@ int engine_select_profile(int n)
 
 static uint8_t kref[256], mref[5], pref[20], cref[NCC];
 static int wheel;
+static int mvx, mvy; /* makrodaki fare kaydırmaları */
 
 static void o_down(uint8_t t, uint8_t c)
 {
@@ -272,6 +277,11 @@ static void exec_step(const uint8_t *s, int64_t now)
 {
 	uint8_t t = s[0], c = s[1], a = s[2];
 
+	if (t == ST_MOVE) {
+		mvx += (int8_t)c;
+		mvy += (int8_t)a;
+		return;
+	}
 	if (a == 0) {
 		o_down(t, c);
 		if (!(t == ST_MOUSE && c >= 5)) up_later(t, c, now + (t == ST_CC ? 60 : 20));
@@ -324,6 +334,7 @@ static int64_t last_tick;
 
 static void reset_state(void)
 {
+	mvx = mvy = 0;
 	memset(kref, 0, sizeof(kref)); memset(mref, 0, sizeof(mref)); memset(pref, 0, sizeof(pref)); memset(cref, 0, sizeof(cref));
 	memset(ups, 0, sizeof(ups)); memset(holds, 0, sizeof(holds)); memset(togs, 0, sizeof(togs));
 	memset(runs, 0, sizeof(runs)); memset(bs, 0, sizeof(bs));
@@ -356,7 +367,7 @@ static int resolve(int b)
 
 static bool single_out(const struct bind *b)
 {
-	return b->nsteps == 1 && b->steps[2] == 0 && !(b->steps[0] == ST_MOUSE && b->steps[1] >= 5);
+	return b->nsteps == 1 && b->steps[0] != ST_MOVE && b->steps[2] == 0 && !(b->steps[0] == ST_MOUSE && b->steps[1] >= 5);
 }
 
 /* hb: basılı tutulan tuş (tutma davranışı için), -1: tek seferlik */
@@ -674,6 +685,15 @@ enum eng_mode engine_tick(const struct pad_state *p, int64_t now, struct out_rep
 
 	/* fare */
 	for (int i = 0; i < 5; i++) if (mref[i]) r->ms[0] |= BIT(i);
+	{
+		/* makro fare kaydırması: bu karede en fazla 127, kalanı sonraki karelere */
+		int x = mx + CLAMP(mvx, -127, 127), y = my + CLAMP(mvy, -127, 127);
+
+		mvx -= CLAMP(mvx, -127, 127);
+		mvy -= CLAMP(mvy, -127, 127);
+		mx = CLAMP(x, -127, 127);
+		my = CLAMP(y, -127, 127);
+	}
 	r->ms[1] = (uint8_t)mx;
 	r->ms[2] = (uint8_t)my;
 	r->ms[3] = (uint8_t)(int8_t)(wheel > 127 ? 127 : wheel < -127 ? -127 : wheel);

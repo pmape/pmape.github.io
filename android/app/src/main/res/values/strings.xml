@@ -3,4 +3,5 @@
     <string name="app_name">PadMapper</string>
     <string name="access_name">PadMapper sesli yazma</string>
     <string name="access_desc">Pad\'deki sesli yazma tuşuna basınca klavyeyi Google Sesle Yazma\'ya çevirir, tekrar basınca önceki klavyeye döner. Başka hiçbir tuşa ve içeriğe bakmaz.</string>
+    <string name="widget_desc">Kart durumu, profil ve eşleme düğmeleri</string>
 </resources>

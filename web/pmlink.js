@@ -62,7 +62,7 @@ const PM = (() => {
       });
       u16(binds.length);
       for (const { li, btn, trig, other, a } of binds) {
-        const steps = a.kind === 'layer' ? [] : a.steps.slice(0, 255);
+        const steps = a.kind === 'layer' ? [] : expand(a.steps, d.layout).slice(0, 255);
         u8(li); u8(btn); u8(trig); u8(other);
         u8(a.kind === 'layer' ? 1 : 0); u8(MODE[a.mode] || 0); u16(a.turbo || 80);
         u8(a.layer || 0); u8(a.how === 'toggle' ? 1 : 0); u8(steps.length);
@@ -70,6 +70,7 @@ const PM = (() => {
           if (s.t === 'key') { u8(0); u8(HID[s.k] || 0); }
           else if (s.t === 'mouse') { u8(1); u8(MOUSE[s.b] ?? 0); }
           else if (s.t === 'media') { u8(3); u8(MEDIA[s.m] ?? 1); }
+          else if (s.t === 'move') { u8(4); u8(s.x & 255); u8(s.y & 255); u16(s.after || 0); continue; }
           else { u8(2); u8(BTN[s.p] ?? 0); }
           u8(ACTS[s.a] ?? 0); u16(s.after || 0);
         }
@@ -106,7 +107,8 @@ const PM = (() => {
         const li = u8(), btn = BTNI[u8()], trig = u8(), other = u8(), kind = u8(), mode = u8(), loop = u16(), tl = u8(), how = u8(), ns = u8();
         const a = { kind: kind ? 'layer' : 'combo', mode: MODEI[mode] || 'normal', turbo: loop, layer: tl || 1, how: how ? 'toggle' : 'hold', steps: [] };
         for (let s = 0; s < ns; s++) {
-          const t = u8(), c = u8(), ac = ACTSI[u8()] || 'press', after = u16();
+          const t = u8(), c = u8(), acr = u8(), ac = ACTSI[acr] || 'press', after = u16();
+          if (t === 4) { a.steps.push({ t: 'move', x: (c << 24) >> 24, y: (acr << 24) >> 24, after }); continue; }
           a.steps.push(t === 0 ? { t: 'key', k: HIDI[c] || '', a: ac, after } : t === 1 ? { t: 'mouse', b: MOUSEI[c] || 'left', a: ac, after } : t === 3 ? { t: 'media', m: MEDIAI[c] || 'voice', a: ac, after } : { t: 'pad', p: BTNI[c] || 'A', a: ac, after });
         }
         if (!btn) continue;
@@ -161,6 +163,63 @@ const PM = (() => {
     return !!r.ok;
   }
 
+  /* Yazı → tuş basışları (Türkçe Q ya da US düzeni). [kod, shift, altgr] */
+  const TXT_US = {}, TXT_TR = {};
+  (() => {
+    const set = (m, ch, k, sh = 0, ag = 0) => { if (!(ch in m)) m[ch] = [k, sh, ag]; };
+    for (const m of [TXT_US, TXT_TR]) {
+      'abcdefghjklmnopqrstuvwxyz'.split('').forEach(c => { set(m, c, 'Key' + c.toUpperCase()); set(m, c.toUpperCase(), 'Key' + c.toUpperCase(), 1); });
+      '1234567890'.split('').forEach(c => set(m, c, 'Digit' + c));
+      set(m, ' ', 'Space'); set(m, '\n', 'Enter'); set(m, '\t', 'Tab');
+    }
+    set(TXT_US, 'i', 'KeyI'); set(TXT_US, 'I', 'KeyI', 1);
+    const us = { '-': ['Minus'], '=': ['Equal'], '[': ['BracketLeft'], ']': ['BracketRight'], '\\': ['Backslash'], ';': ['Semicolon'], "'": ['Quote'], '`': ['Backquote'], ',': ['Comma'], '.': ['Period'], '/': ['Slash'],
+      '_': ['Minus', 1], '+': ['Equal', 1], '{': ['BracketLeft', 1], '}': ['BracketRight', 1], '|': ['Backslash', 1], ':': ['Semicolon', 1], '"': ['Quote', 1], '~': ['Backquote', 1], '<': ['Comma', 1], '>': ['Period', 1], '?': ['Slash', 1],
+      '!': ['Digit1', 1], '@': ['Digit2', 1], '#': ['Digit3', 1], '$': ['Digit4', 1], '%': ['Digit5', 1], '^': ['Digit6', 1], '&': ['Digit7', 1], '*': ['Digit8', 1], '(': ['Digit9', 1], ')': ['Digit0', 1] };
+    for (const [c, [k, s]] of Object.entries(us)) set(TXT_US, c, k, s || 0);
+    const tr = { 'ı': ['KeyI'], 'I': ['KeyI', 1], 'i': ['Quote'], 'İ': ['Quote', 1], 'ğ': ['BracketLeft'], 'Ğ': ['BracketLeft', 1], 'ü': ['BracketRight'], 'Ü': ['BracketRight', 1],
+      'ş': ['Semicolon'], 'Ş': ['Semicolon', 1], 'ö': ['Comma'], 'Ö': ['Comma', 1], 'ç': ['Period'], 'Ç': ['Period', 1], '.': ['Slash'], ':': ['Slash', 1], ',': ['Backslash'], ';': ['Backslash', 1],
+      '"': ['Backquote'], 'é': ['Backquote', 1], '*': ['Minus'], '?': ['Minus', 1], '-': ['Equal'], '_': ['Equal', 1], '<': ['IntlBackslash'], '>': ['IntlBackslash', 1],
+      '!': ['Digit1', 1], "'": ['Digit2', 1], '^': ['Digit3', 1], '+': ['Digit4', 1], '%': ['Digit5', 1], '&': ['Digit6', 1], '/': ['Digit7', 1], '(': ['Digit8', 1], ')': ['Digit9', 1], '=': ['Digit0', 1],
+      '@': ['KeyQ', 0, 1], '#': ['Digit3', 0, 1], '$': ['Digit4', 0, 1], '{': ['Digit7', 0, 1], '[': ['Digit8', 0, 1], ']': ['Digit9', 0, 1], '}': ['Digit0', 0, 1], '\\': ['Minus', 0, 1], '|': ['Equal', 0, 1], '~': ['BracketRight', 0, 1] };
+    for (const [c, [k, s, g]] of Object.entries(tr)) { TXT_TR[c] = [k, s || 0, g || 0]; }
+  })();
+  /* Düzenleyicideki kolaylıkları kartın anladığı adımlara aç: yazı, basılı tutma süresi, tekrar sayısı */
+  function expand(steps, layout) {
+    const out = [], map = layout === 'us' ? TXT_US : TXT_TR;
+    for (const s of steps || []) {
+      const n = Math.max(1, Math.min(50, (s.rep | 0) || 1));
+      for (let r = 0; r < n; r++) {
+        const after = r < n - 1 ? (s.repGap ?? s.after ?? 0) : (s.after || 0);
+        if (s.t === 'text') {
+          const chars = Array.from(s.s || '');
+          chars.forEach((ch, i) => {
+            const m = map[ch]; if (!m) return;
+            const last = i === chars.length - 1, gap = last ? after : Math.max(30, s.gap || 35);
+            if (m[1]) out.push({ t: 'key', k: 'ShiftLeft', a: 'down', after: 0 });
+            if (m[2]) out.push({ t: 'key', k: 'AltRight', a: 'down', after: 0 });
+            out.push({ t: 'key', k: m[0], a: 'press', after: m[1] || m[2] ? 15 : gap });
+            if (m[2]) out.push({ t: 'key', k: 'AltRight', a: 'up', after: m[1] ? 0 : gap });
+            if (m[1]) out.push({ t: 'key', k: 'ShiftLeft', a: 'up', after: gap });
+          });
+        } else if (s.t === 'move') {
+          /* büyük kaydırmayı 127'lik parçalara böl */
+          let x = Math.round(+s.x || 0), y = Math.round(+s.y || 0);
+          do {
+            const px = Math.max(-127, Math.min(127, x)), py = Math.max(-127, Math.min(127, y));
+            x -= px; y -= py;
+            out.push({ t: 'move', x: px, y: py, after: x || y ? 0 : after });
+          } while (x || y);
+        } else if (s.a === 'hold' && !(s.t === 'mouse' && String(s.b).startsWith('wheel'))) {
+          out.push(Object.assign({}, s, { a: 'down', after: Math.max(0, +s.hold || 100) }));
+          out.push(Object.assign({}, s, { a: 'up', after }));
+        } else {
+          out.push(Object.assign({}, s, { a: s.a === 'hold' ? 'press' : s.a, after }));
+        }
+      }
+    }
+    return out;
+  }
   const CRC = (() => { const t = []; for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1; t[n] = c >>> 0; } return t; })();
   function crc32(a) { let c = 0xffffffff; for (const x of a) c = CRC[(c ^ x) & 255] ^ (c >>> 8); return (c ^ 0xffffffff) >>> 0; }
   const hex = a => Array.from(a, x => x.toString(16).padStart(2, '0')).join('');
@@ -365,7 +424,7 @@ const PM = (() => {
     else if ('serial' in navigator) navigator.serial.addEventListener('connect', e => { const p = e.target; if (p.getInfo && p.getInfo().usbVendorId === 0x2fe3) cb({ serial: p }); });
   }
 
-  return { HID, decompile, readCard, writeJson, findKnown, onPlug, compile, crc32, hex, link, connect, disconnect, sendLine, writeConfig,
+  return { HID, expandCount: (st, lay) => expand(st, lay).length, decompile, readCard, writeJson, findKnown, onPlug, compile, crc32, hex, link, connect, disconnect, sendLine, writeConfig,
     connected: () => !!link.kind, OLD, bleOk, supported: () => native || 'serial' in navigator || 'usb' in navigator, native };
 })();
 if (typeof module !== 'undefined') module.exports = PM;

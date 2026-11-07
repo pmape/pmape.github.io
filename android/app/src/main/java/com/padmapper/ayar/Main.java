@@ -51,6 +51,13 @@ public class Main extends Activity {
     private static final int DRIVE = 8;
     private volatile boolean flashing;
     private BleLink ble;
+    static Main inst;
+    private String pendingCmd;
+
+    boolean linked() { return (conn != null && reading) || (ble != null && ble.ready()); }
+
+    /* bildirim / widget düğmesi */
+    void action(String cmd) { js("window.PM_native&&PM_native.action&&PM_native.action(" + JSONObject.quote(cmd) + ")"); }
     private static final int BLE_PERM = 9;
 
     /* Bu telefona ait gizli anahtar: karta USB ile bir kez tanıtılır, sonra Bluetooth'tan bağlanırken kullanılır */
@@ -87,6 +94,7 @@ public class Main extends Activity {
 
     @Override
     public void onRequestPermissionsResult(int req, String[] perms, int[] res) {
+        if (req == 10) { Status.refresh(this); return; }
         if (req != BLE_PERM) return;
         boolean ok = res.length > 0;
         for (int r : res) ok &= r == PackageManager.PERMISSION_GRANTED;
@@ -180,6 +188,8 @@ public class Main extends Activity {
     @Override
     protected void onCreate(Bundle b) {
         super.onCreate(b);
+        inst = this;
+        pendingCmd = getIntent().getStringExtra("cmd");
         um = (UsbManager) getSystemService(Context.USB_SERVICE);
         web = new WebView(this);
         WebSettings s = web.getSettings();
@@ -200,6 +210,8 @@ public class Main extends Activity {
     @Override
     protected void onNewIntent(Intent i) {
         super.onNewIntent(i);
+        String cmd = i.getStringExtra("cmd");
+        if (cmd != null) { if (linked()) action(cmd); else pendingCmd = cmd; }
         if (UsbManager.ACTION_USB_DEVICE_ATTACHED.equals(i.getAction())) js("window.PM_native&&PM_native.plug()");
     }
 
@@ -210,6 +222,8 @@ public class Main extends Activity {
 
     @Override
     protected void onDestroy() {
+        if (inst == this) inst = null;
+        Status.offline(this);
         closeLink();
         if (ble != null) ble.close(false);
         try { unregisterReceiver(rx); } catch (Exception e) { }
@@ -376,6 +390,28 @@ public class Main extends Activity {
             if (ble != null && ble.ready()) return "ble";
             return "";
         }
+
+        /* kart durumu: bildirim ve ana ekran aracı */
+        @JavascriptInterface public void status(String json) { Status.set(Main.this, json); }
+
+        /* bildirim izni (Android 13+), bir kez sorulur */
+        @JavascriptInterface public void notifPerm() {
+            if (Build.VERSION.SDK_INT < 33) return;
+            android.content.SharedPreferences sp = getSharedPreferences("pm", MODE_PRIVATE);
+            if (checkSelfPermission("android.permission.POST_NOTIFICATIONS") == PackageManager.PERMISSION_GRANTED || sp.getBoolean("notifAsked", false)) return;
+            sp.edit().putBoolean("notifAsked", true).apply();
+            runOnUiThread(() -> requestPermissions(new String[] { "android.permission.POST_NOTIFICATIONS" }, 10));
+        }
+
+        @JavascriptInterface public void setNotif(boolean on) {
+            getSharedPreferences("pm", MODE_PRIVATE).edit().putBoolean("notif", on).apply();
+            Status.refresh(Main.this);
+        }
+
+        @JavascriptInterface public boolean notifOn() { return getSharedPreferences("pm", MODE_PRIVATE).getBoolean("notif", true); }
+
+        /* uygulama widget/bildirim düğmesiyle açıldıysa bekleyen komut */
+        @JavascriptInterface public String takeCmd() { String c = pendingCmd; pendingCmd = null; return c == null ? "" : c; }
 
         /* karta USB'den tanıtılacak anahtar */
         @JavascriptInterface public String secret() { return secretHex(); }

@@ -94,11 +94,14 @@ details.sum summary{cursor:pointer;color:var(--mute);font-size:13px;padding:4px 
 
 /* makro */
 .mac{display:flex;flex-direction:column}
-.st{display:flex;align-items:center;gap:6px;background:var(--panel2);border:1px solid var(--line);border-radius:9px;padding:5px 6px}
+.st{display:flex;flex-wrap:wrap;align-items:center;gap:6px;background:var(--panel2);border:1px solid var(--line);border-radius:9px;padding:5px 6px}
 .st .n{width:18px;text-align:center;color:var(--mute);font-size:12px;flex:none}
 .st select{flex:1;min-width:0}
 .st .a{flex:0 0 108px}
 .st .ty{flex:0 0 52px;padding:4px 2px;text-align:center}
+.st .stx{flex:1 0 100%;display:flex;gap:10px;align-items:center;padding-left:24px;font-size:12px;color:var(--mute)}
+.st .stx input{width:64px;padding:3px 6px}
+.st .mvi{display:flex;align-items:center;gap:3px;color:var(--mute);flex:1;min-width:0}.st .mvi input{width:100%;min-width:0}
 .x{background:none;border:0;color:var(--mute);cursor:pointer;width:30px;height:32px;border-radius:7px;font-size:15px;flex:none}
 .x:hover{color:var(--text);background:var(--bg)}
 .gap{display:flex;align-items:center;gap:6px;padding:3px 0 3px 26px;color:var(--mute);font-size:13px}
@@ -265,7 +268,7 @@ const PM = (() => {
       });
       u16(binds.length);
       for (const { li, btn, trig, other, a } of binds) {
-        const steps = a.kind === 'layer' ? [] : a.steps.slice(0, 255);
+        const steps = a.kind === 'layer' ? [] : expand(a.steps, d.layout).slice(0, 255);
         u8(li); u8(btn); u8(trig); u8(other);
         u8(a.kind === 'layer' ? 1 : 0); u8(MODE[a.mode] || 0); u16(a.turbo || 80);
         u8(a.layer || 0); u8(a.how === 'toggle' ? 1 : 0); u8(steps.length);
@@ -273,6 +276,7 @@ const PM = (() => {
           if (s.t === 'key') { u8(0); u8(HID[s.k] || 0); }
           else if (s.t === 'mouse') { u8(1); u8(MOUSE[s.b] ?? 0); }
           else if (s.t === 'media') { u8(3); u8(MEDIA[s.m] ?? 1); }
+          else if (s.t === 'move') { u8(4); u8(s.x & 255); u8(s.y & 255); u16(s.after || 0); continue; }
           else { u8(2); u8(BTN[s.p] ?? 0); }
           u8(ACTS[s.a] ?? 0); u16(s.after || 0);
         }
@@ -309,7 +313,8 @@ const PM = (() => {
         const li = u8(), btn = BTNI[u8()], trig = u8(), other = u8(), kind = u8(), mode = u8(), loop = u16(), tl = u8(), how = u8(), ns = u8();
         const a = { kind: kind ? 'layer' : 'combo', mode: MODEI[mode] || 'normal', turbo: loop, layer: tl || 1, how: how ? 'toggle' : 'hold', steps: [] };
         for (let s = 0; s < ns; s++) {
-          const t = u8(), c = u8(), ac = ACTSI[u8()] || 'press', after = u16();
+          const t = u8(), c = u8(), acr = u8(), ac = ACTSI[acr] || 'press', after = u16();
+          if (t === 4) { a.steps.push({ t: 'move', x: (c << 24) >> 24, y: (acr << 24) >> 24, after }); continue; }
           a.steps.push(t === 0 ? { t: 'key', k: HIDI[c] || '', a: ac, after } : t === 1 ? { t: 'mouse', b: MOUSEI[c] || 'left', a: ac, after } : t === 3 ? { t: 'media', m: MEDIAI[c] || 'voice', a: ac, after } : { t: 'pad', p: BTNI[c] || 'A', a: ac, after });
         }
         if (!btn) continue;
@@ -364,6 +369,63 @@ const PM = (() => {
     return !!r.ok;
   }
 
+  /* Yazı → tuş basışları (Türkçe Q ya da US düzeni). [kod, shift, altgr] */
+  const TXT_US = {}, TXT_TR = {};
+  (() => {
+    const set = (m, ch, k, sh = 0, ag = 0) => { if (!(ch in m)) m[ch] = [k, sh, ag]; };
+    for (const m of [TXT_US, TXT_TR]) {
+      'abcdefghjklmnopqrstuvwxyz'.split('').forEach(c => { set(m, c, 'Key' + c.toUpperCase()); set(m, c.toUpperCase(), 'Key' + c.toUpperCase(), 1); });
+      '1234567890'.split('').forEach(c => set(m, c, 'Digit' + c));
+      set(m, ' ', 'Space'); set(m, '\n', 'Enter'); set(m, '\t', 'Tab');
+    }
+    set(TXT_US, 'i', 'KeyI'); set(TXT_US, 'I', 'KeyI', 1);
+    const us = { '-': ['Minus'], '=': ['Equal'], '[': ['BracketLeft'], ']': ['BracketRight'], '\\': ['Backslash'], ';': ['Semicolon'], "'": ['Quote'], '`': ['Backquote'], ',': ['Comma'], '.': ['Period'], '/': ['Slash'],
+      '_': ['Minus', 1], '+': ['Equal', 1], '{': ['BracketLeft', 1], '}': ['BracketRight', 1], '|': ['Backslash', 1], ':': ['Semicolon', 1], '"': ['Quote', 1], '~': ['Backquote', 1], '<': ['Comma', 1], '>': ['Period', 1], '?': ['Slash', 1],
+      '!': ['Digit1', 1], '@': ['Digit2', 1], '#': ['Digit3', 1], '$': ['Digit4', 1], '%': ['Digit5', 1], '^': ['Digit6', 1], '&': ['Digit7', 1], '*': ['Digit8', 1], '(': ['Digit9', 1], ')': ['Digit0', 1] };
+    for (const [c, [k, s]] of Object.entries(us)) set(TXT_US, c, k, s || 0);
+    const tr = { 'ı': ['KeyI'], 'I': ['KeyI', 1], 'i': ['Quote'], 'İ': ['Quote', 1], 'ğ': ['BracketLeft'], 'Ğ': ['BracketLeft', 1], 'ü': ['BracketRight'], 'Ü': ['BracketRight', 1],
+      'ş': ['Semicolon'], 'Ş': ['Semicolon', 1], 'ö': ['Comma'], 'Ö': ['Comma', 1], 'ç': ['Period'], 'Ç': ['Period', 1], '.': ['Slash'], ':': ['Slash', 1], ',': ['Backslash'], ';': ['Backslash', 1],
+      '"': ['Backquote'], 'é': ['Backquote', 1], '*': ['Minus'], '?': ['Minus', 1], '-': ['Equal'], '_': ['Equal', 1], '<': ['IntlBackslash'], '>': ['IntlBackslash', 1],
+      '!': ['Digit1', 1], "'": ['Digit2', 1], '^': ['Digit3', 1], '+': ['Digit4', 1], '%': ['Digit5', 1], '&': ['Digit6', 1], '/': ['Digit7', 1], '(': ['Digit8', 1], ')': ['Digit9', 1], '=': ['Digit0', 1],
+      '@': ['KeyQ', 0, 1], '#': ['Digit3', 0, 1], '$': ['Digit4', 0, 1], '{': ['Digit7', 0, 1], '[': ['Digit8', 0, 1], ']': ['Digit9', 0, 1], '}': ['Digit0', 0, 1], '\\': ['Minus', 0, 1], '|': ['Equal', 0, 1], '~': ['BracketRight', 0, 1] };
+    for (const [c, [k, s, g]] of Object.entries(tr)) { TXT_TR[c] = [k, s || 0, g || 0]; }
+  })();
+  /* Düzenleyicideki kolaylıkları kartın anladığı adımlara aç: yazı, basılı tutma süresi, tekrar sayısı */
+  function expand(steps, layout) {
+    const out = [], map = layout === 'us' ? TXT_US : TXT_TR;
+    for (const s of steps || []) {
+      const n = Math.max(1, Math.min(50, (s.rep | 0) || 1));
+      for (let r = 0; r < n; r++) {
+        const after = r < n - 1 ? (s.repGap ?? s.after ?? 0) : (s.after || 0);
+        if (s.t === 'text') {
+          const chars = Array.from(s.s || '');
+          chars.forEach((ch, i) => {
+            const m = map[ch]; if (!m) return;
+            const last = i === chars.length - 1, gap = last ? after : Math.max(30, s.gap || 35);
+            if (m[1]) out.push({ t: 'key', k: 'ShiftLeft', a: 'down', after: 0 });
+            if (m[2]) out.push({ t: 'key', k: 'AltRight', a: 'down', after: 0 });
+            out.push({ t: 'key', k: m[0], a: 'press', after: m[1] || m[2] ? 15 : gap });
+            if (m[2]) out.push({ t: 'key', k: 'AltRight', a: 'up', after: m[1] ? 0 : gap });
+            if (m[1]) out.push({ t: 'key', k: 'ShiftLeft', a: 'up', after: gap });
+          });
+        } else if (s.t === 'move') {
+          /* büyük kaydırmayı 127'lik parçalara böl */
+          let x = Math.round(+s.x || 0), y = Math.round(+s.y || 0);
+          do {
+            const px = Math.max(-127, Math.min(127, x)), py = Math.max(-127, Math.min(127, y));
+            x -= px; y -= py;
+            out.push({ t: 'move', x: px, y: py, after: x || y ? 0 : after });
+          } while (x || y);
+        } else if (s.a === 'hold' && !(s.t === 'mouse' && String(s.b).startsWith('wheel'))) {
+          out.push(Object.assign({}, s, { a: 'down', after: Math.max(0, +s.hold || 100) }));
+          out.push(Object.assign({}, s, { a: 'up', after }));
+        } else {
+          out.push(Object.assign({}, s, { a: s.a === 'hold' ? 'press' : s.a, after }));
+        }
+      }
+    }
+    return out;
+  }
   const CRC = (() => { const t = []; for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1; t[n] = c >>> 0; } return t; })();
   function crc32(a) { let c = 0xffffffff; for (const x of a) c = CRC[(c ^ x) & 255] ^ (c >>> 8); return (c ^ 0xffffffff) >>> 0; }
   const hex = a => Array.from(a, x => x.toString(16).padStart(2, '0')).join('');
@@ -568,7 +630,7 @@ const PM = (() => {
     else if ('serial' in navigator) navigator.serial.addEventListener('connect', e => { const p = e.target; if (p.getInfo && p.getInfo().usbVendorId === 0x2fe3) cb({ serial: p }); });
   }
 
-  return { HID, decompile, readCard, writeJson, findKnown, onPlug, compile, crc32, hex, link, connect, disconnect, sendLine, writeConfig,
+  return { HID, expandCount: (st, lay) => expand(st, lay).length, decompile, readCard, writeJson, findKnown, onPlug, compile, crc32, hex, link, connect, disconnect, sendLine, writeConfig,
     connected: () => !!link.kind, OLD, bleOk, supported: () => native || 'serial' in navigator || 'usb' in navigator, native };
 })();
 if (typeof module !== 'undefined') module.exports = PM;
@@ -619,17 +681,18 @@ const keyName=c=>(S&&S.device&&S.device.layout!=='us'&&TRQ[c])||KEY_LABEL[c]||c;
 const MOUSE=[['left','Sol tık'],['right','Sağ tık'],['middle','Orta tık'],['back','Yan geri'],['fwd','Yan ileri'],['wheelUp','Tekerlek yukarı'],['wheelDown','Tekerlek aşağı']];
 const PAD=[['A','A'],['B','B'],['X','X'],['Y','Y'],['LB','LB'],['RB','RB'],['LT','LT'],['RT','RT'],['SELECT','Select'],['START','Start'],['HOME','Home'],['L3','L3'],['R3','R3'],['UP','Yön yukarı'],['DOWN','Yön aşağı'],['LEFT','Yön sol'],['RIGHT','Yön sağ']];
 const PAD_LABEL=Object.fromEntries(PAD);
-const TYPES=[['key','⌨'],['mouse','🖱'],['media','🎵'],['pad','🎮']];
+const TYPES=[['key','⌨'],['mouse','🖱'],['move','↔'],['text','Aa'],['media','🎵'],['pad','🎮']];
 const MEDIA=[['voice','🎤 Sesli komut / Asistan'],['search','🔍 Arama'],['volUp','🔊 Ses +'],['volDown','🔉 Ses −'],['mute','🔇 Sessiz'],['play','⏯ Oynat / Durdur'],['next','⏭ Sonraki'],['prev','⏮ Önceki'],['brUp','☀ Parlaklık +'],['brDown','🔅 Parlaklık −'],['home','🏠 Ana ekran'],['back','↩ Geri']];
 const MEDIA_LABEL=Object.fromEntries(MEDIA);
 const OUTS=[['kbm','⌨🖱 Klavye + Fare'],['kb','⌨ Sadece klavye'],['pad','🎮 Gamepad'],['all','⌨🖱🎮 Hepsi']];
 const OUT_ALLOW={kbm:['key','mouse','media'],kb:['key','media'],pad:['pad'],all:['key','mouse','media','pad']};
 const OUT_NAME={kbm:'klavye + fare',kb:'sadece klavye',pad:'gamepad',all:'klavye + fare + gamepad'};
-const TYPE_NAME={key:'⌨ klavye',mouse:'🖱 fare',media:'🎵 medya',pad:'🎮 gamepad'};
-const ok=t=>OUT_ALLOW[P().output||'all'].includes(t);
+const TYPE_NAME={key:'⌨ klavye',mouse:'🖱 fare',move:'↔ fare kaydır',text:'Aa yazı',media:'🎵 medya',pad:'🎮 gamepad'};
+const TYPE_NEED={move:'mouse',text:'key'};
+const ok=t=>OUT_ALLOW[P().output||'all'].includes(TYPE_NEED[t]||t);
 const STICK_NEED={mouse:'mouse',scroll:'mouse',keys:'key',pad:'pad'};
 const MOUSE_LABEL=Object.fromEntries(MOUSE);
-const KACT=[['press','Bas-bırak'],['down','Basılı tut'],['up','Bırak']];
+const KACT=[['press','Bas-bırak'],['hold','Süreli bas'],['down','Basılı tut'],['up','Bırak']];
 
 /* ---------- Veri ---------- */
 const act=()=>({kind:'combo',mode:'normal',turbo:80,steps:[],layer:1,how:'hold'});
@@ -707,6 +770,10 @@ const fmtMs=ms=>ms>=1000?(ms/1000).toFixed(ms%1000?2:1).replace('.',',')+' sn':m
 
 /* ---------- Kısa açıklamalar ---------- */
 function stepLabel(s){
+  const x=(s.a==='hold'?' '+fmtMs(s.hold||100):'')+((s.rep|0)>1?' ×'+(s.rep|0):'');
+  if(s.t==='move')return `<span class="k">↔ ${s.x|0},${s.y|0}${x}</span>`;
+  if(s.t==='text')return `<span class="k">“${esc(String(s.s||'').slice(0,16))}${String(s.s||'').length>16?'…':''}”${x}</span>`;
+  if(x&&s.t!=='media')return stepLabel(Object.assign({},s,{a:'press',rep:1})).replace('</span>',esc(x)+'</span>');
   if(s.t==='key')return `<span class="k">${esc(keyName(s.k))}</span>`;
   if(s.t==='mouse')return `<span class="k">${MOUSE_LABEL[s.b]}</span>`;
   if(s.t==='pad')return `<span class="k">🎮${esc(PAD_LABEL[s.p])}</span>`;
@@ -845,14 +912,21 @@ function renderPanel(){
     else if(s.t==='mouse')h+=`<select onchange="setStep(${i},'b',this.value)">${opt(MOUSE,s.b)}</select>`+(s.b.startsWith('wheel')?'':actSel);
     else if(s.t==='pad')h+=`<select onchange="setStep(${i},'p',this.value)">${opt(PAD,s.p)}</select>`+actSel;
     else if(s.t==='media')h+=`<select onchange="setStep(${i},'m',this.value)">${opt(MEDIA,s.m)}</select>`+actSel;
-    h+=`<button class="x" title="Yukarı taşı" onclick="mv(${i},-1)">↑</button><button class="x" title="Sil" onclick="rm(${i})">✕</button></div>`;
+    else if(s.t==='move')h+=`<label class="mvi" title="Sağa (+) / sola (−)">→<input type="number" min="-2000" max="2000" value="${s.x|0}" onchange="setStep(${i},'x',+this.value)"></label><label class="mvi" title="Aşağı (+) / yukarı (−)">↓<input type="number" min="-2000" max="2000" value="${s.y|0}" onchange="setStep(${i},'y',+this.value)"></label>`;
+    else if(s.t==='text')h+=`<input type="text" placeholder="Yazılacak metin" value="${esc(s.s||'')}" style="flex:1;min-width:120px" onchange="setStep(${i},'s',this.value)">`;
+    h+=`<button class="x" title="Yukarı taşı" onclick="mv(${i},-1)">↑</button><button class="x" title="Sil" onclick="rm(${i})">✕</button>`;
+    h+=`<div class="stx">${s.a==='hold'&&s.t!=='move'&&s.t!=='text'?`<label>Basılı kalsın <input type="number" min="10" max="60000" step="10" value="${s.hold||100}" onchange="setStep(${i},'hold',clamp(this.value))"> ms</label>`:''}
+      <label title="Bu adım kaç kez tekrarlansın">Tekrar <input type="number" min="1" max="50" value="${(s.rep|0)||1}" onchange="setStep(${i},'rep',Math.max(1,Math.min(50,+this.value|0)))"> kez</label></div></div>`;
     if(i<a.steps.length-1)h+=gapRow(s.after,`gap.bind(null,${i})`);
   });
   if(loop)h+=gapRow(a.turbo,'loopGap',true);
   h+=`</div><div class="row" style="margin-top:8px">
-    ${['key','mouse','media','pad'].filter(ok).map(t=>`<button class="btn" onclick="add('${t}')">+ ${TYPE_NAME[t].replace(/^(\S+) (.)/,(m,a,b)=>a+' '+b.toUpperCase())}</button>`).join('')}
+    ${['key','mouse','move','text','media','pad'].filter(ok).map(t=>`<button class="btn" onclick="add('${t}')">+ ${TYPE_NAME[t].replace(/^(\S+) (.)/,(m,a,b)=>a+' '+b.toUpperCase())}</button>`).join('')}
     <button class="btn ${rec?'rec':''}" onclick="toggleRec()" title="Bilgisayar klavyesinde basarak kaydet">${rec?'■ Durdur':'● Kaydet'}</button>
-    ${ok('key')?`<button class="btn" onclick="voicePreset()" title="Cihazın kendi sesli yazmasını açar">🎤 Sesli yazma</button>`:''}</div>`;
+    ${ok('key')?`<button class="btn" onclick="voicePreset()" title="Cihazın kendi sesli yazmasını açar">🎤 Sesli yazma</button>`:''}
+    <button class="btn" onclick="libOpen()" title="Kayıtlı makrolar">📚 Kütüphane</button></div>`;
+  if(a.steps.length){const tot=macroMs(a.steps),n=PM.expandCount(a.steps,S.device.layout);
+    h+=`<div class="hint" style="margin-top:6px">Toplam süre ≈ ${fmtMs(tot)} · kartta ${n} adım${n>255?' — <b class="bad">en fazla 255, fazlası kesilir</b>':''}</div>`;}
   if(a.steps.length>2)h+=`<div class="row" style="margin-top:6px"><span class="hint">Hepsinin arası</span><input type="number" id="allGap" min="0" max="60000" step="10" value="${P().gapMs}" style="width:84px"><span class="hint">ms</span><button class="btn" onclick="setAll()">Uygula</button></div>`;
   h+=`<div class="lbl">Tekrar</div><div class="seg"><button class="${a.mode==='normal'?'on':''}" onclick="curA().mode='normal';render()">Normal</button><button class="${a.mode==='turbo'?'on':''}" onclick="curA().mode='turbo';render()">Turbo</button><button class="${a.mode==='macro'?'on':''}" onclick="curA().mode='macro';render()">Makro</button><button class="${a.mode==='toggle'?'on':''}" onclick="curA().mode='toggle';render()">Toggle</button></div>`;
   if(a.mode==='macro'&&a.steps.length<2)h+=`<div class="note">Makro için yukarıdan birden fazla adım ekle (+ Klavye, + Fare…) ya da "● Kaydet" ile klavyede basarak kaydet. Her adımın arasındaki süreyi ms olarak ayarlayabilirsin.</div>`;
@@ -931,9 +1005,28 @@ function add(t){
   st.push(newStep(t,g));
   render();
 }
-function newStep(t,after){return t==='key'?{t,k:'KeyZ',a:'press',after}:t==='mouse'?{t,b:'left',a:'press',after}:t==='media'?{t,m:'voice',a:'press',after}:{t,p:'A',a:'press',after};}
+function newStep(t,after){return t==='move'?{t,x:50,y:0,after}:t==='text'?{t,s:'',after}:t==='key'?{t,k:'KeyZ',a:'press',after}:t==='mouse'?{t,b:'left',a:'press',after}:t==='media'?{t,m:'voice',a:'press',after}:{t,p:'A',a:'press',after};}
 function setType(i,t){const s=curA().steps;s[i]=Object.assign(newStep(t,s[i].after),{a:s[i].a||'press'});render();}
 function rm(i){curA().steps.splice(i,1);render();}
+function macroMs(st){let t=0;for(const s of st){const n=(s.rep|0)||1;const one=(s.t==='text'?Math.max(1,Array.from(s.s||'').length)*35:0)+(s.a==='hold'?(+s.hold||100):0)+(+s.after||0);t+=one*n;}return t;}
+/* Makro kütüphanesi: bu cihazda saklanır, profiller arasında kullanılır */
+function libOpen(){
+  S.lib=S.lib||[];const a=curA();
+  const d=document.createElement('div');d.className='sheet open';d.style.zIndex=25;
+  const draw=()=>{d.innerHTML=`<div class="in" style="max-width:440px"><div class="row"><h2 style="margin:0">📚 Makro kütüphanesi</h2><span style="flex:1"></span><button class="btn ico" data-x="close">✕</button></div>
+    <p class="hint">Sık kullandığın makroları kaydet, istediğin tuşa tek dokunuşla ekle.</p>
+    <div class="slist">${S.lib.map((m,i)=>`<button data-i="${i}"><span>▶</span>${esc(m.name)}<small>${m.steps.length} adım · ${fmtMs(macroMs(m.steps))}</small></button><button class="btn" data-del="${i}" style="justify-self:end">Sil</button>`).join('')||'<div class="empty">Henüz kayıtlı makro yok.</div>'}</div>
+    <div class="sbtns"><button class="btn pri" data-x="save" ${a.steps.length?'':'disabled'}>Bu makroyu kaydet</button></div></div>`;};
+  draw();document.body.appendChild(d);
+  d.onclick=async e=>{
+    if(e.target===d){d.remove();return;}
+    const t=e.target.closest('[data-x],[data-i],[data-del]');if(!t)return;
+    if(t.dataset.x==='close'){d.remove();return;}
+    if(t.dataset.x==='save'){const n=await ask('Makronun adı:',BY_ID[ui.sel].name+' makrosu');if(!n)return;S.lib.push({name:String(n).slice(0,40),steps:JSON.parse(JSON.stringify(a.steps))});save();draw();toast('Kütüphaneye kaydedildi');return;}
+    if(t.dataset.del!=null){S.lib.splice(+t.dataset.del,1);save();draw();return;}
+    const m=S.lib[+t.dataset.i];a.steps.push(...JSON.parse(JSON.stringify(m.steps)));if(a.steps.length>1&&a.mode==='normal')a.mode='macro';d.remove();render();toast(m.name+' eklendi');
+  };
+}
 function mv(i,d){const s=curA().steps,j=i+d;if(j<0||j>=s.length)return;[s[i],s[j]]=[s[j],s[i]];render();}
 function setStep(i,k,v){curA().steps[i][k]=v;render();}
 const clamp=v=>Math.max(0,Math.min(60000,Math.round(+v||0)));
@@ -983,6 +1076,7 @@ function renderSheet(){
       ${!c&&!connMsg&&PM.bleOk&&PM.bleOk()?`<div class="sbtns"><button class="btn" onclick="cardBtn({ble:true})">📶 Bluetooth ile bağlan</button></div><p class="hint" style="margin:6px 0 0">Kart powerbank'a ya da başka bir cihaza takılıyken telefondan ayar yapmak için. Telefonun karta bir kez USB ile bağlanmış olması gerekir.</p>`:''}
       <div class="sbtns"><button class="btn pri" ${c?'':'disabled'} onclick="writeCard()">Karta yaz</button><button class="btn" ${c&&(i.cfg||i.jlen)?'':'disabled'} onclick="takeFromCard(false)">Karttakileri al</button></div>`)+
       sgroup('Tuşlar nereye',routeHtml())+sgroup('Güncelleme',updHtml())+
+      (PM.native&&PMNative.notifOn?sgroup('Bildirim ve ana ekran',srow('Bildirimde kart durumu',tog(PMNative.notifOn(),"PMNative.setNotif(!PMNative.notifOn());renderSheet()"),'Kart bağlıyken bildirimde profil ve eşleme durumu, profil değiştirme ve eşleme aç/kapat düğmeleri görünür. Ana ekrana PadMapper aracını (widget) da ekleyebilirsin: ana ekranda boş yere basılı tut → Araçlar → PadMapper.')):'')+
       (PM.native&&PMNative.accessOn?sgroup('Bu tablet',srow('🎤 Google Sesle Yazma izni',PMNative.accessOn()?'<span class="ok">Açık ✓</span>':'<button class="btn" onclick="gvoiceSetup()">Aç</button>','Pad\'deki sesli yazma tuşu klavyeyi Google Sesle Yazma\'ya çevirebilsin diye. Uygulama sadece o tuşa bakar.')):'');
   }else if(stab==='pad'){
     body=sgroup('Kontrolcüler',ctrlListHtml()+`<div class="sbtns"><button class="btn pri" onclick="openScan()" ${PM.connected()?'':'disabled'}>🔍 Cihaz ara</button><button class="btn" onclick="openLearn()" ${PM.connected()&&cardCtl.cur?'':'disabled'}>🎯 Tuşları tanıt</button></div>`)+
@@ -1280,7 +1374,24 @@ function renderCard(){
   d.className='dot '+(!c?'':card.busy?'warn':s?'on':'warn');
   t.textContent=(c&&PM.link.via==='ble'?'📶 ':'')+(!c?(connMsg||'Kart'):card.busy?'Yazılıyor…':s?'Kart ✓':'Kart ●')+(c?(cardState?stateText():(PM.link.info&&PM.link.info.mapping===0?' · 🎮 eşleme kapalı':'')):'');
   document.getElementById('card').title=cardLine();
+  pushStatus();
 }
+/* bildirim ve ana ekran aracı için durumu uygulamaya bildir */
+let lastStatus='';
+function pushStatus(){
+  if(!PM.native||!PMNative.status)return;
+  try{
+  const c=PM.connected()&&!!PM.link.info,i=PM.link.info||{};
+  const st=JSON.stringify({conn:c,via:PM.link.via||'',prof:c?(P()&&P().name)||'':'',pi:S.cur,np:S.profiles.length,mapping:i.mapping===0?0:1,route:cardBT&&cardBT.route||0});
+  if(st===lastStatus)return;lastStatus=st;PMNative.status(st);
+  }catch(e){}
+}
+if(window.PM_native)window.PM_native.action=cmd=>{
+  if(!PM.connected()||!PM.link.info)return;
+  const n=S.profiles.length;
+  if(cmd==='prev'||cmd==='next'){if(n>1)PM.sendLine('cs '+((S.cur+(cmd==='next'?1:n-1))%n)).catch(()=>{});}
+  else if(cmd==='map')PM.sendLine('map '+(PM.link.info.mapping===0?1:0)).catch(()=>{});
+};
 const sheetOpen=()=>document.getElementById('sheet').classList.contains('open');
 async function cardBtn(known){
   if(updating)return;
@@ -1317,6 +1428,8 @@ async function cardBtn(known){
     lastVia=PM.link.via;
     if(!ok){if(PM.connected())toast(PM.OLD);renderCard();return;}
     if(PM.link.via==='ble')localStorage.setItem('pm_ble','1');
+    if(PM.native){try{PMNative.notifPerm&&PMNative.notifPerm();}catch(e){}
+      const pc=PMNative.takeCmd?PMNative.takeCmd():'';if(pc)setTimeout(()=>window.PM_native.action(pc),800);}
     toast((PM.link.via==='ble'?'📶 Bluetooth ile karta bağlandı':'Karta bağlandı')+' · kart yazılımı '+PM.link.info.fw);
     if(sheetOpen())renderSheet();
     setTimeout(()=>{renderCard();if(PM.link.info&&!cardSynced())toast('Karttaki ayar farklı. "Karta yaz"a bas');},600);

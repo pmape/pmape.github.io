@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent" android:layout_height="match_parent"
+    android:orientation="vertical" android:padding="10dp" android:background="@drawable/w_bg">
+    <LinearLayout android:id="@+id/w_head" android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:orientation="horizontal" android:gravity="center_vertical">
+        <ImageView android:layout_width="28dp" android:layout_height="28dp" android:src="@drawable/ic_launcher" />
+        <LinearLayout android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content"
+            android:orientation="vertical" android:paddingStart="8dp">
+            <TextView android:id="@+id/w_l2" android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:textColor="#FFFFFF" android:textSize="14sp" android:textStyle="bold" android:maxLines="1"
+                android:ellipsize="end" android:text="PadMapper" />
+            <TextView android:id="@+id/w_l1" android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:textColor="#B8BCC8" android:textSize="12sp" android:maxLines="1" android:ellipsize="end"
+                android:text="Kart bağlı değil" />
+        </LinearLayout>
+    </LinearLayout>
+    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:orientation="horizontal" android:layout_marginTop="8dp">
+        <TextView android:id="@+id/w_prev" android:layout_width="0dp" android:layout_weight="1" android:layout_height="36dp"
+            android:gravity="center" android:background="@drawable/w_btn" android:textColor="#FFFFFF" android:text="◀ Profil" />
+        <TextView android:id="@+id/w_map" android:layout_width="0dp" android:layout_weight="1.2" android:layout_height="36dp"
+            android:layout_marginStart="6dp" android:layout_marginEnd="6dp"
+            android:gravity="center" android:background="@drawable/w_acc" android:textColor="#1A1205" android:textStyle="bold" android:text="Eşleme" />
+        <TextView android:id="@+id/w_next" android:layout_width="0dp" android:layout_weight="1" android:layout_height="36dp"
+            android:gravity="center" android:background="@drawable/w_btn" android:textColor="#FFFFFF" android:text="Profil ▶" />
+    </LinearLayout>
+</LinearLayout>
