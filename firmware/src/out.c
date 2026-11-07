@@ -238,6 +238,26 @@ static void route_tick(int64_t now)
 
 static uint8_t bt_last[4][9], bt_len[4];
 
+/* Durum: değişen her şeyi ayar ekranına bildir (uygulama hep kartın gerçek durumunu göstersin) */
+static volatile bool state_force;
+void out_state_request(void) { state_force = true; }
+
+static void state_tick(void)
+{
+	static int last[8] = { -1, -1, -1, -1, -1, -1, -1, -1 };
+	int now[8] = {
+		engine_mapping(), engine_profile(), ble_out_route(),
+		use_bt ? 1 : (bt_side ? 2 : 0), /* yol: 0 kablo, 1 Bluetooth, 2 Bluetooth aranıyor */
+		pad_connected, engine_active_layer(), usb_cfg, ble_out_ready(),
+	};
+
+	if (!state_force && !memcmp(now, last, sizeof(now))) return;
+	state_force = false;
+	memcpy(last, now, sizeof(now));
+	OUT("{\"ev\":\"state\",\"mapping\":%d,\"prof\":%d,\"route\":%d,\"path\":%d,\"pad\":%d,\"layer\":%d,\"usb\":%d,\"bt\":%d}\n",
+	    now[0], now[1], now[2], now[3], now[4], now[5], now[6], now[7]);
+}
+
 static void bt_send(int which, const uint8_t *buf, uint8_t len, bool force)
 {
 	if (!force && bt_len[which] == len && !memcmp(bt_last[which], buf, len)) return;
@@ -391,6 +411,7 @@ static void out_thread(void *a, void *b, void *c)
 		pad_get(&p);
 
 		route_tick(k_uptime_get());
+		state_tick();
 		if (!p.valid || !pad_connected) {
 			send(D_PAD, g_idle, 9, false);
 			send(D_KB, z8, 8, false);

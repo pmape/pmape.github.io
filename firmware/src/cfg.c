@@ -20,6 +20,7 @@
 #include <soc.h>
 #include "log.h"
 #include "engine.h"
+#include "out.h"
 #include "cfg.h"
 #include "ble_out.h"
 
@@ -162,6 +163,9 @@ static void cmd(char *l)
 	if (ble_cmd(l)) return;
 	if (!strcmp(l, "hello")) {
 		hello();
+		out_state_request();
+	} else if (!strcmp(l, "state")) {
+		out_state_request();
 	} else if (!strcmp(l, "dfu")) {
 		/* Yükleme moduna geç: kart USB sürücü olarak açılır, yeni UF2 oraya yazılır */
 		OUT("{\"ev\":\"dfu\",\"ok\":1}\n");

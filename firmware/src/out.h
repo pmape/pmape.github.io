@@ -14,3 +14,5 @@ void out_print_stats(void);
 
 /* pad raporu geldi: çıkışı hemen hesapla */
 void out_kick(void);
+/* durum mesajını hemen gönder */
+void out_state_request(void);

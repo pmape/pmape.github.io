@@ -1204,7 +1204,7 @@ function renderCard(){
   const d=document.querySelector('#card .dot'),t=document.getElementById('cardTxt');if(!d)return;
   const c=PM.connected(),s=c&&cardSynced();
   d.className='dot '+(!c?'':card.busy?'warn':s?'on':'warn');
-  t.textContent=(!c?'Kart':card.busy?'Yazılıyor…':s?'Kart ✓':'Kart ●')+(c&&PM.link.info&&PM.link.info.mapping===0?' · 🎮 eşleme kapalı':'')+(c&&cardBT&&cardBT.route===1?(cardBT.host?' · 📶 '+tName(cardBT.host):' · 📶 aranıyor'):'');
+  t.textContent=(!c?'Kart':card.busy?'Yazılıyor…':s?'Kart ✓':'Kart ●')+(c?(cardState?stateText():(PM.link.info&&PM.link.info.mapping===0?' · 🎮 eşleme kapalı':'')):'');
   document.getElementById('card').title=cardLine();
 }
 async function cardBtn(known){
@@ -1216,6 +1216,7 @@ async function cardBtn(known){
       if(ev.ev==='prof'&&ev.cur<S.profiles.length&&ev.cur!==S.cur){S.cur=ev.cur;ui.layer=0;render();toast('Profil: '+P().name);}
       if(ev.ev==='mode'){if(PM.link.info)PM.link.info.mapping=ev.mapping;toast(ev.mapping?'Eşleme açık':'Eşleme kapalı · normal gamepad');renderCard();if(document.getElementById('sheet').classList.contains('open'))renderSheet();}
       if(ev.ev==='hello'){renderCard();setTimeout(cardProfilesCheck,300);if(!updating&&cardNeedsUpdate()&&!window._updAsked){window._updAsked=true;setTimeout(()=>ask('Kart için yeni yazılım var ('+ev.fw+' → '+bundledFw()+'). Şimdi kurulsun mu?',null).then(ok=>{if(ok)updCard(true);}),1500);}PM.sendLine('ctrls').catch(()=>{});setTimeout(()=>PM.sendLine('targets').catch(()=>{}),150);if(document.getElementById('sheet').classList.contains('open'))renderSheet();}
+      if(ev.ev==='state')applyState(ev);
       if(ev.ev==='targets'){cardBT=ev;renderCard();if(document.getElementById('sheet').classList.contains('open'))renderSheet();}
       if(ev.ev==='ble'){if(ev.paired)toast('Yeni cihaz eşleşti');if(ev.host&&ev.host!=='connecting')toast('Bluetooth hedefe bağlandı: '+tName(ev.host));PM.sendLine('targets').catch(()=>{});}
       if(ev.ev==='ctrls'){cardCtl=ev;if(ev.cur&&ev.name)rememberName(ev.cur,ev.name);if(document.getElementById('sheet').classList.contains('open'))renderSheet();}
@@ -1224,7 +1225,7 @@ async function cardBtn(known){
       if(['dev','scan_end','connected'].includes(ev.ev))scanEv(ev);
       if(['ctrl','map','map_end','rep'].includes(ev.ev))learnEv(ev);
     };
-    PM.link.onClose=()=>{renderCard();toast('Kart bağlantısı koptu');};
+    PM.link.onClose=()=>{cardState=null;renderCard();toast('Kart bağlantısı koptu');};
     const ok=await PM.connect(known);
     if(!ok){toast(PM.OLD);renderCard();return;}
     toast('Karta bağlandı · kart yazılımı '+PM.link.info.fw);
@@ -1263,6 +1264,33 @@ function applyTheme(){
 function setTheme(x){S.theme=Object.assign(themeOf(),x);applyTheme();save();renderSheet();drawPad();render();}
 if(darkMq&&darkMq.addEventListener)darkMq.addEventListener('change',()=>{if(themeOf().mode==='auto')applyTheme();});
 applyTheme();
+
+/* ---------- Kartın anlık durumu: ekran hep bunu gösterir ---------- */
+let cardState=null,stT=null;
+function applyState(st){
+  const prev=cardState;cardState=st;
+  if(PM.link.info){PM.link.info.mapping=st.mapping;PM.link.info.prof=st.prof;}
+  if(cardBT){cardBT.route=st.route;}
+  if(st.prof<S.profiles.length&&st.prof!==S.cur&&cardSynced()){S.cur=st.prof;ui.layer=0;render();}
+  if(prev&&prev.path!==st.path){
+    if(st.path===0&&prev.path===2&&st.route===1)toast('Bluetooth hedefi bulunamadı, tuşlar kabloya döndü');
+    if(st.path===1)PM.sendLine('targets').catch(()=>{});
+  }
+  if(prev&&prev.pad!==st.pad)toast(st.pad?'Pad bağlandı':'Pad bağlantısı koptu');
+  renderCard();
+  clearTimeout(stT);stT=setTimeout(()=>{if(document.getElementById('sheet').classList.contains('open'))renderSheet();},150);
+}
+function stateText(){
+  const s=cardState;if(!s)return '';
+  const parts=[];
+  if(!s.pad)parts.push('pad yok');
+  if(s.path===1)parts.push('📶 '+(cardBT&&cardBT.host?tName(cardBT.host):'Bluetooth'));
+  else if(s.path===2)parts.push('📶 aranıyor');
+  else if(s.route===1)parts.push('🔌 kabloya döndü');
+  if(!s.mapping)parts.push('🎮 eşleme kapalı');
+  else if(s.layer>0)parts.push(LAYER_NAMES[s.layer]);
+  return parts.length?' · '+parts.join(' · '):'';
+}
 
 /* ---------- Güncelleme ---------- */
 const APK_URL='https://github.com/ImLegennD/padmapper/releases/download/son-surum/padmapper-ayar.apk';
@@ -1332,7 +1360,9 @@ function routeHtml(){
   if(!cardBT)return '<p class="hint" style="margin:0">Kart yazılımı Bluetooth çıkışı desteklemiyor (0.6.0 gerekli).</p>';
   const bt=cardBT.route===1;
   let h=`<div class="seg"><button class="${!bt?'on':''}" onclick="setRoute(0)">🔌 Takılı olduğu cihaz</button><button class="${bt?'on':''}" onclick="setRoute(1)">📶 Bluetooth hedefi</button></div>`;
-  h+=`<p class="hint" style="margin:6px 0">${!bt?'Tuşlar kablodan kartın takılı olduğu cihaza gider.':cardBT.host?'Tuşlar Bluetooth\'tan <b>'+esc(tName(cardBT.host))+'</b> cihazına gidiyor. Kartın takılı olduğu cihaza tuş gitmez.':'Bluetooth hedefi aranıyor… 10 sn içinde bulunamazsa tuşlar kabloya döner.'}</p>`;
+  const path=cardState?cardState.path:(bt?(cardBT.host?1:2):0);
+  if(bt&&path===0)h+=`<p class="hint" style="margin:6px 0">Bluetooth hedefi bulunamadığı için tuşlar şu an <b>kablodan</b> gidiyor. Hedef açılınca kendiliğinden Bluetooth'a geçer.</p>`;else
+  h+=`<p class="hint" style="margin:6px 0">${!bt?'Tuşlar kablodan kartın takılı olduğu cihaza gider.':path===1&&cardBT.host?'Tuşlar Bluetooth\'tan <b>'+esc(tName(cardBT.host))+'</b> cihazına gidiyor. Kartın takılı olduğu cihaza tuş gitmez.':'Bluetooth hedefi aranıyor… 10 sn içinde bulunamazsa tuşlar kabloya döner.'}</p>`;
   h+=(cardBT.list||[]).map(a=>{const sel=a===cardBT.target,on=a===cardBT.host;
     return `<div class="dev ${sel?'act':''}" onclick="pickTarget('${a}')"><span class="r">${sel?'◉':'○'}</span><div style="flex:1;min-width:0"><b>${esc(tName(a))}</b><div class="hint">${on?'<span class="ok">bağlı</span>':sel?'seçili':'eşleşmiş'}</div></div>
       <button class="x" title="Adını değiştir" onclick="event.stopPropagation();renameTarget('${a}')">✎</button><button class="x" title="Unut" onclick="event.stopPropagation();unpairTarget('${a}')">✕</button></div>`;}).join('')||'<div class="empty">Eşleşmiş Bluetooth hedefi yok.</div>';

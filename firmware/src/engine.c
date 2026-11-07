@@ -157,6 +157,8 @@ bool engine_mapping(void) { return mapping; }
 void engine_set_mapping(bool on) { LOCK(); mapping = on; reset_state(); UNLOCK(); }
 int engine_profile(void) { return cur; }
 int engine_profile_count(void) { return nprof; }
+static int active_layer(void);
+int engine_active_layer(void) { return cfg && mapping ? active_layer() : 0; }
 
 int engine_select_profile(int n)
 {

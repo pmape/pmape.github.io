@@ -48,5 +48,6 @@ void engine_set_mapping(bool on);
 int engine_select_profile(int n);
 int engine_profile(void);
 int engine_profile_count(void);
+int engine_active_layer(void);
 /* Profil kartın üzerinden değişince (kaydetmek için) */
 extern void engine_profile_changed(int n);
