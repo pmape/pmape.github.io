@@ -290,12 +290,20 @@ const PM = (() => {
     nosvc: 'Karttaki yazılım eski: kablosuz ayar için kartı USB ile tak ve güncelle.',
     timeout: 'Karta Bluetooth ile bağlanılamadı (süre doldu). Tekrar dene.',
   };
+  const STAGE = { conn: 'bağlanırken', mtu: 'bağlantı ayarlanırken', svc: 'servisler okunurken', ccc: 'bildirim açılırken', auth: 'doğrulanırken', scan: 'ararken' };
+  function bleErr(msg) {
+    if (BLE_ERR[msg]) return BLE_ERR[msg];
+    const [k, st, code] = String(msg || '').split(':');
+    if (k === 'timeout') return 'Kart bulundu ama ' + (STAGE[st] || st) + ' yanıt vermedi. Kartı powerbank\'tan çıkarıp tak, 10 sn bekle, tekrar dene. (' + msg + ')';
+    if (k === 'drop') return 'Kart bulundu ama ' + (STAGE[st] || st) + ' bağlantı koptu. Telefonun Bluetooth\'unu kapatıp aç, tekrar dene. (' + msg + ')';
+    return 'Bluetooth bağlantısı kurulamadı (' + msg + ')';
+  }
   window.PM_native = {
     feed: t => feed(t),
     closed: () => { const was = link.kind === 'native'; link.kind = null; link.via = ''; link.info = null; if (was && !closing) link.onClose(); },
     perm: ok => { if (permWait) { const w = permWait; permWait = null; ok ? w.res() : w.rej(new Error('Karta izin verilmedi')); } },
     plug: () => { if (plugCb) plugCb({ native: true }); },
-    bleperm: ok => { if (blePerm) { const w = blePerm; blePerm = null; ok ? w.res() : w.rej(new Error('Bluetooth izni verilmedi')); } },
+    bleperm: ok => { if (blePerm) { const w = blePerm; blePerm = null; ok ? w.res() : w.rej(new Error('Bluetooth izni verilmedi. Telefon Ayarlar → Uygulamalar → PadMapper → İzinler → "Yakındaki cihazlar"a izin ver.')); } },
     ble: (st, msg) => {
       link.onStatus(st, msg);
       if (!bleWait) return;
@@ -303,7 +311,7 @@ const PM = (() => {
       if (st === 'ok') { bleWait = null; w.res(); }
       else if (st === 'fail' || st === 'closed') {
         bleWait = null;
-        w.rej(new Error(BLE_ERR[msg] || (msg && msg.startsWith('drop') ? BLE_ERR.timeout : 'Bluetooth bağlantısı kurulamadı (' + msg + ')')));
+        w.rej(new Error(bleErr(msg)));
       }
     },
   };
@@ -311,12 +319,13 @@ const PM = (() => {
   async function openBle() {
     let r = PMNative.bleOpen();
     if (r === 'perm') {
-      await new Promise((res, rej) => { blePerm = { res, rej }; setTimeout(() => { if (blePerm) { blePerm = null; rej(new Error('İzin beklenirken süre doldu')); } }, 60000); });
+      await new Promise((res, rej) => { blePerm = { res, rej }; setTimeout(() => { if (blePerm) { blePerm = null; rej(new Error('Bluetooth izni beklenirken süre doldu. Telefon Ayarlar → Uygulamalar → PadMapper → İzinler → "Yakındaki cihazlar"a izin ver.')); } }, 60000); });
       r = PMNative.bleOpen();
     }
     if (r === 'off') throw new Error('Telefonun Bluetooth\'u kapalı. Açıp tekrar dene.');
+    if (r === 'loc') throw new Error('Bu Android sürümünde Bluetooth araması için Konum açık olmalı. Konumu açıp tekrar dene.');
     if (r !== 'ok') throw new Error('Bluetooth kullanılamıyor (' + r + ')');
-    await new Promise((res, rej) => { bleWait = { res, rej }; setTimeout(() => { if (bleWait === null) return; bleWait = null; rej(new Error(BLE_ERR.timeout)); }, 40000); });
+    await new Promise((res, rej) => { bleWait = { res, rej }; setTimeout(() => { if (bleWait === null) return; bleWait = null; try { PMNative.close(); } catch (e) {} rej(new Error(BLE_ERR.timeout)); }, 50000); });
     link.kind = 'native'; link.via = 'ble';
   }
   async function openNative(known) {

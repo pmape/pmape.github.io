@@ -59,6 +59,9 @@ class BleLink {
     private final ArrayDeque<byte[]> q = new ArrayDeque<>();
     private boolean busy;
     private final ByteArrayOutputStream acc = new ByteArrayOutputStream();
+    private BluetoothDevice dev;
+    private int tries;
+    private volatile String stage = "scan";
 
     BleLink(Context c, byte[] key, Cb cb) { this.ctx = c; this.key = key; this.cb = cb; }
 
@@ -72,6 +75,11 @@ class BleLink {
         BluetoothAdapter a = bm == null ? null : bm.getAdapter();
         if (a == null) return "nobt";
         if (!a.isEnabled()) return "off";
+        /* Android 11 ve öncesinde konum kapalıyken Bluetooth taraması hiçbir şey bulmaz */
+        if (Build.VERSION.SDK_INT < 31 && Build.VERSION.SDK_INT >= 28) {
+            android.location.LocationManager lm = (android.location.LocationManager) ctx.getSystemService(Context.LOCATION_SERVICE);
+            if (lm != null && !lm.isLocationEnabled()) return "loc";
+        }
         scanner = a.getBluetoothLeScanner();
         if (scanner == null) return "off";
         active = true;
@@ -98,33 +106,54 @@ class BleLink {
             if (gatt != null || !active) return;
             stopScan();
             cb.state("conn", null);
-            BluetoothDevice d = r.getDevice();
-            gatt = Build.VERSION.SDK_INT >= 23 ? d.connectGatt(ctx, false, gcb, BluetoothDevice.TRANSPORT_LE) : d.connectGatt(ctx, false, gcb);
-            h.postDelayed(connTimeout, 20000);
+            dev = r.getDevice();
+            tries = 0;
+            connect();
+            h.postDelayed(connTimeout, 30000);
         }
         @Override public void onScanFailed(int code) { active = false; cb.state("fail", "scan" + code); }
     };
 
-    private final Runnable connTimeout = () -> { if (!authed && active) { close(false); cb.state("fail", "timeout"); } };
+    private void connect() {
+        stage = "conn";
+        gatt = Build.VERSION.SDK_INT >= 23 ? dev.connectGatt(ctx, false, gcb, BluetoothDevice.TRANSPORT_LE) : dev.connectGatt(ctx, false, gcb);
+    }
+
+    /* Android eski servis listesini saklayabiliyor (kart güncellendiyse yeni servis görünmez): temizle */
+    private static void refreshCache(BluetoothGatt g) {
+        try { g.getClass().getMethod("refresh").invoke(g); } catch (Exception e) { }
+    }
+
+    private final Runnable connTimeout = () -> { if (!authed && active) { String s = stage; close(false); cb.state("fail", "timeout:" + s); } };
 
     private final BluetoothGattCallback gcb = new BluetoothGattCallback() {
         @Override public void onConnectionStateChange(BluetoothGatt g, int status, int st) {
-            if (st == BluetoothProfile.STATE_CONNECTED) {
-                h.post(() -> { if (!g.requestMtu(247)) g.discoverServices(); });
-            } else if (st == BluetoothProfile.STATE_DISCONNECTED) {
+            if (st == BluetoothProfile.STATE_CONNECTED && status == BluetoothGatt.GATT_SUCCESS) {
+                stage = "mtu";
+                refreshCache(g);
+                h.postDelayed(() -> { if (gatt == g && !g.requestMtu(247)) { stage = "svc"; g.discoverServices(); } }, 300);
+            } else {
                 boolean was = authed, act = active;
+                String s = stage;
                 h.post(() -> {
                     try { g.close(); } catch (Exception e) { }
-                    if (gatt == g) { gatt = null; rx = null; authed = false; active = false; synchronized (q) { q.clear(); busy = false; } }
+                    if (gatt != g) return;
+                    gatt = null; rx = null; authed = false;
+                    synchronized (q) { q.clear(); busy = false; }
+                    synchronized (acc) { acc.reset(); }
+                    if (was) { active = false; h.removeCallbacks(connTimeout); cb.state("closed", null); return; }
+                    /* Android'de ilk bağlanmada sık görülen kopma (133): iki kez daha dene */
+                    if (act && dev != null && tries < 2) { tries++; h.postDelayed(() -> { if (active && gatt == null) connect(); }, 700); return; }
+                    active = false;
                     h.removeCallbacks(connTimeout);
-                    if (was) cb.state("closed", null);
-                    else if (act) cb.state("fail", "drop" + status);
+                    if (act) cb.state("fail", "drop:" + s + ":" + status);
                 });
             }
         }
 
         @Override public void onMtuChanged(BluetoothGatt g, int mtu, int status) {
             if (status == BluetoothGatt.GATT_SUCCESS) chunk = Math.max(20, Math.min(240, mtu - 3));
+            stage = "svc";
             h.post(g::discoverServices);
         }
 
@@ -132,7 +161,8 @@ class BleLink {
             BluetoothGattService s = g.getService(SVC);
             BluetoothGattCharacteristic tx = s == null ? null : s.getCharacteristic(TX);
             rx = s == null ? null : s.getCharacteristic(RX);
-            if (tx == null || rx == null) { h.post(() -> { close(false); cb.state("fail", "nosvc"); }); return; }
+            if (tx == null || rx == null) { h.post(() -> { close(false); cb.state("fail", s == null && g.getServices().isEmpty() ? "drop:svc:" + status : "nosvc"); }); return; }
+            stage = "ccc";
             g.setCharacteristicNotification(tx, true);
             BluetoothGattDescriptor d = tx.getDescriptor(CCC);
             if (d == null) { h.post(() -> { close(false); cb.state("fail", "nosvc"); }); return; }
@@ -142,6 +172,7 @@ class BleLink {
 
         @Override public void onDescriptorWrite(BluetoothGatt g, BluetoothGattDescriptor d, int status) {
             g.requestConnectionPriority(BluetoothGatt.CONNECTION_PRIORITY_HIGH);
+            stage = "auth";
             cb.state("auth", null);
             send("nonce\n");
         }

@@ -257,16 +257,22 @@ static bool may_connect(const bt_addr_le_t *a)
 }
 
 /* arama listesinde aynı cihazı sık sık yazmamak için */
-static struct { bt_addr_le_t a; int64_t t; } seen[24];
+static struct { bt_addr_le_t a; int64_t t; bool named, hid; } seen[32];
 
-static bool seen_recent(const bt_addr_le_t *a)
+/* Listede gösterilsin mi: yeni cihaz, ya da önceki yayında olmayan ad/HID bilgisi geldi
+ * (çoğu cihaz adını ayrı "tarama yanıtı"nda gönderir). */
+static bool seen_recent(const bt_addr_le_t *a, bool named, bool hid)
 {
 	int64_t now = k_uptime_get();
 	int old = 0;
 
 	for (int i = 0; i < ARRAY_SIZE(seen); i++) {
 		if (seen[i].t && addr_eq(&seen[i].a, a)) {
-			if (now - seen[i].t < 1500) return true;
+			bool news = (named && !seen[i].named) || (hid && !seen[i].hid);
+
+			seen[i].named |= named;
+			seen[i].hid |= hid;
+			if (!news && now - seen[i].t < 1500) return true;
 			seen[i].t = now;
 			return false;
 		}
@@ -274,6 +280,14 @@ static bool seen_recent(const bt_addr_le_t *a)
 	}
 	seen[old].a = *a;
 	seen[old].t = now;
+	seen[old].named = named;
+	seen[old].hid = hid;
+	return false;
+}
+
+static bool seen_hid(const bt_addr_le_t *a)
+{
+	for (int i = 0; i < ARRAY_SIZE(seen); i++) if (seen[i].t && addr_eq(&seen[i].a, a)) return seen[i].hid;
 	return false;
 }
 
@@ -330,7 +344,7 @@ static void scan_filter_match(struct bt_scan_device_info *info,
 	bt_data_parse(info->adv_data, adv_name_cb, &ctx);
 	net_buf_simple_restore(info->adv_data, &state);
 
-	if (listing && !seen_recent(info->recv_info->addr)) {
+	if (listing && !seen_recent(info->recv_info->addr, ctx.name[0] != 0, true)) {
 		OUT("{\"ev\":\"dev\",\"addr\":\"%s\",\"name\":\"%s\",\"rssi\":%d,\"hid\":1,\"app\":%u}\n",
 		    addr, ctx.name, info->recv_info->rssi, ctx.app);
 	}
@@ -361,14 +375,17 @@ static void scan_filter_no_match(struct bt_scan_device_info *info, bool connecta
 	struct name_ctx ctx = { .name = "" };
 	struct net_buf_simple_state state;
 
-	if (!listing || seen_recent(info->recv_info->addr)) return;
-	bt_addr_le_to_str(info->recv_info->addr, addr, sizeof(addr));
+	if (!listing) return;
 	net_buf_simple_save(info->adv_data, &state);
 	bt_data_parse(info->adv_data, adv_name_cb, &ctx);
 	net_buf_simple_restore(info->adv_data, &state);
-	if (!ctx.name[0]) return; /* adsızları gösterme */
-	OUT("{\"ev\":\"dev\",\"addr\":\"%s\",\"name\":\"%s\",\"rssi\":%d,\"hid\":0}\n",
-	    addr, ctx.name, info->recv_info->rssi);
+	/* adsız ve HID olmayanları gösterme (telefonlar, işaretçiler...) */
+	if (!ctx.name[0] && !seen_hid(info->recv_info->addr)) return;
+	if (seen_recent(info->recv_info->addr, ctx.name[0] != 0, false)) return;
+	bt_addr_le_to_str(info->recv_info->addr, addr, sizeof(addr));
+	/* HID diye görülmüş bir cihazın tarama yanıtı: hid bilgisini koru */
+	OUT("{\"ev\":\"dev\",\"addr\":\"%s\",\"name\":\"%s\",\"rssi\":%d,\"hid\":%d,\"app\":%u}\n",
+	    addr, ctx.name, info->recv_info->rssi, seen_hid(info->recv_info->addr), ctx.app);
 }
 
 static void scan_connecting_error(struct bt_scan_device_info *info)
