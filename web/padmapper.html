@@ -892,6 +892,7 @@ function renderSheet(){
   <div class="sec"><div class="lbl">Yedek (bu profil)</div>
     <textarea id="jsonTa" spellcheck="false">${esc(snap(p,2))}</textarea>
     <div class="row" style="margin-top:6px"><button class="btn" onclick="copyJson()">Kopyala</button><button class="btn" onclick="importJson()">İçe aktar</button></div></div>
+  <div class="sec"><div class="lbl">Tuşlar nereye</div>${routeHtml()}</div>
   <div class="sec"><div class="lbl">Görünüm</div>
     <div class="seg">${[['dark','Koyu'],['amoled','Siyah'],['light','Açık'],['auto','Sistem']].map(([k,t])=>`<button class="${themeOf().mode===k?'on':''}" onclick="setTheme({mode:'${k}'})">${t}</button>`).join('')}</div>
     <div class="row" style="margin-top:10px;gap:10px;flex-wrap:wrap">${ACCENTS.map(a=>`<button aria-label="${a.n}" title="${a.n}" onclick="setTheme({acc:'${a.k}'})" style="width:38px;height:38px;border-radius:50%;cursor:pointer;background:${a.c};border:3px solid ${themeOf().acc===a.k?'var(--text)':'transparent'};box-shadow:0 0 0 1px var(--line)"></button>`).join('')}</div>
@@ -1137,7 +1138,7 @@ function renderCard(){
   const d=document.querySelector('#card .dot'),t=document.getElementById('cardTxt');if(!d)return;
   const c=PM.connected(),s=c&&cardSynced();
   d.className='dot '+(!c?'':card.busy?'warn':s?'on':'warn');
-  t.textContent=!c?'Kart':card.busy?'Yazılıyor…':s?'Kart ✓':'Kart ●';
+  t.textContent=(!c?'Kart':card.busy?'Yazılıyor…':s?'Kart ✓':'Kart ●')+(c&&cardBT&&cardBT.route===1?(cardBT.host?' · 📶 '+tName(cardBT.host):' · 📶 aranıyor'):'');
   document.getElementById('card').title=cardLine();
 }
 async function cardBtn(known){
@@ -1147,7 +1148,9 @@ async function cardBtn(known){
     PM.link.onLine=ev=>{
       if(ev.ev==='prof'&&ev.cur<S.profiles.length&&ev.cur!==S.cur){S.cur=ev.cur;ui.layer=0;render();toast('Profil: '+P().name);}
       if(ev.ev==='mode')toast(ev.mapping?'Eşleme açık':'Normal gamepad');
-      if(ev.ev==='hello'){renderCard();setTimeout(cardProfilesCheck,300);PM.sendLine('ctrls').catch(()=>{});if(document.getElementById('sheet').classList.contains('open'))renderSheet();}
+      if(ev.ev==='hello'){renderCard();setTimeout(cardProfilesCheck,300);PM.sendLine('ctrls').catch(()=>{});setTimeout(()=>PM.sendLine('targets').catch(()=>{}),150);if(document.getElementById('sheet').classList.contains('open'))renderSheet();}
+      if(ev.ev==='targets'){cardBT=ev;renderCard();if(document.getElementById('sheet').classList.contains('open'))renderSheet();}
+      if(ev.ev==='ble'){if(ev.paired)toast('Yeni cihaz eşleşti');if(ev.host&&ev.host!=='connecting')toast('Bluetooth hedefe bağlandı: '+tName(ev.host));PM.sendLine('targets').catch(()=>{});}
       if(ev.ev==='ctrls'){cardCtl=ev;if(ev.cur&&ev.name)rememberName(ev.cur,ev.name);if(document.getElementById('sheet').classList.contains('open'))renderSheet();}
       if(ev.ev==='connected'){rememberName(ev.addr,ev.name);PM.sendLine('ctrls').catch(()=>{});}
       if(ev.ev==='disconnected'||ev.ev==='lm')PM.sendLine('ctrls').catch(()=>{});
@@ -1192,6 +1195,28 @@ function applyTheme(){
 function setTheme(x){S.theme=Object.assign(themeOf(),x);applyTheme();save();renderSheet();drawPad();render();}
 if(darkMq&&darkMq.addEventListener)darkMq.addEventListener('change',()=>{if(themeOf().mode==='auto')applyTheme();});
 applyTheme();
+
+/* ---------- Tuşlar nereye: kablo / Bluetooth hedefleri ---------- */
+let cardBT=null;
+const tName=a=>(S.device.tnames&&S.device.tnames[a])||('Bluetooth cihaz '+String(a).replace(/ \(.*\)$/,'').slice(-5));
+function routeHtml(){
+  if(!PM.connected())return '<p class="hint" style="margin:0">Karta bağlanınca burada seçilir. Seçim kartta saklanır; uygulama kapalıyken de geçerlidir.</p>';
+  if(!cardBT)return '<p class="hint" style="margin:0">Kart yazılımı Bluetooth çıkışı desteklemiyor (0.6.0 gerekli).</p>';
+  const bt=cardBT.route===1;
+  let h=`<div class="seg"><button class="${!bt?'on':''}" onclick="setRoute(0)">🔌 Takılı olduğu cihaz</button><button class="${bt?'on':''}" onclick="setRoute(1)">📶 Bluetooth hedefi</button></div>`;
+  h+=`<p class="hint" style="margin:6px 0">${!bt?'Tuşlar kablodan kartın takılı olduğu cihaza gider.':cardBT.host?'Tuşlar Bluetooth\'tan <b>'+esc(tName(cardBT.host))+'</b> cihazına gidiyor. Kartın takılı olduğu cihaza tuş gitmez.':'Bluetooth hedefi aranıyor… 10 sn içinde bulunamazsa tuşlar kabloya döner.'}</p>`;
+  h+=(cardBT.list||[]).map(a=>{const sel=a===cardBT.target,on=a===cardBT.host;
+    return `<div class="dev ${sel?'act':''}" onclick="pickTarget('${a}')"><span class="r">${sel?'◉':'○'}</span><div style="flex:1;min-width:0"><b>${esc(tName(a))}</b><div class="hint">${on?'<span class="ok">bağlı</span>':sel?'seçili':'eşleşmiş'}</div></div>
+      <button class="x" title="Adını değiştir" onclick="event.stopPropagation();renameTarget('${a}')">✎</button><button class="x" title="Unut" onclick="event.stopPropagation();unpairTarget('${a}')">✕</button></div>`;}).join('')||'<div class="empty">Eşleşmiş Bluetooth hedefi yok.</div>';
+  h+=`<div class="row" style="margin-top:8px"><button class="btn ${cardBT.pairing?'':'pri'}" onclick="pairNew()" ${cardBT.pairing?'disabled':''}>${cardBT.pairing?'<span class="spin"></span> Eşleşme bekleniyor (60 sn)':'＋ Yeni cihaz eşle'}</button></div>
+    <p class="hint" style="margin:6px 0 0">Yeni cihaz: "Yeni cihaz eşle"ye bas, sonra o cihazın (PC, TV, tablet) Bluetooth ayarlarında <b>PadMapper</b>'ı seç. Kart sadece bu 60 saniyede yeni cihaz kabul eder. Pad'den hızlı geçiş: Home + Start 2 sn.</p>`;
+  return h;
+}
+async function setRoute(r){await PM.sendLine('route '+r);}
+async function pickTarget(a){if(a===cardBT.target)return;await PM.sendLine('target '+a);toast(tName(a)+' seçildi');}
+async function pairNew(){await PM.sendLine('pair');toast('Hedef cihazın Bluetooth ayarlarında PadMapper\'ı seç');}
+async function renameTarget(a){const n=await ask('Bu cihazın adı:',tName(a));if(n==null)return;S.device.tnames=S.device.tnames||{};S.device.tnames[a]=n||undefined;save();renderSheet();}
+async function unpairTarget(a){if(!await ask(`"${tName(a)}" unutulsun mu? Tekrar kullanmak için yeniden eşlemen gerekir.`,null))return;await PM.sendLine('unpair '+a);}
 
 /* ---------- Karttan profilleri alma ---------- */
 const isFresh=()=>S.profiles.length===1&&snap(S.profiles[0])===snap(migrate(demoProf()));
