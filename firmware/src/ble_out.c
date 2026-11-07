@@ -97,7 +97,10 @@ static void adv_update(struct k_work *w)
 	bool want = want_adv();
 
 	if (want && !adv_on) {
-		int err = bt_le_adv_start(BT_LE_ADV_CONN, ad, ARRAY_SIZE(ad), sd, ARRAY_SIZE(sd));
+		/* hızlı yayın (20–30 ms): hedef cihaz kartı hemen görsün, çabuk geri bağlansın */
+		static const struct bt_le_adv_param fast = BT_LE_ADV_PARAM_INIT(BT_LE_ADV_OPT_CONNECTABLE,
+			BT_GAP_ADV_FAST_INT_MIN_1 * 2 / 3, BT_GAP_ADV_FAST_INT_MIN_1, NULL);
+		int err = bt_le_adv_start(&fast, ad, ARRAY_SIZE(ad), sd, ARRAY_SIZE(sd));
 
 		adv_on = (err == 0 || err == -EALREADY);
 		if (err && err != -EALREADY) OUT("{\"ev\":\"ble\",\"adv_err\":%d}\n", err);

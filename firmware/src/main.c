@@ -127,9 +127,18 @@ static int parse_addr(const char *s, bt_addr_le_t *a)
 	return bt_addr_le_from_str(buf, type, a);
 }
 
+static int scan_filters_refresh(void);
+
 static void save_list(void)
 {
 	settings_save_one("pmc/list", saved, nsaved * sizeof(bt_addr_le_t));
+	if (!cur_conn) {
+		bt_scan_stop();
+		scan_filters_refresh();
+		bt_scan_start(BT_SCAN_TYPE_SCAN_ACTIVE);
+	} else {
+		scan_filters_refresh();
+	}
 }
 
 static void save_lm(int i)
@@ -322,10 +331,42 @@ static void scan_connecting(struct bt_scan_device_info *info, struct bt_conn *co
 
 BT_SCAN_CB_INIT(scan_cb, scan_filter_match, scan_filter_no_match, scan_connecting_error, scan_connecting);
 
+/* Filtreler: HID yayını yapanlar + kayıtlı pad'lerin adresleri.
+ * Pad yeniden bağlanırken çoğu zaman "doğrudan" yayın yapar, bu yayında HID bilgisi yoktur;
+ * adres filtresi olmadan kart onu görmüyor ve geri bağlanma uzun sürüyordu. */
+static int scan_filters_refresh(void)
+{
+	int err;
+	uint8_t mode = BT_SCAN_UUID_FILTER;
+
+	bt_scan_filter_disable();
+	bt_scan_filter_remove_all();
+	err = bt_scan_filter_add(BT_SCAN_FILTER_TYPE_UUID, BT_UUID_HIDS);
+	if (err) {
+		print_err("filter_add", err);
+		return err;
+	}
+	for (int i = 0; i < nsaved && i < CONFIG_BT_SCAN_ADDRESS_CNT; i++) {
+		if (bt_scan_filter_add(BT_SCAN_FILTER_TYPE_ADDR, &saved[i]) == 0) mode |= BT_SCAN_ADDR_FILTER;
+	}
+	err = bt_scan_filter_enable(mode, false);
+	if (err) {
+		print_err("filter_enable", err);
+	}
+	return err;
+}
+
 static int scan_init(void)
 {
+	/* sürekli dinle (aralık = pencere): pad açılır açılmaz görülsün */
+	static const struct bt_le_scan_param fast = {
+		.type = BT_LE_SCAN_TYPE_ACTIVE,
+		.options = BT_LE_SCAN_OPT_NONE,
+		.interval = 0x0030,
+		.window = 0x0030,
+	};
 	struct bt_scan_init_param param = {
-		.scan_param = NULL,
+		.scan_param = &fast,
 		.conn_param = PAD_CONN_PARAM,
 		.connect_if_match = 0,
 	};
@@ -334,17 +375,7 @@ static int scan_init(void)
 	bt_scan_init(&param);
 	bt_scan_cb_register(&scan_cb);
 
-	/* Yalnızca HID (0x1812) yayını yapan cihazlar: gamepad, klavye, fare */
-	err = bt_scan_filter_add(BT_SCAN_FILTER_TYPE_UUID, BT_UUID_HIDS);
-	if (err) {
-		print_err("filter_add", err);
-		return err;
-	}
-	err = bt_scan_filter_enable(BT_SCAN_UUID_FILTER, false);
-	if (err) {
-		print_err("filter_enable", err);
-	}
-	return err;
+	return scan_filters_refresh();
 }
 
 /* ---------- HID servisini bulma ---------- */

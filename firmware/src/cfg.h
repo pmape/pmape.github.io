@@ -1,3 +1,3 @@
 #pragma once
 /* Sürüm (main.c ve cfg.c ortak) */
-#define FW_VERSION "0.6.1"
+#define FW_VERSION "0.6.2"
