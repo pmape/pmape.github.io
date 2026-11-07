@@ -24,6 +24,7 @@
 #include "cfg.h"
 #include "ble_out.h"
 #include "ble_cfg.h"
+#include "hid_in.h"
 
 #define CHUNK 1024
 
@@ -163,6 +164,7 @@ static void cmd(char *l)
 	if (bt_cmd(l)) return;
 	if (ble_cmd(l)) return;
 	if (ble_cfg_cmd(l)) return;
+	if (hid_cmd(l)) return;
 	if (!strcmp(l, "hello")) {
 		hello();
 		out_state_request();

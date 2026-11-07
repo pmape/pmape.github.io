@@ -18,6 +18,7 @@
 #include "out.h"
 #include "engine.h"
 #include "ble_out.h"
+#include "hid_in.h"
 
 /* ---------- HID tanımları ---------- */
 
@@ -384,6 +385,8 @@ static K_SEM_DEFINE(kick, 0, 1);
 /* pad'den rapor gelince çağrılır: 8 ms beklemeden hesapla */
 void out_kick(void) { k_sem_give(&kick); }
 
+static void out_emit(struct out_rep *rr);
+
 static void out_thread(void *a, void *b, void *c)
 {
 	struct pad_state p;
@@ -410,9 +413,35 @@ static void out_thread(void *a, void *b, void *c)
 		led_update(tick);
 		pad_get(&p);
 
+		/* Bluetooth klavye/fare */
+		struct hid_in hi;
+		const struct hid_cfg *hc = hid_in_cfg();
+		uint8_t hkb[8] = { 0 }, hmb = 0;
+
+		hid_in_get(&hi);
+		bool hid_on = hi.kb_on || hi.ms_on;
+
+		if (!pad_connected) p.valid = false;
+		if (hid_on && hc->mode == 1) {
+			/* gamepad'e çevir: pad yoksa boş bir pad gibi */
+			hid_to_pad(hc, &hi, &p, hkb, &hmb);
+		} else if (hid_on) {
+			memcpy(hkb, hi.kb, 8);
+			hmb = hi.mbtn;
+		}
+
 		route_tick(k_uptime_get());
 		state_tick();
-		if (!p.valid || !pad_connected) {
+		if (!p.valid && hid_on) {
+			/* pad yok, sadece klavye/fare: doğrudan geçir */
+			struct out_rep r0 = { 0 };
+
+			memcpy(r0.g, g_idle, 9);
+			hid_merge_out(hkb, hmb, hc->mode == 1 ? 0 : hi.dx, hc->mode == 1 ? 0 : hi.dy, hi.wh, &r0);
+			out_emit(&r0);
+			continue;
+		}
+		if (!p.valid) {
 			send(D_PAD, g_idle, 9, false);
 			send(D_KB, z8, 8, false);
 			send(D_MOUSE, z8, 4, false);
@@ -445,6 +474,19 @@ static void out_thread(void *a, void *b, void *c)
 			build_mapped(&p, r.kb, r.ms);
 			memcpy(r.g, g_idle, 9);
 		}
+		if (hid_on) hid_merge_out(hkb, hmb, hc->mode == 1 ? 0 : hi.dx, hc->mode == 1 ? 0 : hi.dy, hi.wh, &r);
+		out_emit(&r);
+	}
+}
+
+/* hesaplanan raporları seçili yola gönder */
+static void out_emit(struct out_rep *rr)
+{
+	struct out_rep r = *rr;
+	static const uint8_t g_idle[9] = { 0, 0, 0x0f, 128, 128, 128, 128, 0, 0 };
+	static const uint8_t z8[8] = { 0 };
+
+	{
 
 		route_tick(k_uptime_get());
 		if (bt_side) {
@@ -459,7 +501,7 @@ static void out_thread(void *a, void *b, void *c)
 			send(D_PAD, g_idle, 9, false);
 			send(D_KB, z8, 8, false);
 			send(D_MOUSE, z8, 4, false);
-			continue;
+			return;
 		}
 		memset(bt_len, 0, sizeof(bt_len));
 

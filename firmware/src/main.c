@@ -37,6 +37,7 @@
 #include "cfg.h"
 #include "ble_out.h"
 #include "ble_cfg.h"
+#include "hid_in.h"
 
 bool usb_listening(void)
 {
@@ -66,7 +67,6 @@ void pm_out(const char *fmt, ...)
 	}
 }
 
-static struct bt_conn *cur_conn;
 static struct bt_hogp hogp;
 
 /* ---------- yardımcılar ---------- */
@@ -83,8 +83,30 @@ static void print_err(const char *where, int code)
 	OUT("{\"ev\":\"err\",\"where\":\"%s\",\"code\":%d}\n", where, code);
 }
 
+static bool listing;
+static struct bt_conn *cur_conn;
+
+/* Tarama: pad bağlı değilken ya da cihaz aranırken sürekli; pad bağlıyken sadece kayıtlı bir
+ * klavye/fare bekleniyorsa ve seyrek (pad'in bağlantısından süre çalmasın). */
 static void start_scan(void)
 {
+	static const struct bt_le_scan_param fastp = {
+		.type = BT_LE_SCAN_TYPE_ACTIVE, .options = BT_LE_SCAN_OPT_NONE, .interval = 0x0030, .window = 0x0030,
+	};
+	static const struct bt_le_scan_param slowp = {
+		.type = BT_LE_SCAN_TYPE_ACTIVE, .options = BT_LE_SCAN_OPT_NONE, .interval = 0x0140, .window = 0x0030,
+	};
+	static int mode = -1;
+	bool fast = !cur_conn || listing;
+
+	if (!fast && !hid_in_need_scan()) {
+		bt_scan_stop();
+		return;
+	}
+	if (mode != fast) {
+		bt_scan_params_set((struct bt_le_scan_param *)(fast ? &fastp : &slowp));
+		mode = fast;
+	}
 	int err = bt_scan_start(BT_SCAN_TYPE_SCAN_ACTIVE);
 
 	if (err && err != -EALREADY) {
@@ -116,16 +138,16 @@ static struct lmap {
 	uint8_t n;
 	uint8_t e[LM_MAX * LM_ENT];
 } lms[MAXC];
-static bool listing;
-
 static bool addr_eq(const bt_addr_le_t *a, const bt_addr_le_t *b) { return bt_addr_le_cmp(a, b) == 0; }
 
 /* ble_out.c: bu adres kayıtlı bir pad mi? (hedef listesine karışmasın) */
 bool pad_addr_known(const bt_addr_le_t *a)
 {
 	for (int i = 0; i < nsaved; i++) if (addr_eq(&saved[i], a)) return true;
-	return false;
+	return hid_in_known(a);
 }
+
+void scan_resume(void) { start_scan(); }
 
 static int parse_addr(const char *s, bt_addr_le_t *a)
 {
@@ -227,6 +249,7 @@ SETTINGS_STATIC_HANDLER_DEFINE(pmc, "pmc", NULL, h_ctrl_set, NULL, NULL);
 static bool may_connect(const bt_addr_le_t *a)
 {
 	if (cur_conn) return false;
+	if (hid_in_known(a)) return false;
 	if (want_set) return addr_eq(a, &want);
 	if (!nsaved) return true;
 	for (int i = 0; i < nsaved; i++) if (addr_eq(&saved[i], a)) return true;
@@ -260,19 +283,24 @@ static void list_end_fn(struct k_work *w)
 {
 	listing = false;
 	OUT("{\"ev\":\"scan_end\"}\n");
-	if (cur_conn) bt_scan_stop();
+	start_scan();
 }
 
 /* ---------- tarama ---------- */
 
 struct name_ctx {
 	char name[32];
+	uint16_t app;
 };
 
 static bool adv_name_cb(struct bt_data *data, void *user_data)
 {
 	struct name_ctx *ctx = user_data;
 
+	if (data->type == BT_DATA_GAP_APPEARANCE && data->data_len >= 2) {
+		ctx->app = data->data[0] | data->data[1] << 8;
+		return true;
+	}
 	if (data->type == BT_DATA_NAME_COMPLETE || data->type == BT_DATA_NAME_SHORTENED) {
 		size_t len = MIN(data->data_len, sizeof(ctx->name) - 1);
 
@@ -284,7 +312,7 @@ static bool adv_name_cb(struct bt_data *data, void *user_data)
 				ctx->name[i] = '_';
 			}
 		}
-		return false;
+		return true;
 	}
 	return true;
 }
@@ -303,10 +331,15 @@ static void scan_filter_match(struct bt_scan_device_info *info,
 	net_buf_simple_restore(info->adv_data, &state);
 
 	if (listing && !seen_recent(info->recv_info->addr)) {
-		OUT("{\"ev\":\"dev\",\"addr\":\"%s\",\"name\":\"%s\",\"rssi\":%d,\"hid\":1}\n",
-		    addr, ctx.name, info->recv_info->rssi);
+		OUT("{\"ev\":\"dev\",\"addr\":\"%s\",\"name\":\"%s\",\"rssi\":%d,\"hid\":1,\"app\":%u}\n",
+		    addr, ctx.name, info->recv_info->rssi, ctx.app);
 	}
-	if (!connectable || !may_connect(info->recv_info->addr)) return;
+	if (!connectable) return;
+	/* kayıtlı ya da yeni eklenen klavye/fare */
+	if (hid_in_try(info->recv_info->addr, ctx.name)) return;
+	if (!may_connect(info->recv_info->addr)) return;
+	/* klavye/fareyi (görünüm 961/962) kendiliğinden pad diye alma */
+	if (!want_set && (ctx.app == 961 || ctx.app == 962)) return;
 
 	OUT("{\"ev\":\"found\",\"addr\":\"%s\",\"name\":\"%s\",\"rssi\":%d,\"connectable\":%d}\n",
 	       addr, ctx.name, info->recv_info->rssi, connectable);
@@ -366,14 +399,27 @@ static int scan_filters_refresh(void)
 		print_err("filter_add", err);
 		return err;
 	}
-	for (int i = 0; i < nsaved && i < CONFIG_BT_SCAN_ADDRESS_CNT; i++) {
+	for (int i = 0; i < nsaved && i < MAXC; i++) {
 		if (bt_scan_filter_add(BT_SCAN_FILTER_TYPE_ADDR, &saved[i]) == 0) mode |= BT_SCAN_ADDR_FILTER;
+	}
+	/* kayıtlı klavye/fareler de (geri bağlanırken doğrudan yayın yaparlar) */
+	bt_addr_le_t ha[3];
+	int nh = hid_in_addrs(ha, ARRAY_SIZE(ha));
+
+	for (int i = 0; i < nh; i++) {
+		if (bt_scan_filter_add(BT_SCAN_FILTER_TYPE_ADDR, &ha[i]) == 0) mode |= BT_SCAN_ADDR_FILTER;
 	}
 	err = bt_scan_filter_enable(mode, false);
 	if (err) {
 		print_err("filter_enable", err);
 	}
 	return err;
+}
+
+void scan_filters_changed(void)
+{
+	scan_filters_refresh();
+	start_scan();
 }
 
 static int scan_init(void)
@@ -425,13 +471,24 @@ static const struct bt_gatt_dm_cb discovery_cb = {
 	.error_found = discovery_error,
 };
 
+static void disc_retry_fn(struct k_work *w);
+static K_WORK_DELAYABLE_DEFINE(disc_retry, disc_retry_fn);
+
 static void start_discovery(struct bt_conn *conn)
 {
 	int err = bt_gatt_dm_start(conn, BT_UUID_HIDS, &discovery_cb, NULL);
 
-	if (err) {
+	/* klavye/fare için servis aranıyorsa biraz sonra tekrar */
+	if (err == -EALREADY || err == -EBUSY) {
+		k_work_reschedule(&disc_retry, K_MSEC(400));
+	} else if (err) {
 		print_err("discovery_start", err);
 	}
+}
+
+static void disc_retry_fn(struct k_work *w)
+{
+	if (cur_conn) start_discovery(cur_conn);
 }
 
 /* ---------- bağlantı ---------- */
@@ -441,7 +498,7 @@ static bool is_pad_conn(struct bt_conn *c)
 {
 	struct bt_conn_info i;
 
-	return bt_conn_get_info(c, &i) == 0 && i.role == BT_CONN_ROLE_CENTRAL;
+	return bt_conn_get_info(c, &i) == 0 && i.role == BT_CONN_ROLE_CENTRAL && !hid_in_is(c);
 }
 
 static void connected(struct bt_conn *conn, uint8_t conn_err)
@@ -464,7 +521,7 @@ static void connected(struct bt_conn *conn, uint8_t conn_err)
 	OUT("{\"ev\":\"connected\",\"addr\":\"%s\",\"name\":\"%s\"}\n", addr, cur_name);
 	bt_conn_le_phy_update(conn, BT_CONN_LE_PHY_PARAM_2M);
 	cur_addr = *bt_conn_get_dst(conn);
-	if (listing) bt_scan_start(BT_SCAN_TYPE_SCAN_ACTIVE);
+	start_scan();
 	want_set = false;
 	saved_front(&cur_addr);
 
@@ -854,6 +911,7 @@ int main(void)
 		settings_load();
 		ble_cfg_init();
 		ble_out_init();
+		hid_in_init();
 	}
 	bt_conn_auth_info_cb_register(&auth_info_cb);
 
