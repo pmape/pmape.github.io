@@ -19,6 +19,7 @@
 #include "log.h"
 #include "engine.h"
 #include "cfg.h"
+#include "ble_out.h"
 
 #define CHUNK 1024
 
@@ -156,6 +157,7 @@ extern bool bt_cmd(char *l);
 static void cmd(char *l)
 {
 	if (bt_cmd(l)) return;
+	if (ble_cmd(l)) return;
 	if (!strcmp(l, "hello")) {
 		hello();
 	} else if (!strcmp(l, "cr")) {

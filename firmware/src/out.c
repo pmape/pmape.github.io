@@ -17,6 +17,7 @@
 #include "pad.h"
 #include "out.h"
 #include "engine.h"
+#include "ble_out.h"
 
 /* ---------- HID tanımları ---------- */
 
@@ -132,9 +133,11 @@ void out_usb_status(int status)
 		}
 		usb_cfg = true;
 		usb_susp = false;
+		ble_out_usb(true);
 	} else if (status == USB_DC_RESET || status == USB_DC_DISCONNECTED) {
 		usb_cfg = false;
 		usb_susp = false;
+		if (status == USB_DC_DISCONNECTED) ble_out_usb(false);
 	} else if (status == USB_DC_SUSPEND) {
 		usb_susp = true;
 	} else if (status == USB_DC_RESUME) {
@@ -210,6 +213,34 @@ static const struct gpio_dt_spec led_r = GPIO_DT_SPEC_GET(DT_ALIAS(led0), gpios)
 #endif
 
 
+/* Tuşlar nereye: bt_side = Bluetooth tarafı seçili (ya da kablo yok); use_bt = şu an Bluetooth'tan gidiyor */
+static volatile bool bt_side, use_bt;
+static int64_t bt_wait_since;
+
+static void route_tick(int64_t now)
+{
+	bool side = ble_out_route_bt() || !usb_cfg;
+
+	if (side && !bt_side) bt_wait_since = now;
+	bt_side = side;
+	if (ble_out_ready()) bt_wait_since = now;
+	use_bt = side && ble_out_ready();
+	/* Bluetooth hedefi 10 sn bulunamazsa ve kablo varsa kabloya dön */
+	if (side && !use_bt && usb_cfg && now - bt_wait_since > 10000) bt_side = false;
+}
+
+static uint8_t bt_last[3][9], bt_len[3];
+
+static void bt_send(int which, const uint8_t *buf, uint8_t len, bool force)
+{
+	if (!force && bt_len[which] == len && !memcmp(bt_last[which], buf, len)) return;
+	if (ble_out_send(which, buf, len) == 0) {
+		memcpy(bt_last[which], buf, len);
+		bt_len[which] = len;
+		last_ok_ms = k_uptime_get();
+	}
+}
+
 static void led_update(uint32_t tick)
 {
 #if HAVE_LED
@@ -219,8 +250,18 @@ static void led_update(uint32_t tick)
 	if (last_ok_ms && now - last_ok_ms < 50) on = false;
 	/* kırmızı: tablet kartı hazırlamadı (sabit) veya uyuttu (yanıp söner) ya da gönderim hatası */
 	bool err = last_err_ms > last_ok_ms && now - last_err_ms < 1000;
-	bool red = (!usb_cfg && !usb_susp) || err || (usb_susp && (tick / 25) % 2);
+	bool bt = use_bt;
+	bool red = !bt && (((!usb_cfg && !usb_susp) || err || (usb_susp && (tick / 25) % 2)));
 
+	if (bt_side) {
+		/* turkuaz: tuşlar Bluetooth'tan hedefe gidiyor; yanıp sönüyorsa hedef aranıyor */
+		bool blink = !ble_out_ready() && (tick / 30) % 2;
+
+		gpio_pin_set_dt(&led_g, on && !blink);
+		gpio_pin_set_dt(&led_b, on && !blink);
+		gpio_pin_set_dt(&led_r, false);
+		return;
+	}
 	gpio_pin_set_dt(&led_g, on && mapping_on && !red);
 	gpio_pin_set_dt(&led_b, on && !mapping_on && !red);
 	gpio_pin_set_dt(&led_r, red);
@@ -331,11 +372,30 @@ static void out_thread(void *a, void *b, void *c)
 		led_update(tick);
 		pad_get(&p);
 
+		route_tick(k_uptime_get());
 		if (!p.valid || !pad_connected) {
 			send(D_PAD, g_idle, 9, false);
 			send(D_KB, z8, 8, false);
 			send(D_MOUSE, z8, 4, false);
 			continue;
+		}
+
+		/* Home + Start 2 sn: tuşlar kablo <-> Bluetooth */
+		{
+			static int64_t since;
+			static bool done;
+			uint32_t hs = BIT(PB_HOME) | BIT(PB_START);
+
+			if ((p.btn & hs) == hs) {
+				if (!since) since = k_uptime_get();
+				if (!done && k_uptime_get() - since > 2000) {
+					done = true;
+					ble_out_set_route(!ble_out_route_bt());
+				}
+			} else {
+				since = 0;
+				done = false;
+			}
 		}
 
 		struct out_rep r;
@@ -345,6 +405,21 @@ static void out_thread(void *a, void *b, void *c)
 			build_mapped(&p, r.kb, r.ms);
 			memcpy(r.g, g_idle, 9);
 		}
+
+		route_tick(k_uptime_get());
+		if (bt_side) {
+			/* Bluetooth tarafı: takılı cihaza (telefon/kumanda) hiçbir tuş gitmez */
+			if (use_bt) {
+				bt_send(2, r.g, 9, false);
+				bt_send(0, r.kb, 8, false);
+				bt_send(1, r.ms, 4, r.ms[1] || r.ms[2] || r.ms[3]);
+			}
+			send(D_PAD, g_idle, 9, false);
+			send(D_KB, z8, 8, false);
+			send(D_MOUSE, z8, 4, false);
+			continue;
+		}
+		memset(bt_len, 0, sizeof(bt_len));
 
 		/* 150 ms'dir hiçbir şey gitmediyse aynı gamepad durumunu tekrar gönder:
 		 * tablet bağlantıyı boşta sanıp uyutmasın (uyanma gecikmesi olmasın) */

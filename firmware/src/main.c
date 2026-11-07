@@ -34,6 +34,7 @@
 #include "out.h"
 
 #include "cfg.h"
+#include "ble_out.h"
 
 bool host_listening(void)
 {
@@ -92,6 +93,13 @@ static struct lmap {
 static bool listing;
 
 static bool addr_eq(const bt_addr_le_t *a, const bt_addr_le_t *b) { return bt_addr_le_cmp(a, b) == 0; }
+
+/* ble_out.c: bu adres kayıtlı bir pad mi? (hedef listesine karışmasın) */
+bool pad_addr_known(const bt_addr_le_t *a)
+{
+	for (int i = 0; i < nsaved; i++) if (addr_eq(&saved[i], a)) return true;
+	return false;
+}
 
 static int parse_addr(const char *s, bt_addr_le_t *a)
 {
@@ -372,10 +380,19 @@ static void start_discovery(struct bt_conn *conn)
 
 /* ---------- bağlantı ---------- */
 
+/* Kart iki rolde bağlanır: pad'e "merkez", hedef cihaza "çevre" (ble_out.c). Burası sadece pad içindir. */
+static bool is_pad_conn(struct bt_conn *c)
+{
+	struct bt_conn_info i;
+
+	return bt_conn_get_info(c, &i) == 0 && i.role == BT_CONN_ROLE_CENTRAL;
+}
+
 static void connected(struct bt_conn *conn, uint8_t conn_err)
 {
 	char addr[BT_ADDR_LE_STR_LEN];
 
+	if (!is_pad_conn(conn)) return;
 	bt_addr_le_to_str(bt_conn_get_dst(conn), addr, sizeof(addr));
 
 	if (conn_err) {
@@ -402,6 +419,7 @@ static void connected(struct bt_conn *conn, uint8_t conn_err)
 
 static void disconnected(struct bt_conn *conn, uint8_t reason)
 {
+	if (!is_pad_conn(conn)) return;
 	OUT("{\"ev\":\"disconnected\",\"reason\":%u}\n", reason);
 	out_set_connected(false);
 	pad_reset();
@@ -418,6 +436,7 @@ static void disconnected(struct bt_conn *conn, uint8_t reason)
 
 static void security_changed(struct bt_conn *conn, bt_security_t level, enum bt_security_err err)
 {
+	if (!is_pad_conn(conn)) return;
 	OUT("{\"ev\":\"security\",\"level\":%u,\"err\":%d}\n", level, err);
 	start_discovery(conn);
 }
@@ -752,6 +771,7 @@ int main(void)
 	}
 	if (IS_ENABLED(CONFIG_SETTINGS)) {
 		settings_load();
+		ble_out_init();
 	}
 	bt_conn_auth_info_cb_register(&auth_info_cb);
 
