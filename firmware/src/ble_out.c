@@ -50,9 +50,13 @@ static const uint8_t report_map[] = {
 	0x09, 0x30, 0x09, 0x31, 0x09, 0x32, 0x09, 0x35, 0x15, 0x00, 0x26, 0xff, 0x00, 0x75, 0x08, 0x95, 0x04, 0x81, 0x02,
 	0x05, 0x02, 0x09, 0xc5, 0x09, 0xc4, 0x15, 0x00, 0x26, 0xff, 0x00, 0x75, 0x08, 0x95, 0x02, 0x81, 0x02,
 	0xc0,
+	/* medya tuşları (4) */
+	0x05, 0x0c, 0x09, 0x01, 0xa1, 0x01, 0x85, 0x04,
+	0x15, 0x00, 0x26, 0xff, 0x03, 0x19, 0x00, 0x2a, 0xff, 0x03, 0x75, 0x10, 0x95, 0x01, 0x81, 0x00,
+	0xc0,
 };
 
-BT_HIDS_DEF(hids_obj, 8, 4, 9);
+BT_HIDS_DEF(hids_obj, 8, 4, 9, 2);
 
 static struct bt_conn *host;          /* bağlı hedef */
 static volatile bool host_ready;      /* şifreli ve bildirimler açık */
@@ -216,7 +220,7 @@ bool ble_out_searching(void) { return adv_on && !host; }
 
 int ble_out_send(int which, const uint8_t *buf, uint8_t len)
 {
-	/* which: 0 klavye, 1 fare, 2 gamepad = rapor sırası */
+	/* which: 0 klavye, 1 fare, 2 gamepad, 3 medya = rapor sırası */
 	if (!ble_out_ready()) return -ENOTCONN;
 	return bt_hids_inp_rep_send(&hids_obj, host, which, buf, len, NULL);
 }
@@ -338,14 +342,14 @@ int ble_out_init(void)
 {
 	struct bt_hids_init_param p = { 0 };
 	struct bt_hids_inp_rep *r;
-	static const uint8_t sizes[3] = { 8, 4, 9 };
+	static const uint8_t sizes[4] = { 8, 4, 9, 2 };
 
 	p.rep_map.data = report_map;
 	p.rep_map.size = sizeof(report_map);
 	p.info.bcd_hid = 0x0101;
 	p.info.b_country_code = 0;
 	p.info.flags = BT_HIDS_REMOTE_WAKE | BT_HIDS_NORMALLY_CONNECTABLE;
-	for (int i = 0; i < 3; i++) {
+	for (int i = 0; i < 4; i++) {
 		r = &p.inp_rep_group_init.reports[i];
 		r->size = sizes[i];
 		r->id = i + 1;

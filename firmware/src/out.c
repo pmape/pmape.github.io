@@ -60,7 +60,14 @@ static const uint8_t mouse_desc[] = {
 #define mapping_on engine_mapping()
 static bool pad_connected;
 
-enum { D_KB, D_MOUSE, D_PAD, D_N };
+enum { D_KB, D_MOUSE, D_PAD, D_CC, D_N };
+
+static const uint8_t consumer_desc[] = {
+	0x05, 0x0c, 0x09, 0x01, 0xa1, 0x01,
+	0x15, 0x00, 0x26, 0xff, 0x03, 0x19, 0x00, 0x2a, 0xff, 0x03,
+	0x75, 0x10, 0x95, 0x01, 0x81, 0x00,
+	0xc0,
+};
 static volatile bool usb_cfg, usb_susp;
 static int64_t last_ok_ms, last_err_ms, last_any_ms;
 static bool keepalive;
@@ -91,7 +98,7 @@ static int get_report(const struct device *dev, struct usb_setup_packet *setup, 
 	for (int i = 0; i < D_N; i++) {
 		if (hid[i] == dev) {
 			*data = zero;
-			*len = i == D_KB ? 8 : (i == D_MOUSE ? 4 : 9);
+			*len = i == D_KB ? 8 : i == D_MOUSE ? 4 : i == D_CC ? 2 : 9;
 			return 0;
 		}
 	}
@@ -106,9 +113,9 @@ static const struct hid_ops ops = {
 
 int out_usb_init(void)
 {
-	static const char *names[D_N] = { "HID_0", "HID_1", "HID_2" };
-	static const uint8_t *descs[D_N] = { keyboard_desc, mouse_desc, gamepad_desc };
-	static const size_t sizes[D_N] = { sizeof(keyboard_desc), sizeof(mouse_desc), sizeof(gamepad_desc) };
+	static const char *names[D_N] = { "HID_0", "HID_1", "HID_2", "HID_3" };
+	static const uint8_t *descs[D_N] = { keyboard_desc, mouse_desc, gamepad_desc, consumer_desc };
+	static const size_t sizes[D_N] = { sizeof(keyboard_desc), sizeof(mouse_desc), sizeof(gamepad_desc), sizeof(consumer_desc) };
 
 	for (int i = 0; i < D_N; i++) {
 		hid[i] = device_get_binding(names[i]);
@@ -229,7 +236,7 @@ static void route_tick(int64_t now)
 	if (side && !use_bt && usb_cfg && now - bt_wait_since > 10000) bt_side = false;
 }
 
-static uint8_t bt_last[3][9], bt_len[3];
+static uint8_t bt_last[4][9], bt_len[4];
 
 static void bt_send(int which, const uint8_t *buf, uint8_t len, bool force)
 {
@@ -388,6 +395,7 @@ static void out_thread(void *a, void *b, void *c)
 			send(D_PAD, g_idle, 9, false);
 			send(D_KB, z8, 8, false);
 			send(D_MOUSE, z8, 4, false);
+			send(D_CC, z8, 2, false);
 			continue;
 		}
 
@@ -424,7 +432,9 @@ static void out_thread(void *a, void *b, void *c)
 				bt_send(2, r.g, 9, false);
 				bt_send(0, r.kb, 8, false);
 				bt_send(1, r.ms, 4, r.ms[1] || r.ms[2] || r.ms[3]);
+				bt_send(3, r.cc, 2, false);
 			}
+			send(D_CC, z8, 2, false);
 			send(D_PAD, g_idle, 9, false);
 			send(D_KB, z8, 8, false);
 			send(D_MOUSE, z8, 4, false);
@@ -442,6 +452,7 @@ static void out_thread(void *a, void *b, void *c)
 		send(D_PAD, r.g, 9, false);
 		send(D_KB, r.kb, 8, false);
 		send(D_MOUSE, r.ms, 4, r.ms[1] || r.ms[2] || r.ms[3]);
+		send(D_CC, r.cc, 2, false);
 	}
 }
 

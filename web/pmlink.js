@@ -19,6 +19,7 @@ const PM = (() => {
   const BTN = { A: 0, B: 1, X: 3, Y: 4, LB: 6, RB: 7, LT: 8, RT: 9, SELECT: 10, START: 11, HOME: 12,
     L3: 13, R3: 14, SHARE: 15, UP: 16, DOWN: 17, LEFT: 18, RIGHT: 19, M1: 20, M2: 21 };
   const MOUSE = { left: 0, right: 1, middle: 2, back: 3, fwd: 4, wheelUp: 5, wheelDown: 6 };
+  const MEDIA = { voice: 1, search: 2, volUp: 3, volDown: 4, mute: 5, play: 6, next: 7, prev: 8, brUp: 9, brDown: 10, home: 11, back: 12 };
   const OUT = { kbm: 0, kb: 1, pad: 2, all: 3 };
   const SM = { inherit: 0, off: 1, mouse: 2, keys: 3, scroll: 4, pad: 5 };
   const TRIG = { single: 0, double: 1, long: 2, start: 3, release: 4 };
@@ -68,6 +69,7 @@ const PM = (() => {
         for (const s of steps) {
           if (s.t === 'key') { u8(0); u8(HID[s.k] || 0); }
           else if (s.t === 'mouse') { u8(1); u8(MOUSE[s.b] ?? 0); }
+          else if (s.t === 'media') { u8(3); u8(MEDIA[s.m] ?? 1); }
           else { u8(2); u8(BTN[s.p] ?? 0); }
           u8(ACTS[s.a] ?? 0); u16(s.after || 0);
         }
@@ -79,7 +81,7 @@ const PM = (() => {
   /* Karttaki ayardan profilleri geri çıkar (profil adları kartta yok: Profil 1, 2…) */
   const inv = o => Object.fromEntries(Object.entries(o).map(([k, v]) => [v, k]));
   function decompile(b) {
-    const HIDI = inv(HID), BTNI = inv(BTN), MOUSEI = inv(MOUSE), OUTI = inv(OUT), SMI = inv(SM), TRIGI = inv(TRIG), MODEI = inv(MODE), ACTSI = inv(ACTS);
+    const HIDI = inv(HID), BTNI = inv(BTN), MOUSEI = inv(MOUSE), MEDIAI = inv(MEDIA), OUTI = inv(OUT), SMI = inv(SM), TRIGI = inv(TRIG), MODEI = inv(MODE), ACTSI = inv(ACTS);
     let i = 0;
     const u8 = () => b[i++], u16 = () => { const v = b[i] | (b[i + 1] << 8); i += 2; return v; };
     if (b[0] !== 80 || b[1] !== 77 || b[2] !== 2) throw new Error('Karttaki ayar okunamadı');
@@ -105,7 +107,7 @@ const PM = (() => {
         const a = { kind: kind ? 'layer' : 'combo', mode: MODEI[mode] || 'normal', turbo: loop, layer: tl || 1, how: how ? 'toggle' : 'hold', steps: [] };
         for (let s = 0; s < ns; s++) {
           const t = u8(), c = u8(), ac = ACTSI[u8()] || 'press', after = u16();
-          a.steps.push(t === 0 ? { t: 'key', k: HIDI[c] || '', a: ac, after } : t === 1 ? { t: 'mouse', b: MOUSEI[c] || 'left', a: ac, after } : { t: 'pad', p: BTNI[c] || 'A', a: ac, after });
+          a.steps.push(t === 0 ? { t: 'key', k: HIDI[c] || '', a: ac, after } : t === 1 ? { t: 'mouse', b: MOUSEI[c] || 'left', a: ac, after } : t === 3 ? { t: 'media', m: MEDIAI[c] || 'voice', a: ac, after } : { t: 'pad', p: BTNI[c] || 'A', a: ac, after });
         }
         if (!btn) continue;
         const key = trig === 5 ? 'c_' + (BTNI[other] || '') : TRIGI[trig];

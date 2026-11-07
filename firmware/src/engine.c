@@ -26,7 +26,10 @@ static K_MUTEX_DEFINE(mtx);
 #define STEP 5
 
 enum { TR_SINGLE, TR_DOUBLE, TR_LONG, TR_START, TR_RELEASE, TR_COMBO, TR_N };
-enum { ST_KEY, ST_MOUSE, ST_PAD };
+enum { ST_KEY, ST_MOUSE, ST_PAD, ST_CC };
+/* medya tuşları: ayar ekranındaki sırayla */
+static const uint16_t cc_usage[] = { 0, 0x0cf, 0x221, 0x0e9, 0x0ea, 0x0e2, 0x0cd, 0x0b5, 0x0b6, 0x06f, 0x070, 0x223, 0x224 };
+#define NCC (sizeof(cc_usage) / sizeof(cc_usage[0]))
 enum { SM_INHERIT, SM_OFF, SM_MOUSE, SM_KEYS, SM_SCROLL, SM_PAD };
 
 static inline uint16_t rd16(const uint8_t *p) { return p[0] | (p[1] << 8); }
@@ -168,7 +171,7 @@ int engine_select_profile(int n)
 
 /* ---------- çıkış sayaçları ---------- */
 
-static uint8_t kref[256], mref[5], pref[20];
+static uint8_t kref[256], mref[5], pref[20], cref[NCC];
 static int wheel;
 
 static void o_down(uint8_t t, uint8_t c)
@@ -179,6 +182,7 @@ static void o_down(uint8_t t, uint8_t c)
 		else if (c == 5) wheel++;
 		else if (c == 6) wheel--;
 	} else if (t == ST_PAD && c < 20) { if (pref[c] < 255) pref[c]++; }
+	else if (t == ST_CC && c < NCC) { if (cref[c] < 255) cref[c]++; }
 }
 
 static void o_up(uint8_t t, uint8_t c)
@@ -186,6 +190,7 @@ static void o_up(uint8_t t, uint8_t c)
 	if (t == ST_KEY) { if (kref[c]) kref[c]--; }
 	else if (t == ST_MOUSE) { if (c < 5 && mref[c]) mref[c]--; }
 	else if (t == ST_PAD && c < 20) { if (pref[c]) pref[c]--; }
+	else if (t == ST_CC && c < NCC) { if (cref[c]) cref[c]--; }
 }
 
 /* bas-bırak'ın bırakma anları */
@@ -267,7 +272,7 @@ static void exec_step(const uint8_t *s, int64_t now)
 
 	if (a == 0) {
 		o_down(t, c);
-		if (!(t == ST_MOUSE && c >= 5)) up_later(t, c, now + 20);
+		if (!(t == ST_MOUSE && c >= 5)) up_later(t, c, now + (t == ST_CC ? 60 : 20));
 	} else if (a == 1) o_down(t, c);
 	else o_up(t, c);
 }
@@ -317,7 +322,7 @@ static int64_t last_tick;
 
 static void reset_state(void)
 {
-	memset(kref, 0, sizeof(kref)); memset(mref, 0, sizeof(mref)); memset(pref, 0, sizeof(pref));
+	memset(kref, 0, sizeof(kref)); memset(mref, 0, sizeof(mref)); memset(pref, 0, sizeof(pref)); memset(cref, 0, sizeof(cref));
 	memset(ups, 0, sizeof(ups)); memset(holds, 0, sizeof(holds)); memset(togs, 0, sizeof(togs));
 	memset(runs, 0, sizeof(runs)); memset(bs, 0, sizeof(bs));
 	for (int i = 0; i < NBTN; i++) bs[i].hold_layer = -1;
@@ -661,6 +666,9 @@ enum eng_mode engine_tick(const struct pad_state *p, int64_t now, struct out_rep
 		for (int j = 0; j < n; j++) if (r->kb[2 + j] == c) dup = true;
 		if (!dup) r->kb[2 + n++] = c;
 	}
+
+	/* medya */
+	for (unsigned i = 1; i < NCC; i++) if (cref[i]) { r->cc[0] = cc_usage[i] & 0xff; r->cc[1] = cc_usage[i] >> 8; break; }
 
 	/* fare */
 	for (int i = 0; i < 5; i++) if (mref[i]) r->ms[0] |= BIT(i);

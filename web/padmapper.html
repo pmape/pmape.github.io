@@ -222,6 +222,7 @@ const PM = (() => {
   const BTN = { A: 0, B: 1, X: 3, Y: 4, LB: 6, RB: 7, LT: 8, RT: 9, SELECT: 10, START: 11, HOME: 12,
     L3: 13, R3: 14, SHARE: 15, UP: 16, DOWN: 17, LEFT: 18, RIGHT: 19, M1: 20, M2: 21 };
   const MOUSE = { left: 0, right: 1, middle: 2, back: 3, fwd: 4, wheelUp: 5, wheelDown: 6 };
+  const MEDIA = { voice: 1, search: 2, volUp: 3, volDown: 4, mute: 5, play: 6, next: 7, prev: 8, brUp: 9, brDown: 10, home: 11, back: 12 };
   const OUT = { kbm: 0, kb: 1, pad: 2, all: 3 };
   const SM = { inherit: 0, off: 1, mouse: 2, keys: 3, scroll: 4, pad: 5 };
   const TRIG = { single: 0, double: 1, long: 2, start: 3, release: 4 };
@@ -271,6 +272,7 @@ const PM = (() => {
         for (const s of steps) {
           if (s.t === 'key') { u8(0); u8(HID[s.k] || 0); }
           else if (s.t === 'mouse') { u8(1); u8(MOUSE[s.b] ?? 0); }
+          else if (s.t === 'media') { u8(3); u8(MEDIA[s.m] ?? 1); }
           else { u8(2); u8(BTN[s.p] ?? 0); }
           u8(ACTS[s.a] ?? 0); u16(s.after || 0);
         }
@@ -282,7 +284,7 @@ const PM = (() => {
   /* Karttaki ayardan profilleri geri çıkar (profil adları kartta yok: Profil 1, 2…) */
   const inv = o => Object.fromEntries(Object.entries(o).map(([k, v]) => [v, k]));
   function decompile(b) {
-    const HIDI = inv(HID), BTNI = inv(BTN), MOUSEI = inv(MOUSE), OUTI = inv(OUT), SMI = inv(SM), TRIGI = inv(TRIG), MODEI = inv(MODE), ACTSI = inv(ACTS);
+    const HIDI = inv(HID), BTNI = inv(BTN), MOUSEI = inv(MOUSE), MEDIAI = inv(MEDIA), OUTI = inv(OUT), SMI = inv(SM), TRIGI = inv(TRIG), MODEI = inv(MODE), ACTSI = inv(ACTS);
     let i = 0;
     const u8 = () => b[i++], u16 = () => { const v = b[i] | (b[i + 1] << 8); i += 2; return v; };
     if (b[0] !== 80 || b[1] !== 77 || b[2] !== 2) throw new Error('Karttaki ayar okunamadı');
@@ -308,7 +310,7 @@ const PM = (() => {
         const a = { kind: kind ? 'layer' : 'combo', mode: MODEI[mode] || 'normal', turbo: loop, layer: tl || 1, how: how ? 'toggle' : 'hold', steps: [] };
         for (let s = 0; s < ns; s++) {
           const t = u8(), c = u8(), ac = ACTSI[u8()] || 'press', after = u16();
-          a.steps.push(t === 0 ? { t: 'key', k: HIDI[c] || '', a: ac, after } : t === 1 ? { t: 'mouse', b: MOUSEI[c] || 'left', a: ac, after } : { t: 'pad', p: BTNI[c] || 'A', a: ac, after });
+          a.steps.push(t === 0 ? { t: 'key', k: HIDI[c] || '', a: ac, after } : t === 1 ? { t: 'mouse', b: MOUSEI[c] || 'left', a: ac, after } : t === 3 ? { t: 'media', m: MEDIAI[c] || 'voice', a: ac, after } : { t: 'pad', p: BTNI[c] || 'A', a: ac, after });
         }
         if (!btn) continue;
         const key = trig === 5 ? 'c_' + (BTNI[other] || '') : TRIGI[trig];
@@ -575,11 +577,13 @@ const keyName=c=>(S&&S.device&&S.device.layout!=='us'&&TRQ[c])||KEY_LABEL[c]||c;
 const MOUSE=[['left','Sol tık'],['right','Sağ tık'],['middle','Orta tık'],['back','Yan geri'],['fwd','Yan ileri'],['wheelUp','Tekerlek yukarı'],['wheelDown','Tekerlek aşağı']];
 const PAD=[['A','A'],['B','B'],['X','X'],['Y','Y'],['LB','LB'],['RB','RB'],['LT','LT'],['RT','RT'],['SELECT','Select'],['START','Start'],['HOME','Home'],['L3','L3'],['R3','R3'],['UP','Yön yukarı'],['DOWN','Yön aşağı'],['LEFT','Yön sol'],['RIGHT','Yön sağ']];
 const PAD_LABEL=Object.fromEntries(PAD);
-const TYPES=[['key','⌨'],['mouse','🖱'],['pad','🎮']];
+const TYPES=[['key','⌨'],['mouse','🖱'],['media','🎵'],['pad','🎮']];
+const MEDIA=[['voice','🎤 Sesli komut / Asistan'],['search','🔍 Arama'],['volUp','🔊 Ses +'],['volDown','🔉 Ses −'],['mute','🔇 Sessiz'],['play','⏯ Oynat / Durdur'],['next','⏭ Sonraki'],['prev','⏮ Önceki'],['brUp','☀ Parlaklık +'],['brDown','🔅 Parlaklık −'],['home','🏠 Ana ekran'],['back','↩ Geri']];
+const MEDIA_LABEL=Object.fromEntries(MEDIA);
 const OUTS=[['kbm','⌨🖱 Klavye + Fare'],['kb','⌨ Sadece klavye'],['pad','🎮 Gamepad'],['all','⌨🖱🎮 Hepsi']];
-const OUT_ALLOW={kbm:['key','mouse'],kb:['key'],pad:['pad'],all:['key','mouse','pad']};
+const OUT_ALLOW={kbm:['key','mouse','media'],kb:['key','media'],pad:['pad'],all:['key','mouse','media','pad']};
 const OUT_NAME={kbm:'klavye + fare',kb:'sadece klavye',pad:'gamepad',all:'klavye + fare + gamepad'};
-const TYPE_NAME={key:'⌨ klavye',mouse:'🖱 fare',pad:'🎮 gamepad'};
+const TYPE_NAME={key:'⌨ klavye',mouse:'🖱 fare',media:'🎵 medya',pad:'🎮 gamepad'};
 const ok=t=>OUT_ALLOW[P().output||'all'].includes(t);
 const STICK_NEED={mouse:'mouse',scroll:'mouse',keys:'key',pad:'pad'};
 const MOUSE_LABEL=Object.fromEntries(MOUSE);
@@ -664,6 +668,7 @@ function stepLabel(s){
   if(s.t==='key')return `<span class="k">${esc(keyName(s.k))}</span>`;
   if(s.t==='mouse')return `<span class="k">${MOUSE_LABEL[s.b]}</span>`;
   if(s.t==='pad')return `<span class="k">🎮${esc(PAD_LABEL[s.p])}</span>`;
+  if(s.t==='media')return `<span class="k">${esc(MEDIA_LABEL[s.m]||s.m)}</span>`;
   return '';
 }
 function descAct(a){
@@ -797,13 +802,15 @@ function renderPanel(){
     if(s.t==='key')h+=keySel(s.k,`setStep(${i},'k',this.value)`)+actSel;
     else if(s.t==='mouse')h+=`<select onchange="setStep(${i},'b',this.value)">${opt(MOUSE,s.b)}</select>`+(s.b.startsWith('wheel')?'':actSel);
     else if(s.t==='pad')h+=`<select onchange="setStep(${i},'p',this.value)">${opt(PAD,s.p)}</select>`+actSel;
+    else if(s.t==='media')h+=`<select onchange="setStep(${i},'m',this.value)">${opt(MEDIA,s.m)}</select>`+actSel;
     h+=`<button class="x" title="Yukarı taşı" onclick="mv(${i},-1)">↑</button><button class="x" title="Sil" onclick="rm(${i})">✕</button></div>`;
     if(i<a.steps.length-1)h+=gapRow(s.after,`gap.bind(null,${i})`);
   });
   if(loop)h+=gapRow(a.turbo,'loopGap',true);
   h+=`</div><div class="row" style="margin-top:8px">
-    ${['key','mouse','pad'].filter(ok).map(t=>`<button class="btn" onclick="add('${t}')">+ ${TYPE_NAME[t].replace(/^(\S+) (.)/,(m,a,b)=>a+' '+b.toUpperCase())}</button>`).join('')}
-    <button class="btn ${rec?'rec':''}" onclick="toggleRec()" title="Bilgisayar klavyesinde basarak kaydet">${rec?'■ Durdur':'● Kaydet'}</button></div>`;
+    ${['key','mouse','media','pad'].filter(ok).map(t=>`<button class="btn" onclick="add('${t}')">+ ${TYPE_NAME[t].replace(/^(\S+) (.)/,(m,a,b)=>a+' '+b.toUpperCase())}</button>`).join('')}
+    <button class="btn ${rec?'rec':''}" onclick="toggleRec()" title="Bilgisayar klavyesinde basarak kaydet">${rec?'■ Durdur':'● Kaydet'}</button>
+    ${ok('key')?`<button class="btn" onclick="voicePreset()" title="Cihazın kendi sesli yazmasını açar">🎤 Sesli yazma</button>`:''}</div>`;
   if(a.steps.length>2)h+=`<div class="row" style="margin-top:6px"><span class="hint">Hepsinin arası</span><input type="number" id="allGap" min="0" max="60000" step="10" value="${P().gapMs}" style="width:84px"><span class="hint">ms</span><button class="btn" onclick="setAll()">Uygula</button></div>`;
   h+=`<div class="lbl">Tekrar</div><div class="seg"><button class="${a.mode==='normal'?'on':''}" onclick="curA().mode='normal';render()">Normal</button><button class="${a.mode==='turbo'?'on':''}" onclick="curA().mode='turbo';render()">Turbo</button><button class="${a.mode==='macro'?'on':''}" onclick="curA().mode='macro';render()">Makro</button><button class="${a.mode==='toggle'?'on':''}" onclick="curA().mode='toggle';render()">Toggle</button></div>`;
   if(a.mode==='macro'&&a.steps.length<2)h+=`<div class="note">Makro için yukarıdan birden fazla adım ekle (+ Klavye, + Fare…) ya da "● Kaydet" ile klavyede basarak kaydet. Her adımın arasındaki süreyi ms olarak ayarlayabilirsin.</div>`;
@@ -850,13 +857,30 @@ function curA(){const b=cur();return b[ui.act]||(b[ui.act]=act());}
 function curS(){return L().sticks[ui.sel];}
 function pick(id){ui.sel=id;if(ui.act==='_new'||ui.act.startsWith('c_'))ui.act='single';if(rec)stopRec();render();}
 function hasExit(li){const l=P().layers[li];return Object.values(l.btn).some(bd=>Object.values(bd).some(a=>a&&a.kind==='layer'&&a.layer!==li));}
+/* Sesli yazma: cihazın kendi dikte / asistanını açan hazır adımlar */
+const VOICE=[
+  ['win','Windows','Win + H: yazı kutusuna sesle yazar',()=>[{t:'key',k:'MetaLeft',a:'down',after:20},{t:'key',k:'KeyH',a:'press',after:40},{t:'key',k:'MetaLeft',a:'up',after:0}]],
+  ['android','Android tablet / telefon','Google Asistan açılır; "… yaz" diyebilirsin',()=>[{t:'media',m:'voice',a:'press',after:0}]],
+  ['tv','Android TV / TV kutusu','Sesli arama açılır',()=>[{t:'media',m:'search',a:'press',after:0}]],
+  ['mac','Mac','Ctrl iki kez (Mac ayarlarında dikte kısayolu "Ctrl iki kez" olmalı)',()=>[{t:'key',k:'ControlLeft',a:'press',after:120},{t:'key',k:'ControlLeft',a:'press',after:0}]],
+  ['cros','Chromebook','Arama + D',()=>[{t:'key',k:'MetaLeft',a:'down',after:20},{t:'key',k:'KeyD',a:'press',after:40},{t:'key',k:'MetaLeft',a:'up',after:0}]],
+];
+function voicePreset(){
+  const d=document.createElement('div');d.className='sheet open';d.style.zIndex=25;
+  d.innerHTML=`<div class="in" style="max-width:420px"><h2 style="margin:0 0 6px">🎤 Sesli yazma</h2><p class="hint" style="margin:0 0 8px">Tuşa basınca hangi cihazın sesli yazması açılsın?</p>
+    <div class="slist">${VOICE.map(([k,n,dsc])=>`<button data-k="${k}"><span>🎤</span>${n}<small>${dsc}</small></button>`).join('')}</div>
+    <div class="sbtns"><button class="btn" data-k="">Vazgeç</button></div></div>`;
+  document.body.appendChild(d);
+  d.onclick=e=>{const b=e.target.closest('[data-k]');if(!b&&e.target!==d)return;d.remove();const v=b&&VOICE.find(x=>x[0]===b.dataset.k);if(!v)return;
+    const a=curA();a.steps=v[3]();a.mode=a.steps.length>1?'macro':'normal';render();toast('Sesli yazma eklendi ('+v[1]+')');};
+}
 function add(t){
   const st=curA().steps,g=P().gapMs;
   if(st.length&&!st[st.length-1].after)st[st.length-1].after=g;
   st.push(newStep(t,g));
   render();
 }
-function newStep(t,after){return t==='key'?{t,k:'KeyZ',a:'press',after}:t==='mouse'?{t,b:'left',a:'press',after}:{t,p:'A',a:'press',after};}
+function newStep(t,after){return t==='key'?{t,k:'KeyZ',a:'press',after}:t==='mouse'?{t,b:'left',a:'press',after}:t==='media'?{t,m:'voice',a:'press',after}:{t,p:'A',a:'press',after};}
 function setType(i,t){const s=curA().steps;s[i]=Object.assign(newStep(t,s[i].after),{a:s[i].a||'press'});render();}
 function rm(i){curA().steps.splice(i,1);render();}
 function mv(i,d){const s=curA().steps,j=i+d;if(j<0||j>=s.length)return;[s[i],s[j]]=[s[j],s[i]];render();}

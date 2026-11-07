@@ -16,7 +16,7 @@
  *       tetik: 0 tek, 1 çift, 2 uzun, 3 basma anı, 4 bırakma, 5 birlikte (diğer = öbür tuş)
  *       tür: 0 tuş dizisi, 1 katman değiştir   tekrar: 0 normal, 1 turbo, 2 toggle, 3 makro (bir kez)
  *       nasıl: 0 basılıyken, 1 bas aç/bas kapat
- *     her adım 5 bayt: tip(0 klavye,1 fare,2 pad) kod hareket(0 bas-bırak,1 basılı tut,2 bırak) sonra_ms(u16)
+ *     her adım 5 bayt: tip(0 klavye,1 fare,2 pad,3 medya) kod hareket(0 bas-bırak,1 basılı tut,2 bırak) sonra_ms(u16)
  */
 #pragma once
 #include <stdint.h>
@@ -31,6 +31,7 @@ struct out_rep {
 	uint8_t kb[8];
 	uint8_t ms[4];
 	uint8_t g[9];
+	uint8_t cc[2]; /* medya tuşu (Consumer usage, küçük uçlu) */
 };
 
 enum eng_mode { E_PAD, E_MAP, E_LEGACY };
