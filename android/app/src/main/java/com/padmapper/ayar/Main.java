@@ -415,6 +415,20 @@ public class Main extends Activity {
             }, "pm-flash").start();
         }
 
+        /* Sesli yazma için erişilebilirlik izni açık mı */
+        @JavascriptInterface public boolean accessOn() {
+            String s = android.provider.Settings.Secure.getString(getContentResolver(), android.provider.Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES);
+            return s != null && s.contains(getPackageName() + "/");
+        }
+
+        @JavascriptInterface public void openAccess() {
+            Intent i = new Intent(android.provider.Settings.ACTION_ACCESSIBILITY_SETTINGS);
+            i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            runOnUiThread(() -> startActivity(i));
+        }
+
+        @JavascriptInterface public int sdk() { return Build.VERSION.SDK_INT; }
+
         @JavascriptInterface public String version() {
             try { return getPackageManager().getPackageInfo(getPackageName(), 0).versionName; } catch (Exception e) { return "?"; }
         }

@@ -24,6 +24,16 @@
                 android:name="android.hardware.usb.action.USB_DEVICE_ATTACHED"
                 android:resource="@xml/device_filter" />
         </activity>
+        <service
+            android:name=".PmAccess"
+            android:label="@string/access_name"
+            android:exported="false"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data android:name="android.accessibilityservice" android:resource="@xml/pm_access" />
+        </service>
         <provider
             android:name=".Share"
             android:authorities="com.padmapper.ayar.share"

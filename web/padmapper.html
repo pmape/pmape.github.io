@@ -212,7 +212,7 @@ const PM = (() => {
     Enter: 40, Escape: 41, Backspace: 42, Tab: 43, Space: 44, Minus: 45, Equal: 46, BracketLeft: 47,
     BracketRight: 48, Backslash: 49, Semicolon: 51, Quote: 52, Backquote: 53, Comma: 54, Period: 55,
     Slash: 56, CapsLock: 57, Insert: 73, Home: 74, PageUp: 75, Delete: 76, End: 77, PageDown: 78,
-    ArrowRight: 79, ArrowLeft: 80, ArrowDown: 81, ArrowUp: 82, IntlBackslash: 100,
+    ArrowRight: 79, ArrowLeft: 80, ArrowDown: 81, ArrowUp: 82, IntlBackslash: 100, PrintScreen: 70, ScrollLock: 71, Pause: 72,
     ControlLeft: 0xe0, ShiftLeft: 0xe1, AltLeft: 0xe2, MetaLeft: 0xe3,
     ControlRight: 0xe4, ShiftRight: 0xe5, AltRight: 0xe6,
   });
@@ -570,6 +570,7 @@ const KEYS=[];
 for(let i=1;i<=12;i++)KEYS.push(['F'+i,'F'+i]);
 [['Space','Boşluk'],['Enter','Enter'],['Escape','Esc'],['Tab','Tab'],['Backspace','Geri sil'],['ShiftLeft','Sol Shift'],['ControlLeft','Sol Ctrl'],['AltLeft','Sol Alt'],['ShiftRight','Sağ Shift'],['ControlRight','Sağ Ctrl'],['AltRight','AltGr'],['MetaLeft','Win / Meta'],['CapsLock','Caps Lock'],['ArrowUp','↑'],['ArrowDown','↓'],['ArrowLeft','←'],['ArrowRight','→'],['Insert','Insert'],['Delete','Delete'],['Home','Home'],['End','End'],['PageUp','Page Up'],['PageDown','Page Down'],['Minus','-'],['Equal','='],['BracketLeft','['],['BracketRight',']'],['Semicolon',';'],['Quote',"'"],['Backquote','`'],['Backslash','\\'],['Comma',','],['Period','.'],['Slash','/'],['IntlBackslash','< >']].forEach(k=>KEYS.push(k));
 for(let i=0;i<=9;i++)KEYS.push(['Numpad'+i,'Num '+i]);
+KEYS.push(['PrintScreen','Print Screen'],['ScrollLock','Scroll Lock'],['Pause','Pause']);
 const KEY_LABEL=Object.fromEntries(KEYS);
 /* Türkçe Q düzeninde aynı fiziksel tuşun yazdığı karakter */
 const TRQ={KeyI:'I',Quote:'İ',Semicolon:'Ş',BracketLeft:'Ğ',BracketRight:'Ü',Comma:'Ö',Period:'Ç',Slash:'.',Backslash:',',Minus:'*',Equal:'-',Backquote:'"',IntlBackslash:'<'};
@@ -860,7 +861,8 @@ function hasExit(li){const l=P().layers[li];return Object.values(l.btn).some(bd=
 /* Sesli yazma: cihazın kendi dikte / asistanını açan hazır adımlar */
 const VOICE=[
   ['win','Windows','Win + H: yazı kutusuna sesle yazar',()=>[{t:'key',k:'MetaLeft',a:'down',after:20},{t:'key',k:'KeyH',a:'press',after:40},{t:'key',k:'MetaLeft',a:'up',after:0}]],
-  ['android','Android tablet / telefon','Google Asistan açılır; "… yaz" diyebilirsin',()=>[{t:'media',m:'voice',a:'press',after:0}]],
+  ['gvoice','Android: Google Sesle Yazma klavyesi','Yazı kutusunda klavye sesli yazmaya geçer; tekrar basınca eski klavyene döner. Tablette PadMapper uygulaması ve bir kerelik izin gerekir.',()=>[{t:'key',k:'Pause',a:'press',after:0}]],
+  ['android','Android: Google Asistan','Asistan açılır; "… yaz" diyebilirsin',()=>[{t:'media',m:'voice',a:'press',after:0}]],
   ['tv','Android TV / TV kutusu','Sesli arama açılır',()=>[{t:'media',m:'search',a:'press',after:0}]],
   ['mac','Mac','Ctrl iki kez (Mac ayarlarında dikte kısayolu "Ctrl iki kez" olmalı)',()=>[{t:'key',k:'ControlLeft',a:'press',after:120},{t:'key',k:'ControlLeft',a:'press',after:0}]],
   ['cros','Chromebook','Arama + D',()=>[{t:'key',k:'MetaLeft',a:'down',after:20},{t:'key',k:'KeyD',a:'press',after:40},{t:'key',k:'MetaLeft',a:'up',after:0}]],
@@ -872,7 +874,15 @@ function voicePreset(){
     <div class="sbtns"><button class="btn" data-k="">Vazgeç</button></div></div>`;
   document.body.appendChild(d);
   d.onclick=e=>{const b=e.target.closest('[data-k]');if(!b&&e.target!==d)return;d.remove();const v=b&&VOICE.find(x=>x[0]===b.dataset.k);if(!v)return;
-    const a=curA();a.steps=v[3]();a.mode=a.steps.length>1?'macro':'normal';render();toast('Sesli yazma eklendi ('+v[1]+')');};
+    const a=curA();a.steps=v[3]();a.mode=a.steps.length>1?'macro':'normal';render();toast('Sesli yazma eklendi ('+v[1]+')');
+    if(v[0]==='gvoice')setTimeout(gvoiceSetup,400);};
+}
+/* Google Sesle Yazma için tabletteki izin */
+function gvoiceSetup(){
+  if(!PM.native){ask('Bu özellik tabletteki PadMapper uygulamasıyla çalışır. Tablette uygulamayı açıp oradan izni ver.',null);return;}
+  if(PMNative.sdk&&PMNative.sdk()<33){ask('Bu tablette Android 13 veya üstü gerekli. Onun yerine "Android: Google Asistan" seçeneğini kullanabilirsin.',null);return;}
+  if(PMNative.accessOn&&PMNative.accessOn()){toast('Sesli yazma izni açık ✓');return;}
+  ask('Bir kerelik izin: açılan ekranda "Yüklü uygulamalar" (ya da İndirilen uygulamalar) → "PadMapper sesli yazma" → Aç. Uygulama sadece sesli yazma tuşuna bakar. Ayrıca Ayarlar → Diller ve giriş → Fiziksel klavye → "Ekran klavyesini göster" açık olmalı, yoksa Android klavyeyi gizler.',null).then(ok=>{if(ok)PMNative.openAccess();});
 }
 function add(t){
   const st=curA().steps,g=P().gapMs;
@@ -930,7 +940,8 @@ function renderSheet(){
       <div class="scard"><span class="dot ${!c?'':cardSynced()?'on':'warn'}"></span><div style="flex:1;min-width:0"><b>${!c?'Kart bağlı değil':cardSynced()?'Karttaki ayar güncel':'Karttaki ayar farklı'}</b><div class="hint">${c?'Yazılım '+esc(i.fw||'?'):'USB ile tak'}</div></div>
         <button class="btn" onclick="cardBtn()">${c?'Kes':'Bağlan'}</button></div>
       <div class="sbtns"><button class="btn pri" ${c?'':'disabled'} onclick="writeCard()">Karta yaz</button><button class="btn" ${c&&(i.cfg||i.jlen)?'':'disabled'} onclick="takeFromCard(false)">Karttakileri al</button></div>`)+
-      sgroup('Tuşlar nereye',routeHtml())+sgroup('Güncelleme',updHtml());
+      sgroup('Tuşlar nereye',routeHtml())+sgroup('Güncelleme',updHtml())+
+      (PM.native&&PMNative.accessOn?sgroup('Bu tablet',srow('🎤 Google Sesle Yazma izni',PMNative.accessOn()?'<span class="ok">Açık ✓</span>':'<button class="btn" onclick="gvoiceSetup()">Aç</button>','Pad\'deki sesli yazma tuşu klavyeyi Google Sesle Yazma\'ya çevirebilsin diye. Uygulama sadece o tuşa bakar.')):'');
   }else if(stab==='pad'){
     body=sgroup('Kontrolcüler',ctrlListHtml()+`<div class="sbtns"><button class="btn pri" onclick="openScan()" ${PM.connected()?'':'disabled'}>🔍 Cihaz ara</button><button class="btn" onclick="openLearn()" ${PM.connected()&&cardCtl.cur?'':'disabled'}>🎯 Tuşları tanıt</button></div>`)+
     sgroup('Eşleme',
