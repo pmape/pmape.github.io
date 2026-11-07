@@ -945,6 +945,7 @@ function renderSheet(){
   }else if(stab==='pad'){
     body=sgroup('Kontrolcüler',ctrlListHtml()+`<div class="sbtns"><button class="btn pri" onclick="openScan()" ${PM.connected()?'':'disabled'}>🔍 Cihaz ara</button><button class="btn" onclick="openLearn()" ${PM.connected()&&cardCtl.cur?'':'disabled'}>🎯 Tuşları tanıt</button></div>`)+
     sgroup('Eşleme',
+      (PM.connected()&&PM.link.info?srow('Şu an',`<div class="seg sm"><button class="${PM.link.info.mapping!==0?'on':''}" onclick="PM.sendLine('map 1')">Açık</button><button class="${PM.link.info.mapping===0?'on':''}" onclick="PM.sendLine('map 0')">Kapalı (gamepad)</button></div>`,'Pad\'den aç/kapat tuşlarıyla değiştirdiğinde burası da değişir.'):'')+
       srow('Açılışta',`<div class="seg sm"><button class="${d.startMode==='map'?'on':''}" onclick="S.device.startMode='map';save();renderSheet()">Açık</button><button class="${d.startMode==='pad'?'on':''}" onclick="S.device.startMode='pad';save();renderSheet()">Gamepad</button></div>`,'Eşleme kapalıyken pad tablete normal gamepad olarak gider. Işık: yeşil açık, mavi gamepad.')+
       srow('Aç / kapat tuşları',`<select onchange="S.device.comboA=this.value;save();renderSheet()">${bo(d.comboA)}</select>+<select onchange="S.device.comboB=this.value;save();renderSheet()">${bo(d.comboB)}</select>`)+
       srow('Basılı tutma',`<input type="number" min="300" max="5000" step="100" value="${d.holdMs}" onchange="S.device.holdMs=Math.max(300,clamp(this.value));save();renderSheet()"><span class="hint">ms</span>`)+
@@ -1203,7 +1204,7 @@ function renderCard(){
   const d=document.querySelector('#card .dot'),t=document.getElementById('cardTxt');if(!d)return;
   const c=PM.connected(),s=c&&cardSynced();
   d.className='dot '+(!c?'':card.busy?'warn':s?'on':'warn');
-  t.textContent=(!c?'Kart':card.busy?'Yazılıyor…':s?'Kart ✓':'Kart ●')+(c&&cardBT&&cardBT.route===1?(cardBT.host?' · 📶 '+tName(cardBT.host):' · 📶 aranıyor'):'');
+  t.textContent=(!c?'Kart':card.busy?'Yazılıyor…':s?'Kart ✓':'Kart ●')+(c&&PM.link.info&&PM.link.info.mapping===0?' · 🎮 eşleme kapalı':'')+(c&&cardBT&&cardBT.route===1?(cardBT.host?' · 📶 '+tName(cardBT.host):' · 📶 aranıyor'):'');
   document.getElementById('card').title=cardLine();
 }
 async function cardBtn(known){
@@ -1213,7 +1214,7 @@ async function cardBtn(known){
   try{
     PM.link.onLine=ev=>{
       if(ev.ev==='prof'&&ev.cur<S.profiles.length&&ev.cur!==S.cur){S.cur=ev.cur;ui.layer=0;render();toast('Profil: '+P().name);}
-      if(ev.ev==='mode')toast(ev.mapping?'Eşleme açık':'Normal gamepad');
+      if(ev.ev==='mode'){if(PM.link.info)PM.link.info.mapping=ev.mapping;toast(ev.mapping?'Eşleme açık':'Eşleme kapalı · normal gamepad');renderCard();if(document.getElementById('sheet').classList.contains('open'))renderSheet();}
       if(ev.ev==='hello'){renderCard();setTimeout(cardProfilesCheck,300);if(!updating&&cardNeedsUpdate()&&!window._updAsked){window._updAsked=true;setTimeout(()=>ask('Kart için yeni yazılım var ('+ev.fw+' → '+bundledFw()+'). Şimdi kurulsun mu?',null).then(ok=>{if(ok)updCard(true);}),1500);}PM.sendLine('ctrls').catch(()=>{});setTimeout(()=>PM.sendLine('targets').catch(()=>{}),150);if(document.getElementById('sheet').classList.contains('open'))renderSheet();}
       if(ev.ev==='targets'){cardBT=ev;renderCard();if(document.getElementById('sheet').classList.contains('open'))renderSheet();}
       if(ev.ev==='ble'){if(ev.paired)toast('Yeni cihaz eşleşti');if(ev.host&&ev.host!=='connecting')toast('Bluetooth hedefe bağlandı: '+tName(ev.host));PM.sendLine('targets').catch(()=>{});}
