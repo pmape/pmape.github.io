@@ -123,9 +123,9 @@ static void reply(const char *s) { tx_put(s, strlen(s), false); }
 
 /* ---------- GATT ---------- */
 
-static const struct bt_uuid_128 svc_uuid = BT_UUID_INIT_128(PM_CFG_UUID_BYTES);
-static const struct bt_uuid_128 rx_uuid = BT_UUID_INIT_128(BT_UUID_128_ENCODE(0x7a1e0002, 0x3c4b, 0x4a8e, 0x9c1d, 0x50ad2840f00d));
-static const struct bt_uuid_128 tx_uuid = BT_UUID_INIT_128(BT_UUID_128_ENCODE(0x7a1e0003, 0x3c4b, 0x4a8e, 0x9c1d, 0x50ad2840f00d));
+static struct bt_uuid_128 svc_uuid = BT_UUID_INIT_128(PM_CFG_UUID_BYTES);
+static struct bt_uuid_128 rx_uuid = BT_UUID_INIT_128(BT_UUID_128_ENCODE(0x7a1e0002, 0x3c4b, 0x4a8e, 0x9c1d, 0x50ad2840f00d));
+static struct bt_uuid_128 tx_uuid = BT_UUID_INIT_128(BT_UUID_128_ENCODE(0x7a1e0003, 0x3c4b, 0x4a8e, 0x9c1d, 0x50ad2840f00d));
 
 K_MSGQ_DEFINE(lines, 520, 4, 4);
 static char lb[520];
@@ -163,10 +163,12 @@ static void on_line(struct bt_conn *conn, char *l)
 		char hx[65];
 		bool ok = false;
 
+		for (char *q = l + 5; *q; q++) if (*q >= 'A' && *q <= 'F') *q += 'a' - 'A';
+
 		for (int k = 0; k < nkey && nonce[0] && !ok; k++) {
 			pm_hmac_sha256(keys[k], 32, (const uint8_t *)nonce, 32, mac);
 			for (int i = 0; i < 32; i++) sprintf(hx + 2 * i, "%02x", mac[i]);
-			ok = strlen(l + 5) == 64 && !strncasecmp(hx, l + 5, 64);
+			ok = strlen(l + 5) == 64 && !strncmp(hx, l + 5, 64);
 		}
 		nonce[0] = 0; /* her sayı tek kullanımlık */
 		if (!ok) {

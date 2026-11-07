@@ -334,6 +334,8 @@ const PM = (() => {
     const r = await new Response(new Blob([b.slice(1)]).stream().pipeThrough(new DecompressionStream('gzip'))).arrayBuffer();
     return JSON.parse(new TextDecoder().decode(r));
   }
+  /* Bluetooth daha yavaş: bekleme süresi uzun */
+  const TO = () => link.via === 'ble' ? 25000 : 8000;
   const unhex = s => Uint8Array.from((s.match(/../g) || []).map(x => parseInt(x, 16)));
 
   function collect(cmd, ev, ms) {
@@ -346,14 +348,14 @@ const PM = (() => {
   }
   async function readCard() {
     const info = link.info || {};
-    if (info.jlen) { try { return { state: await unpack(await collect('jr', 'jdata', 8000)), full: true }; } catch (e) { } }
-    if (info.cfg) return { state: decompile(await collect('cr', 'cfgdata', 8000)), full: false };
+    if (info.jlen) { try { return { state: await unpack(await collect('jr', 'jdata', TO())), full: true }; } catch (e) { } }
+    if (info.cfg) return { state: decompile(await collect('cr', 'cfgdata', TO())), full: false };
     return null;
   }
   async function writeJson(state) {
     const b = await pack(state);
     if (b.length > 8192) return false;
-    const w = waitEv('json', 8000);
+    const w = waitEv('json', TO());
     await sendLine('jb ' + b.length);
     for (let i = 0; i < b.length; i += 200) { await sendLine('jd ' + hex(b.slice(i, i + 200))); await new Promise(r => setTimeout(r, 15)); }
     await sendLine('je ' + crc32(b).toString(16).padStart(8, '0'));
@@ -367,7 +369,7 @@ const PM = (() => {
   const hex = a => Array.from(a, x => x.toString(16).padStart(2, '0')).join('');
 
   /* ---------- bağlantı ---------- */
-  const link = { kind: null, onLine: () => {}, onClose: () => {}, info: null };
+  const link = { kind: null, via: '', onLine: () => {}, onClose: () => {}, onStatus: () => {}, info: null };
   let buf = '', writer = null, usb = null, closing = false;
   const OLD = 'Kart komutlara cevap vermiyor. Karttaki yazılım eski olabilir: 0.3.0 padmapper.uf2 dosyasını yükle.';
   const enc = new TextEncoder(), dec = new TextDecoder();
@@ -424,20 +426,55 @@ const PM = (() => {
 
   /* Android uygulamasının içinde: karta uygulama bağlanır */
   const native = typeof PMNative !== 'undefined';
-  let permWait = null, plugCb = null;
+  let permWait = null, plugCb = null, blePerm = null, bleWait = null;
+  const BLE_ERR = {
+    notfound: 'Kart Bluetooth\'ta bulunamadı. Kart açık mı (güç var mı)? Kart USB ile bir uygulamaya bağlıysa Bluetooth ayarı kapalıdır.',
+    key: 'Bu telefon karta tanıtılmamış. Kartı bir kez USB ile bu telefona tak, uygulama kendini tanıtır.',
+    nokey: 'Bu telefon karta tanıtılmamış. Kartı bir kez USB ile bu telefona tak.',
+    nosvc: 'Karttaki yazılım eski: kablosuz ayar için kartı USB ile tak ve güncelle.',
+    timeout: 'Karta Bluetooth ile bağlanılamadı (süre doldu). Tekrar dene.',
+  };
   window.PM_native = {
     feed: t => feed(t),
-    closed: () => { const was = link.kind === 'native'; link.kind = null; link.info = null; if (was && !closing) link.onClose(); },
+    closed: () => { const was = link.kind === 'native'; link.kind = null; link.via = ''; link.info = null; if (was && !closing) link.onClose(); },
     perm: ok => { if (permWait) { const w = permWait; permWait = null; ok ? w.res() : w.rej(new Error('Karta izin verilmedi')); } },
     plug: () => { if (plugCb) plugCb({ native: true }); },
+    bleperm: ok => { if (blePerm) { const w = blePerm; blePerm = null; ok ? w.res() : w.rej(new Error('Bluetooth izni verilmedi')); } },
+    ble: (st, msg) => {
+      link.onStatus(st, msg);
+      if (!bleWait) return;
+      const w = bleWait;
+      if (st === 'ok') { bleWait = null; w.res(); }
+      else if (st === 'fail' || st === 'closed') {
+        bleWait = null;
+        w.rej(new Error(BLE_ERR[msg] || (msg && msg.startsWith('drop') ? BLE_ERR.timeout : 'Bluetooth bağlantısı kurulamadı (' + msg + ')')));
+      }
+    },
   };
-  async function openNative() {
+  const bleOk = () => native && typeof PMNative.bleOpen === 'function' && PMNative.bleSupported();
+  async function openBle() {
+    let r = PMNative.bleOpen();
+    if (r === 'perm') {
+      await new Promise((res, rej) => { blePerm = { res, rej }; setTimeout(() => { if (blePerm) { blePerm = null; rej(new Error('İzin beklenirken süre doldu')); } }, 60000); });
+      r = PMNative.bleOpen();
+    }
+    if (r === 'off') throw new Error('Telefonun Bluetooth\'u kapalı. Açıp tekrar dene.');
+    if (r !== 'ok') throw new Error('Bluetooth kullanılamıyor (' + r + ')');
+    await new Promise((res, rej) => { bleWait = { res, rej }; setTimeout(() => { if (bleWait === null) return; bleWait = null; rej(new Error(BLE_ERR.timeout)); }, 40000); });
+    link.kind = 'native'; link.via = 'ble';
+  }
+  async function openNative(known) {
+    /* kart USB'de değilse (ya da Bluetooth istendiyse) Bluetooth ile bağlan */
+    if ((known && known.ble) || !PMNative.present()) {
+      if (bleOk()) return openBle();
+      throw new Error('Kart takılı değil');
+    }
     let r = PMNative.open();
     if (r === 'perm') {
       await new Promise((res, rej) => { permWait = { res, rej }; setTimeout(() => { if (permWait) { permWait = null; rej(new Error('İzin beklenirken süre doldu')); } }, 60000); });
       r = PMNative.open();
     }
-    if (r === 'ok') { link.kind = 'native'; return; }
+    if (r === 'ok') { link.kind = 'native'; link.via = 'usb'; return; }
     throw new Error(r === 'none' ? 'Kart takılı değil' : 'Karta bağlanılamadı (' + r + ')');
   }
 
@@ -446,7 +483,7 @@ const PM = (() => {
 
   /* Daha önce izin verilmiş kart takılıysa sormadan bağlan */
   async function findKnown() {
-    if (native) return PMNative.present() ? { native: true } : null;
+    if (native) return PMNative.present() ? { native: true } : bleOk() && localStorage.getItem('pm_ble') === '1' ? { ble: true, auto: true } : null;
     if (android && 'usb' in navigator) {
       const d = (await navigator.usb.getDevices()).find(isCard);
       return d ? { usb: d } : null;
@@ -460,7 +497,7 @@ const PM = (() => {
 
   async function connect(known) {
     closing = false; link.info = null; buf = '';
-    if (native) await openNative();
+    if (native) await openNative(known);
     else if (known && known.usb) await openUsb(known.usb);
     else if (known && known.serial) await openSerial(known.serial);
     else
@@ -471,14 +508,18 @@ const PM = (() => {
     else throw new Error('Bu tarayıcı karta bağlanamıyor. Chrome kullan.');
     for (let i = 0; i < 3 && !link.info; i++) {
       await sendLine('hello');
-      await new Promise(r => setTimeout(r, 700));
+      await new Promise(r => setTimeout(r, link.via === 'ble' ? 1200 : 700));
+    }
+    /* USB'den bağlıyken bu telefonu karta tanıt: sonra kablosuz da bağlanabilsin */
+    if (link.info && link.via === 'usb' && PMNative.secret) {
+      try { await sendLine('secret add ' + PMNative.secret()); } catch (e) {}
     }
     return !!link.info;
   }
 
   async function sendLine(l) {
     const d = enc.encode(l + '\n');
-    if (link.kind === 'native') { if (!PMNative.write(l + '\n')) throw new Error('Karta yazılamadı'); }
+    if (link.kind === 'native') { if (!PMNative.write(l + '\n')) throw new Error('Karta yazılamadı'); if (link.via === 'ble') await new Promise(r => setTimeout(r, 4)); }
     else if (link.kind === 'serial') await writer.write(d);
     else if (link.kind === 'usb') for (let i = 0; i < d.length; i += 64) await usb.dev.transferOut(usb.epOut, d.slice(i, i + 64));
     else throw new Error('Kart bağlı değil');
@@ -486,12 +527,13 @@ const PM = (() => {
 
   async function disconnect() {
     closing = true;
+    if (bleWait) { const w = bleWait; bleWait = null; w.rej(new Error('Vazgeçildi')); try { PMNative.close(); } catch (e) {} }
     try {
       if (link.kind === 'native') PMNative.close();
       else if (link.kind === 'serial') { try { await link.reader.cancel(); } catch (e) {} writer.releaseLock(); await link.port.close(); }
       else if (link.kind === 'usb') await usb.dev.close();
     } catch (e) {}
-    link.kind = null; link.info = null;
+    link.kind = null; link.via = ''; link.info = null;
   }
 
   function waitEv(name, ms) {
@@ -509,7 +551,7 @@ const PM = (() => {
       if (!link.info) throw new Error(OLD);
     }
     const blob = compile(S);
-    const w = waitEv('cfg', 8000);
+    const w = waitEv('cfg', TO());
     await sendLine('cb ' + blob.length);
     for (let i = 0; i < blob.length; i += 200) { await sendLine('cd ' + hex(blob.slice(i, i + 200))); await new Promise(r => setTimeout(r, 15)); }
     await sendLine('ce ' + crc32(blob).toString(16).padStart(8, '0'));
@@ -527,10 +569,9 @@ const PM = (() => {
   }
 
   return { decompile, readCard, writeJson, findKnown, onPlug, compile, crc32, hex, link, connect, disconnect, sendLine, writeConfig,
-    connected: () => !!link.kind, OLD, supported: () => native || 'serial' in navigator || 'usb' in navigator, native };
+    connected: () => !!link.kind, OLD, bleOk, supported: () => native || 'serial' in navigator || 'usb' in navigator, native };
 })();
 if (typeof module !== 'undefined') module.exports = PM;
-
 </script>
 <script>
 /* ---------- Sabitler ---------- */
@@ -937,8 +978,9 @@ function renderSheet(){
   if(stab==='kart'){
     const c=PM.connected(),i=PM.link.info||{};
     body=sgroup('',`
-      <div class="scard"><span class="dot ${!c?'':cardSynced()?'on':'warn'}"></span><div style="flex:1;min-width:0"><b>${!c?'Kart bağlı değil':cardSynced()?'Karttaki ayar güncel':'Karttaki ayar farklı'}</b><div class="hint">${c?'Yazılım '+esc(i.fw||'?'):'USB ile tak'}</div></div>
-        <button class="btn" onclick="cardBtn()">${c?'Kes':'Bağlan'}</button></div>
+      <div class="scard"><span class="dot ${!c?'':cardSynced()?'on':'warn'}"></span><div style="flex:1;min-width:0"><b>${!c?'Kart bağlı değil':cardSynced()?'Karttaki ayar güncel':'Karttaki ayar farklı'}</b><div class="hint">${c?(PM.link.via==='ble'?'📶 Bluetooth · ':PM.link.via==='usb'?'🔌 USB · ':'')+'Yazılım '+esc(i.fw||'?'):connMsg||(PM.bleOk&&PM.bleOk()?'USB ile tak ya da Bluetooth ile bağlan':'USB ile tak')}</div></div>
+        <button class="btn" onclick="cardBtn()">${c?'Kes':connMsg?'Vazgeç':'Bağlan'}</button></div>
+      ${!c&&!connMsg&&PM.bleOk&&PM.bleOk()?`<div class="sbtns"><button class="btn" onclick="cardBtn({ble:true})">📶 Bluetooth ile bağlan</button></div><p class="hint" style="margin:6px 0 0">Kart powerbank'a ya da başka bir cihaza takılıyken telefondan ayar yapmak için. Telefonun karta bir kez USB ile bağlanmış olması gerekir.</p>`:''}
       <div class="sbtns"><button class="btn pri" ${c?'':'disabled'} onclick="writeCard()">Karta yaz</button><button class="btn" ${c&&(i.cfg||i.jlen)?'':'disabled'} onclick="takeFromCard(false)">Karttakileri al</button></div>`)+
       sgroup('Tuşlar nereye',routeHtml())+sgroup('Güncelleme',updHtml())+
       (PM.native&&PMNative.accessOn?sgroup('Bu tablet',srow('🎤 Google Sesle Yazma izni',PMNative.accessOn()?'<span class="ok">Açık ✓</span>':'<button class="btn" onclick="gvoiceSetup()">Aç</button>','Pad\'deki sesli yazma tuşu klavyeyi Google Sesle Yazma\'ya çevirebilsin diye. Uygulama sadece o tuşa bakar.')):'');
@@ -1192,6 +1234,8 @@ function render(){if(S.device.autoApply){P()._applied=snap(P());autoWrite();}ren
 /* ---------- Kart bağlantısı ---------- */
 let card={busy:false,crc:null};
 const wantCrc=()=>PM.crc32(PM.compile(S));
+let connMsg='';
+const CONN_ST={scan:'📶 Kart aranıyor…',conn:'📶 Bağlanıyor…',auth:'📶 Doğrulanıyor…'};
 function cardSynced(){return PM.connected()&&PM.link.info&&parseInt(PM.link.info.crc,16)===wantCrc();}
 function cardLine(){
   if(!PM.supported())return 'Bu tarayıcı karta bağlanamıyor. Chrome kullan.';
@@ -1204,19 +1248,26 @@ function renderCard(){
   const d=document.querySelector('#card .dot'),t=document.getElementById('cardTxt');if(!d)return;
   const c=PM.connected(),s=c&&cardSynced();
   d.className='dot '+(!c?'':card.busy?'warn':s?'on':'warn');
-  t.textContent=(!c?'Kart':card.busy?'Yazılıyor…':s?'Kart ✓':'Kart ●')+(c?(cardState?stateText():(PM.link.info&&PM.link.info.mapping===0?' · 🎮 eşleme kapalı':'')):'');
+  t.textContent=(!c?(connMsg||'Kart'):card.busy?'Yazılıyor…':s?'Kart ✓':'Kart ●')+(c?(cardState?stateText():(PM.link.info&&PM.link.info.mapping===0?' · 🎮 eşleme kapalı':'')):'');
   document.getElementById('card').title=cardLine();
 }
+const sheetOpen=()=>document.getElementById('sheet').classList.contains('open');
 async function cardBtn(known){
   if(updating)return;
-  if(PM.connected()&&known)return;
-  if(PM.connected()){await PM.disconnect();renderCard();if(document.getElementById('sheet').classList.contains('open'))renderSheet();toast('Kart bağlantısı kesildi');return;}
+  /* Bluetooth'tayken kart USB'ye takıldı: USB'ye geç (daha hızlı, güncelleme de yapılabilir) */
+  if(PM.connected()&&known&&known.native&&PM.link.via==='ble'){await PM.disconnect();}
+  else if(PM.connected()&&known)return;
+  if(connMsg&&!known){await PM.disconnect();connMsg='';renderCard();if(sheetOpen())renderSheet();return;}
+  if(PM.connected()){const wasBle=PM.link.via==='ble';await PM.disconnect();if(wasBle)localStorage.setItem('pm_ble','0');renderCard();if(sheetOpen())renderSheet();toast('Kart bağlantısı kesildi');return;}
+  if(connMsg){if(known&&known.native){await PM.disconnect();connMsg='';}else return;}
   try{
+    PM.link.onStatus=(st)=>{connMsg=CONN_ST[st]||'';renderCard();if(sheetOpen())renderSheet();};
     PM.link.onLine=ev=>{
       if(ev.ev==='prof'&&ev.cur<S.profiles.length&&ev.cur!==S.cur){S.cur=ev.cur;ui.layer=0;render();toast('Profil: '+P().name);}
       if(ev.ev==='mode'){if(PM.link.info)PM.link.info.mapping=ev.mapping;toast(ev.mapping?'Eşleme açık':'Eşleme kapalı · normal gamepad');renderCard();if(document.getElementById('sheet').classList.contains('open'))renderSheet();}
-      if(ev.ev==='hello'){renderCard();setTimeout(cardProfilesCheck,300);if(!updating&&cardNeedsUpdate()&&!window._updAsked){window._updAsked=true;setTimeout(()=>ask('Kart için yeni yazılım var ('+ev.fw+' → '+bundledFw()+'). Şimdi kurulsun mu?',null).then(ok=>{if(ok)updCard(true);}),1500);}PM.sendLine('ctrls').catch(()=>{});setTimeout(()=>PM.sendLine('targets').catch(()=>{}),150);if(document.getElementById('sheet').classList.contains('open'))renderSheet();}
+      if(ev.ev==='hello'){renderCard();setTimeout(cardProfilesCheck,300);if(!updating&&PM.link.via!=='ble'&&cardNeedsUpdate()&&!window._updAsked){window._updAsked=true;setTimeout(()=>ask('Kart için yeni yazılım var ('+ev.fw+' → '+bundledFw()+'). Şimdi kurulsun mu?',null).then(ok=>{if(ok)updCard(true);}),1500);}PM.sendLine('ctrls').catch(()=>{});setTimeout(()=>PM.sendLine('targets').catch(()=>{}),150);if(document.getElementById('sheet').classList.contains('open'))renderSheet();}
       if(ev.ev==='state')applyState(ev);
+      if(ev.ev==='secret'&&ev.new)toast('Bu telefon karta tanıtıldı: artık Bluetooth ile de bağlanabilirsin');
       if(ev.ev==='targets'){cardBT=ev;renderCard();if(document.getElementById('sheet').classList.contains('open'))renderSheet();}
       if(ev.ev==='ble'){if(ev.paired)toast('Yeni cihaz eşleşti');if(ev.host&&ev.host!=='connecting')toast('Bluetooth hedefe bağlandı: '+tName(ev.host));PM.sendLine('targets').catch(()=>{});}
       if(ev.ev==='ctrls'){cardCtl=ev;if(ev.cur&&ev.name)rememberName(ev.cur,ev.name);if(document.getElementById('sheet').classList.contains('open'))renderSheet();}
@@ -1225,14 +1276,22 @@ async function cardBtn(known){
       if(['dev','scan_end','connected'].includes(ev.ev))scanEv(ev);
       if(['ctrl','map','map_end','rep'].includes(ev.ev))learnEv(ev);
     };
-    PM.link.onClose=()=>{cardState=null;renderCard();toast('Kart bağlantısı koptu');};
-    const ok=await PM.connect(known);
-    if(!ok){toast(PM.OLD);renderCard();return;}
-    toast('Karta bağlandı · kart yazılımı '+PM.link.info.fw);
+    PM.link.onClose=()=>{const ble=lastVia==='ble';cardState=null;connMsg='';renderCard();if(sheetOpen())renderSheet();
+      toast(ble?'Bluetooth bağlantısı koptu':'Kart bağlantısı koptu');
+      /* Bluetooth koptuysa bir kez sessizce yeniden dene */
+      if(ble&&!updating)setTimeout(()=>{if(!PM.connected()&&!connMsg)cardBtn({ble:true,auto:true});},2500);};
+    let ok;
+    try{ok=await PM.connect(known);}finally{connMsg='';}
+    lastVia=PM.link.via;
+    if(!ok){if(PM.connected())toast(PM.OLD);renderCard();return;}
+    if(PM.link.via==='ble')localStorage.setItem('pm_ble','1');
+    toast((PM.link.via==='ble'?'📶 Bluetooth ile karta bağlandı':'Karta bağlandı')+' · kart yazılımı '+PM.link.info.fw);
+    if(sheetOpen())renderSheet();
     setTimeout(()=>{renderCard();if(PM.link.info&&!cardSynced())toast('Karttaki ayar farklı. "Karta yaz"a bas');},600);
-  }catch(e){if(e&&e.name!=='NotFoundError'&&!known)toast(e.message||'Bağlanılamadı');}
-  renderCard();
+  }catch(e){if(e&&e.name!=='NotFoundError'&&(!known||!known.auto)&&e.message!=='Vazgeçildi')toast(e.message||'Bağlanılamadı');}
+  connMsg='';renderCard();if(sheetOpen())renderSheet();
 }
+let lastVia='';
 async function writeCard(){
   if(updating)return;
   if(!PM.connected()){toast('Önce karta bağlan');return;}
@@ -1302,8 +1361,8 @@ function updHtml(){
   const i=PM.link.info||{},b=bundledFw(),need=cardNeedsUpdate();
   return srow('Uygulama <span class="hint">'+esc(PMNative.version())+'</span>','<button class="btn" onclick="updApp()">Güncelle</button>','Tarayıcında GitHub\'a giriş yapmış olman gerekir. İndirme bitince aç → Güncelle. Profillerin korunur. Yeni uygulama yeni kart yazılımını da içinde getirir.')+
     srow('Kart yazılımı <span class="hint">'+(PM.connected()?'kartta '+esc(i.fw||'?')+' · ':'')+'uygulamada '+esc(b||'?')+'</span>',
-      `<button class="btn ${need?'pri':''}" ${PM.connected()&&b&&PM.link.kind==='native'?'':'disabled'} onclick="updCard()">${need?'Yeni sürümü kur':'Yeniden kur'}</button>`,
-      'Kart yükleme moduna geçer, uygulama yazılımı karta yazar, kart yeniden başlar. Ayarların ve profillerin kartta kalır. Yarıda kesilirse kart bozulmaz; tekrar denersin.');
+      `<button class="btn ${need?'pri':''}" ${PM.connected()&&b&&PM.link.kind==='native'&&PM.link.via!=='ble'?'':'disabled'} onclick="updCard()">${need?'Yeni sürümü kur':'Yeniden kur'}</button>`,
+      (PM.link.via==='ble'?'<b>Kart yazılımı sadece USB ile kurulur:</b> kartı telefona tak. ':'')+'Kart yükleme moduna geçer, uygulama yazılımı karta yazar, kart yeniden başlar. Ayarların ve profillerin kartta kalır. Yarıda kesilirse kart bozulmaz; tekrar denersin.');
 }
 /* tam ekran güncelleme penceresi: bu sırada başka hiçbir şey çalışmaz */
 let updating=false;

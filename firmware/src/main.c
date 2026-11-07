@@ -390,7 +390,6 @@ static int scan_init(void)
 		.conn_param = PAD_CONN_PARAM,
 		.connect_if_match = 0,
 	};
-	int err;
 
 	bt_scan_init(&param);
 	bt_scan_cb_register(&scan_cb);

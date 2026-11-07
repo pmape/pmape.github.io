@@ -15,6 +15,8 @@ import android.hardware.usb.UsbManager;
 import android.os.Build;
 import android.net.Uri;
 import android.os.Bundle;
+import android.Manifest;
+import android.content.pm.PackageManager;
 import android.webkit.JavascriptInterface;
 import android.webkit.WebChromeClient;
 import android.webkit.WebSettings;
@@ -48,6 +50,59 @@ public class Main extends Activity {
     private static final int PICK = 7;
     private static final int DRIVE = 8;
     private volatile boolean flashing;
+    private BleLink ble;
+    private static final int BLE_PERM = 9;
+
+    /* Bu telefona ait gizli anahtar: karta USB ile bir kez tanıtılır, sonra Bluetooth'tan bağlanırken kullanılır */
+    private String secretHex() {
+        android.content.SharedPreferences sp = getSharedPreferences("pm", MODE_PRIVATE);
+        String s = sp.getString("secret", null);
+        if (s == null || s.length() != 64) {
+            byte[] r = new byte[32];
+            new java.security.SecureRandom().nextBytes(r);
+            StringBuilder b = new StringBuilder();
+            for (byte x : r) b.append(String.format("%02x", x & 255));
+            s = b.toString();
+            sp.edit().putString("secret", s).apply();
+        }
+        return s;
+    }
+
+    private static byte[] unhex(String s) {
+        byte[] r = new byte[s.length() / 2];
+        for (int i = 0; i < r.length; i++) r[i] = (byte) Integer.parseInt(s.substring(2 * i, 2 * i + 2), 16);
+        return r;
+    }
+
+    private String[] blePerms() {
+        if (Build.VERSION.SDK_INT >= 31) return new String[] { Manifest.permission.BLUETOOTH_SCAN, Manifest.permission.BLUETOOTH_CONNECT };
+        return new String[] { Manifest.permission.ACCESS_FINE_LOCATION };
+    }
+
+    private boolean hasBlePerms() {
+        if (Build.VERSION.SDK_INT < 23) return true;
+        for (String p : blePerms()) if (checkSelfPermission(p) != PackageManager.PERMISSION_GRANTED) return false;
+        return true;
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int req, String[] perms, int[] res) {
+        if (req != BLE_PERM) return;
+        boolean ok = res.length > 0;
+        for (int r : res) ok &= r == PackageManager.PERMISSION_GRANTED;
+        js("window.PM_native&&PM_native.bleperm&&PM_native.bleperm(" + ok + ")");
+    }
+
+    private BleLink bleLink() {
+        if (ble == null) ble = new BleLink(this, unhex(secretHex()), new BleLink.Cb() {
+            @Override public void state(String s, String msg) {
+                js("window.PM_native&&PM_native.ble&&PM_native.ble(" + JSONObject.quote(s) + "," + JSONObject.quote(msg == null ? "" : msg) + ")");
+                if ("closed".equals(s)) js("window.PM_native&&PM_native.closed()");
+            }
+            @Override public void feed(String t) { js("window.PM_native&&PM_native.feed(" + JSONObject.quote(t) + ")"); }
+        });
+        return ble;
+    }
 
     static String mimeOf(String n) {
         if (n == null) return "application/octet-stream";
@@ -156,6 +211,7 @@ public class Main extends Activity {
     @Override
     protected void onDestroy() {
         closeLink();
+        if (ble != null) ble.close(false);
         try { unregisterReceiver(rx); } catch (Exception e) { }
         super.onDestroy();
     }
@@ -297,7 +353,35 @@ public class Main extends Activity {
             return openDev(d);
         }
 
+        /* Bluetooth ile bağlan: "ok" aranıyor, "perm" izin soruldu, "off" Bluetooth kapalı, "nobt" yok */
+        @JavascriptInterface public String bleOpen() {
+            if (!hasBlePerms()) {
+                if (Build.VERSION.SDK_INT >= 23) runOnUiThread(() -> requestPermissions(blePerms(), BLE_PERM));
+                return "perm";
+            }
+            final String[] r = { "err" };
+            final java.util.concurrent.CountDownLatch l = new java.util.concurrent.CountDownLatch(1);
+            runOnUiThread(() -> { try { r[0] = bleLink().open(); } finally { l.countDown(); } });
+            try { l.await(3, java.util.concurrent.TimeUnit.SECONDS); } catch (InterruptedException e) { }
+            return r[0];
+        }
+
+        @JavascriptInterface public boolean bleSupported() {
+            return getPackageManager().hasSystemFeature(PackageManager.FEATURE_BLUETOOTH_LE);
+        }
+
+        /* şu anki bağlantı: "usb", "ble" ya da "" */
+        @JavascriptInterface public String via() {
+            if (conn != null && reading) return "usb";
+            if (ble != null && ble.ready()) return "ble";
+            return "";
+        }
+
+        /* karta USB'den tanıtılacak anahtar */
+        @JavascriptInterface public String secret() { return secretHex(); }
+
         @JavascriptInterface public boolean write(String s) {
+            if (conn == null && ble != null && ble.ready()) return ble.send(s);
             byte[] b = s.getBytes(StandardCharsets.UTF_8);
             synchronized (wlock) {
                 if (conn == null) return false;
@@ -311,7 +395,10 @@ public class Main extends Activity {
             return true;
         }
 
-        @JavascriptInterface public void close() { closeLink(); }
+        @JavascriptInterface public void close() {
+            closeLink();
+            if (ble != null) { final BleLink b = ble; runOnUiThread(() -> b.close(true)); }
+        }
 
         /* Metin dosyası paylaş (profil yedeği vb.) */
         @JavascriptInterface public boolean shareText(String name, String text) {

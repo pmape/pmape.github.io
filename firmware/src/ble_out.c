@@ -184,6 +184,23 @@ static void pend_add(struct bt_conn *c, bool sec)
 	}
 }
 
+struct bond_q { const bt_addr_le_t *a; bool found; };
+
+static void bond_q_cb(const struct bt_bond_info *info, void *user)
+{
+	struct bond_q *q = user;
+
+	if (!bt_addr_le_cmp(&info->addr, q->a)) q->found = true;
+}
+
+static bool is_bonded(const bt_addr_le_t *a)
+{
+	struct bond_q q = { a, false };
+
+	bt_foreach_bond(BT_ID_DEFAULT, bond_q_cb, &q);
+	return q.found;
+}
+
 static uint8_t conn_id(struct bt_conn *c)
 {
 	struct bt_conn_info i;
@@ -230,7 +247,7 @@ static void connected(struct bt_conn *conn, uint8_t err)
 	if (err) { adv_kick(); return; }
 	bt_hids_connected(&hids_obj, conn);
 	/* eşleşmiş bir hedef: şifrelemeyi kart hemen başlatsın (hızlı geri bağlanma) */
-	bool bonded = conn_id(conn) == BT_ID_DEFAULT && bt_addr_le_is_bonded(BT_ID_DEFAULT, bt_conn_get_dst(conn));
+	bool bonded = conn_id(conn) == BT_ID_DEFAULT && is_bonded(bt_conn_get_dst(conn));
 
 	pend_add(conn, bonded);
 	k_work_reschedule(&vet, K_SECONDS(1));

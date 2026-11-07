@@ -131,6 +131,8 @@ const PM = (() => {
     const r = await new Response(new Blob([b.slice(1)]).stream().pipeThrough(new DecompressionStream('gzip'))).arrayBuffer();
     return JSON.parse(new TextDecoder().decode(r));
   }
+  /* Bluetooth daha yavaş: bekleme süresi uzun */
+  const TO = () => link.via === 'ble' ? 25000 : 8000;
   const unhex = s => Uint8Array.from((s.match(/../g) || []).map(x => parseInt(x, 16)));
 
   function collect(cmd, ev, ms) {
@@ -143,14 +145,14 @@ const PM = (() => {
   }
   async function readCard() {
     const info = link.info || {};
-    if (info.jlen) { try { return { state: await unpack(await collect('jr', 'jdata', 8000)), full: true }; } catch (e) { } }
-    if (info.cfg) return { state: decompile(await collect('cr', 'cfgdata', 8000)), full: false };
+    if (info.jlen) { try { return { state: await unpack(await collect('jr', 'jdata', TO())), full: true }; } catch (e) { } }
+    if (info.cfg) return { state: decompile(await collect('cr', 'cfgdata', TO())), full: false };
     return null;
   }
   async function writeJson(state) {
     const b = await pack(state);
     if (b.length > 8192) return false;
-    const w = waitEv('json', 8000);
+    const w = waitEv('json', TO());
     await sendLine('jb ' + b.length);
     for (let i = 0; i < b.length; i += 200) { await sendLine('jd ' + hex(b.slice(i, i + 200))); await new Promise(r => setTimeout(r, 15)); }
     await sendLine('je ' + crc32(b).toString(16).padStart(8, '0'));
@@ -164,7 +166,7 @@ const PM = (() => {
   const hex = a => Array.from(a, x => x.toString(16).padStart(2, '0')).join('');
 
   /* ---------- bağlantı ---------- */
-  const link = { kind: null, onLine: () => {}, onClose: () => {}, info: null };
+  const link = { kind: null, via: '', onLine: () => {}, onClose: () => {}, onStatus: () => {}, info: null };
   let buf = '', writer = null, usb = null, closing = false;
   const OLD = 'Kart komutlara cevap vermiyor. Karttaki yazılım eski olabilir: 0.3.0 padmapper.uf2 dosyasını yükle.';
   const enc = new TextEncoder(), dec = new TextDecoder();
@@ -221,20 +223,55 @@ const PM = (() => {
 
   /* Android uygulamasının içinde: karta uygulama bağlanır */
   const native = typeof PMNative !== 'undefined';
-  let permWait = null, plugCb = null;
+  let permWait = null, plugCb = null, blePerm = null, bleWait = null;
+  const BLE_ERR = {
+    notfound: 'Kart Bluetooth\'ta bulunamadı. Kart açık mı (güç var mı)? Kart USB ile bir uygulamaya bağlıysa Bluetooth ayarı kapalıdır.',
+    key: 'Bu telefon karta tanıtılmamış. Kartı bir kez USB ile bu telefona tak, uygulama kendini tanıtır.',
+    nokey: 'Bu telefon karta tanıtılmamış. Kartı bir kez USB ile bu telefona tak.',
+    nosvc: 'Karttaki yazılım eski: kablosuz ayar için kartı USB ile tak ve güncelle.',
+    timeout: 'Karta Bluetooth ile bağlanılamadı (süre doldu). Tekrar dene.',
+  };
   window.PM_native = {
     feed: t => feed(t),
-    closed: () => { const was = link.kind === 'native'; link.kind = null; link.info = null; if (was && !closing) link.onClose(); },
+    closed: () => { const was = link.kind === 'native'; link.kind = null; link.via = ''; link.info = null; if (was && !closing) link.onClose(); },
     perm: ok => { if (permWait) { const w = permWait; permWait = null; ok ? w.res() : w.rej(new Error('Karta izin verilmedi')); } },
     plug: () => { if (plugCb) plugCb({ native: true }); },
+    bleperm: ok => { if (blePerm) { const w = blePerm; blePerm = null; ok ? w.res() : w.rej(new Error('Bluetooth izni verilmedi')); } },
+    ble: (st, msg) => {
+      link.onStatus(st, msg);
+      if (!bleWait) return;
+      const w = bleWait;
+      if (st === 'ok') { bleWait = null; w.res(); }
+      else if (st === 'fail' || st === 'closed') {
+        bleWait = null;
+        w.rej(new Error(BLE_ERR[msg] || (msg && msg.startsWith('drop') ? BLE_ERR.timeout : 'Bluetooth bağlantısı kurulamadı (' + msg + ')')));
+      }
+    },
   };
-  async function openNative() {
+  const bleOk = () => native && typeof PMNative.bleOpen === 'function' && PMNative.bleSupported();
+  async function openBle() {
+    let r = PMNative.bleOpen();
+    if (r === 'perm') {
+      await new Promise((res, rej) => { blePerm = { res, rej }; setTimeout(() => { if (blePerm) { blePerm = null; rej(new Error('İzin beklenirken süre doldu')); } }, 60000); });
+      r = PMNative.bleOpen();
+    }
+    if (r === 'off') throw new Error('Telefonun Bluetooth\'u kapalı. Açıp tekrar dene.');
+    if (r !== 'ok') throw new Error('Bluetooth kullanılamıyor (' + r + ')');
+    await new Promise((res, rej) => { bleWait = { res, rej }; setTimeout(() => { if (bleWait === null) return; bleWait = null; rej(new Error(BLE_ERR.timeout)); }, 40000); });
+    link.kind = 'native'; link.via = 'ble';
+  }
+  async function openNative(known) {
+    /* kart USB'de değilse (ya da Bluetooth istendiyse) Bluetooth ile bağlan */
+    if ((known && known.ble) || !PMNative.present()) {
+      if (bleOk()) return openBle();
+      throw new Error('Kart takılı değil');
+    }
     let r = PMNative.open();
     if (r === 'perm') {
       await new Promise((res, rej) => { permWait = { res, rej }; setTimeout(() => { if (permWait) { permWait = null; rej(new Error('İzin beklenirken süre doldu')); } }, 60000); });
       r = PMNative.open();
     }
-    if (r === 'ok') { link.kind = 'native'; return; }
+    if (r === 'ok') { link.kind = 'native'; link.via = 'usb'; return; }
     throw new Error(r === 'none' ? 'Kart takılı değil' : 'Karta bağlanılamadı (' + r + ')');
   }
 
@@ -243,7 +280,7 @@ const PM = (() => {
 
   /* Daha önce izin verilmiş kart takılıysa sormadan bağlan */
   async function findKnown() {
-    if (native) return PMNative.present() ? { native: true } : null;
+    if (native) return PMNative.present() ? { native: true } : bleOk() && localStorage.getItem('pm_ble') === '1' ? { ble: true, auto: true } : null;
     if (android && 'usb' in navigator) {
       const d = (await navigator.usb.getDevices()).find(isCard);
       return d ? { usb: d } : null;
@@ -257,7 +294,7 @@ const PM = (() => {
 
   async function connect(known) {
     closing = false; link.info = null; buf = '';
-    if (native) await openNative();
+    if (native) await openNative(known);
     else if (known && known.usb) await openUsb(known.usb);
     else if (known && known.serial) await openSerial(known.serial);
     else
@@ -268,14 +305,18 @@ const PM = (() => {
     else throw new Error('Bu tarayıcı karta bağlanamıyor. Chrome kullan.');
     for (let i = 0; i < 3 && !link.info; i++) {
       await sendLine('hello');
-      await new Promise(r => setTimeout(r, 700));
+      await new Promise(r => setTimeout(r, link.via === 'ble' ? 1200 : 700));
+    }
+    /* USB'den bağlıyken bu telefonu karta tanıt: sonra kablosuz da bağlanabilsin */
+    if (link.info && link.via === 'usb' && PMNative.secret) {
+      try { await sendLine('secret add ' + PMNative.secret()); } catch (e) {}
     }
     return !!link.info;
   }
 
   async function sendLine(l) {
     const d = enc.encode(l + '\n');
-    if (link.kind === 'native') { if (!PMNative.write(l + '\n')) throw new Error('Karta yazılamadı'); }
+    if (link.kind === 'native') { if (!PMNative.write(l + '\n')) throw new Error('Karta yazılamadı'); if (link.via === 'ble') await new Promise(r => setTimeout(r, 4)); }
     else if (link.kind === 'serial') await writer.write(d);
     else if (link.kind === 'usb') for (let i = 0; i < d.length; i += 64) await usb.dev.transferOut(usb.epOut, d.slice(i, i + 64));
     else throw new Error('Kart bağlı değil');
@@ -283,12 +324,13 @@ const PM = (() => {
 
   async function disconnect() {
     closing = true;
+    if (bleWait) { const w = bleWait; bleWait = null; w.rej(new Error('Vazgeçildi')); try { PMNative.close(); } catch (e) {} }
     try {
       if (link.kind === 'native') PMNative.close();
       else if (link.kind === 'serial') { try { await link.reader.cancel(); } catch (e) {} writer.releaseLock(); await link.port.close(); }
       else if (link.kind === 'usb') await usb.dev.close();
     } catch (e) {}
-    link.kind = null; link.info = null;
+    link.kind = null; link.via = ''; link.info = null;
   }
 
   function waitEv(name, ms) {
@@ -306,7 +348,7 @@ const PM = (() => {
       if (!link.info) throw new Error(OLD);
     }
     const blob = compile(S);
-    const w = waitEv('cfg', 8000);
+    const w = waitEv('cfg', TO());
     await sendLine('cb ' + blob.length);
     for (let i = 0; i < blob.length; i += 200) { await sendLine('cd ' + hex(blob.slice(i, i + 200))); await new Promise(r => setTimeout(r, 15)); }
     await sendLine('ce ' + crc32(blob).toString(16).padStart(8, '0'));
@@ -324,6 +366,6 @@ const PM = (() => {
   }
 
   return { decompile, readCard, writeJson, findKnown, onPlug, compile, crc32, hex, link, connect, disconnect, sendLine, writeConfig,
-    connected: () => !!link.kind, OLD, supported: () => native || 'serial' in navigator || 'usb' in navigator, native };
+    connected: () => !!link.kind, OLD, bleOk, supported: () => native || 'serial' in navigator || 'usb' in navigator, native };
 })();
 if (typeof module !== 'undefined') module.exports = PM;
