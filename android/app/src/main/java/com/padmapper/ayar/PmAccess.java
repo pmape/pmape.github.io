@@ -58,8 +58,8 @@ public class PmAccess extends AccessibilityService {
             target = voice;
         }
         if (target == null) return;
-        int r = getSoftKeyboardController().switchToInputMethod(target);
-        if (r != 0) Toast.makeText(this, "Klavye değiştirilemedi (" + r + ")", Toast.LENGTH_SHORT).show();
+        if (!getSoftKeyboardController().switchToInputMethod(target))
+            Toast.makeText(this, "Klavye değiştirilemedi", Toast.LENGTH_SHORT).show();
     }
 
     @Override public void onAccessibilityEvent(AccessibilityEvent event) { }
