@@ -15,6 +15,7 @@
  */
 
 #include <string.h>
+#include <stdarg.h>
 #include <zephyr/kernel.h>
 #include <zephyr/sys/printk.h>
 #include <zephyr/usb/usb_device.h>
@@ -35,8 +36,9 @@
 
 #include "cfg.h"
 #include "ble_out.h"
+#include "ble_cfg.h"
 
-bool host_listening(void)
+bool usb_listening(void)
 {
 	static const struct device *con = DEVICE_DT_GET(DT_CHOSEN(zephyr_console));
 	uint32_t dtr = 0;
@@ -44,6 +46,24 @@ bool host_listening(void)
 	if (!device_is_ready(con)) return false;
 	if (uart_line_ctrl_get(con, UART_LINE_CTRL_DTR, &dtr)) return false;
 	return dtr != 0;
+}
+
+bool host_listening(void) { return usb_listening() || ble_cfg_authed(); }
+
+void pm_out(const char *fmt, ...)
+{
+	va_list ap;
+
+	if (usb_listening()) {
+		va_start(ap, fmt);
+		vprintk(fmt, ap);
+		va_end(ap);
+	}
+	if (ble_cfg_authed()) {
+		va_start(ap, fmt);
+		ble_cfg_vout(fmt, ap);
+		va_end(ap);
+	}
 }
 
 static struct bt_conn *cur_conn;
@@ -833,6 +853,7 @@ int main(void)
 	}
 	if (IS_ENABLED(CONFIG_SETTINGS)) {
 		settings_load();
+		ble_cfg_init();
 		ble_out_init();
 	}
 	bt_conn_auth_info_cb_register(&auth_info_cb);

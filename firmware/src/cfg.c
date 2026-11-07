@@ -23,6 +23,7 @@
 #include "out.h"
 #include "cfg.h"
 #include "ble_out.h"
+#include "ble_cfg.h"
 
 #define CHUNK 1024
 
@@ -161,6 +162,7 @@ static void cmd(char *l)
 {
 	if (bt_cmd(l)) return;
 	if (ble_cmd(l)) return;
+	if (ble_cfg_cmd(l)) return;
 	if (!strcmp(l, "hello")) {
 		hello();
 		out_state_request();
@@ -251,7 +253,11 @@ static void rx_thread(void *a, void *b, void *c)
 	size_t n = 0;
 	unsigned char ch;
 
+	static char bl[520];
+
 	while (1) {
+		/* telefondan (Bluetooth) gelen satırlar */
+		while (ble_cfg_line(bl, sizeof(bl))) cmd(bl);
 		if (!device_is_ready(con) || uart_poll_in(con, &ch) != 0) {
 			k_sleep(K_MSEC(3));
 			continue;

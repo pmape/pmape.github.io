@@ -16,3 +16,5 @@ int ble_out_send(int which, const uint8_t *buf, uint8_t len);
 /* USB'de veri bağlantısı var mı (yoksa güç kaynağına takılı demektir) */
 void ble_out_usb(bool present);
 bool ble_cmd(char *l);
+/* yayını yeniden değerlendir (ayar telefonu bağlanınca/ayrılınca) */
+void ble_out_adv_kick(void);

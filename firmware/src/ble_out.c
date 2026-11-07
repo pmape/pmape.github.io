@@ -26,6 +26,7 @@
 #include <bluetooth/services/hids.h>
 #include "log.h"
 #include "ble_out.h"
+#include "ble_cfg.h"
 
 /* klavye (1), fare (2), gamepad (3) */
 static const uint8_t report_map[] = {
@@ -88,29 +89,51 @@ static const struct bt_data ad[] = {
 };
 static const struct bt_data sd[] = {
 	BT_DATA(BT_DATA_NAME_COMPLETE, CONFIG_BT_DEVICE_NAME, sizeof(CONFIG_BT_DEVICE_NAME) - 1),
+	BT_DATA_BYTES(BT_DATA_UUID128_ALL, PM_CFG_UUID_BYTES),
 };
-
-static bool want_adv(void)
-{
-	if (host) return false;
-	return pairing || route == 1 || !usb_present;
-}
+/* sadece ayar telefonu için (ikinci kimlik): HID olarak görünmez */
+static const struct bt_data cfg_ad[] = {
+	BT_DATA_BYTES(BT_DATA_FLAGS, (BT_LE_AD_GENERAL | BT_LE_AD_NO_BREDR)),
+	BT_DATA_BYTES(BT_DATA_UUID128_ALL, PM_CFG_UUID_BYTES),
+};
+static const struct bt_data cfg_sd[] = {
+	BT_DATA(BT_DATA_NAME_COMPLETE, CONFIG_BT_DEVICE_NAME, sizeof(CONFIG_BT_DEVICE_NAME) - 1),
+};
+static uint8_t adv_id;
 
 static void adv_update(struct k_work *w)
 {
-	bool want = want_adv();
+	/* hedef cihaz için (bağlı hedef yoksa) ya da telefondan kablosuz ayar için */
+	bool for_host = !host && (pairing || route == 1 || !usb_present);
+	bool for_cfg = ble_cfg_want_adv();
+	bool want = for_host || for_cfg;
+	uint8_t id = for_host ? BT_ID_DEFAULT : PM_CFG_ID;
 
-	if (want && !adv_on) {
-		/* hızlı yayın (20–30 ms): hedef cihaz kartı hemen görsün, çabuk geri bağlansın */
-		static const struct bt_le_adv_param fast = BT_LE_ADV_PARAM_INIT(BT_LE_ADV_OPT_CONNECTABLE,
-			BT_GAP_ADV_FAST_INT_MIN_1 * 2 / 3, BT_GAP_ADV_FAST_INT_MIN_1, NULL);
-		int err = bt_le_adv_start(&fast, ad, ARRAY_SIZE(ad), sd, ARRAY_SIZE(sd));
-
-		adv_on = (err == 0 || err == -EALREADY);
-		if (err && err != -EALREADY) OUT("{\"ev\":\"ble\",\"adv_err\":%d}\n", err);
-	} else if (!want && adv_on) {
+	if (adv_on && (!want || id != adv_id)) {
 		bt_le_adv_stop();
 		adv_on = false;
+	}
+	if (want && !adv_on) {
+		struct bt_le_adv_param p;
+		int err;
+
+		if (for_host) {
+			/* hızlı yayın (20–30 ms): hedef cihaz kartı hemen görsün, çabuk geri bağlansın.
+			 * Tarama yanıtında ayar servisi de var: telefon bu yayından da bağlanabilir. */
+			p = (struct bt_le_adv_param)BT_LE_ADV_PARAM_INIT(BT_LE_ADV_OPT_CONNECTABLE,
+				BT_GAP_ADV_FAST_INT_MIN_1 * 2 / 3, BT_GAP_ADV_FAST_INT_MIN_1, NULL);
+			p.id = BT_ID_DEFAULT;
+			err = bt_le_adv_start(&p, ad, ARRAY_SIZE(ad), sd, ARRAY_SIZE(sd));
+		} else {
+			/* ayar için yavaş yayın (100–150 ms): pad bağlantısının süresinden çalmasın */
+			p = (struct bt_le_adv_param)BT_LE_ADV_PARAM_INIT(BT_LE_ADV_OPT_CONNECTABLE,
+				BT_GAP_ADV_FAST_INT_MIN_2, BT_GAP_ADV_FAST_INT_MAX_2, NULL);
+			p.id = PM_CFG_ID;
+			err = bt_le_adv_start(&p, cfg_ad, ARRAY_SIZE(cfg_ad), cfg_sd, ARRAY_SIZE(cfg_sd));
+		}
+		adv_on = (err == 0 || err == -EALREADY);
+		adv_id = id;
+		if (err && err != -EALREADY) OUT("{\"ev\":\"ble\",\"adv_err\":%d}\n", err);
 	}
 }
 static K_WORK_DEFINE(adv_work, adv_update);
@@ -133,30 +156,101 @@ static bool is_host_role(struct bt_conn *c)
 	return bt_conn_get_info(c, &i) == 0 && i.role == BT_CONN_ROLE_PERIPHERAL;
 }
 
+/* hedefi bırak: ayar telefonuyla aynı bağlantıysa bağlantıyı kesme, sadece hedef rolünü al */
+static void drop_host(void)
+{
+	if (!host) return;
+	if (ble_cfg_is(host)) {
+		bt_conn_unref(host);
+		host = NULL;
+		host_ready = false;
+		adv_kick();
+	} else {
+		bt_conn_disconnect(host, BT_HCI_ERR_REMOTE_USER_TERM_CONN);
+	}
+}
+
 static void addr_str(const bt_addr_le_t *a, char *s, size_t n) { bt_addr_le_to_str(a, s, n); }
+
+/* Çevre rolündeki bağlantılar: hedef cihaz ya da ayar yapan telefon. Kim olduğu belli olana kadar
+ * "bekleyen" sayılır; 20 sn içinde hedef (şifreli) ya da doğrulanmış telefon olmazsa kesilir. */
+#define MAXP 3
+static struct { struct bt_conn *c; int64_t at; bool sec; } pend[MAXP];
+
+static void pend_add(struct bt_conn *c, bool sec)
+{
+	for (int i = 0; i < MAXP; i++) {
+		if (!pend[i].c) { pend[i].c = bt_conn_ref(c); pend[i].at = k_uptime_get(); pend[i].sec = sec; return; }
+	}
+}
+
+static uint8_t conn_id(struct bt_conn *c)
+{
+	struct bt_conn_info i;
+
+	return bt_conn_get_info(c, &i) == 0 ? i.id : BT_ID_DEFAULT;
+}
+
+static void pend_del(struct bt_conn *c)
+{
+	for (int i = 0; i < MAXP; i++) if (pend[i].c == c) { bt_conn_unref(pend[i].c); pend[i].c = NULL; }
+}
+
+static void vet_fn(struct k_work *w);
+static K_WORK_DELAYABLE_DEFINE(vet, vet_fn);
+static void vet_fn(struct k_work *w)
+{
+	int64_t now = k_uptime_get();
+	bool any = false;
+
+	for (int i = 0; i < MAXP; i++) {
+		struct bt_conn *c = pend[i].c;
+
+		if (!c) continue;
+		if (c == host || ble_cfg_is(c)) { pend_del(c); continue; }
+		/* eşleme modunda yeni cihaz: önce telefon mu diye kısa bekle, sonra şifrelemeyi başlat */
+		if (!pend[i].sec && pairing && conn_id(c) == BT_ID_DEFAULT && now - pend[i].at > 2500) {
+			pend[i].sec = true;
+			bt_conn_set_security(c, BT_SECURITY_L2);
+		}
+		if (now - pend[i].at > 20000) {
+			bt_conn_disconnect(c, BT_HCI_ERR_REMOTE_USER_TERM_CONN);
+			pend_del(c);
+			continue;
+		}
+		any = true;
+	}
+	if (any) k_work_reschedule(&vet, K_SECONDS(1));
+}
 
 static void connected(struct bt_conn *conn, uint8_t err)
 {
 	if (!is_host_role(conn)) return;
-	adv_on = false; /* bağlanınca yayın kendiliğinden durur */
+	adv_on = false; /* bağlanınca yayın kendiliğinden durur; gerekiyorsa yeniden başlar */
 	if (err) { adv_kick(); return; }
-	if (host) { bt_conn_disconnect(conn, BT_HCI_ERR_REMOTE_USER_TERM_CONN); return; }
-	host = bt_conn_ref(conn);
-	host_ready = false;
 	bt_hids_connected(&hids_obj, conn);
-	/* eşleşmiş değilse şifreleme sırasında eşleşme istenir; eşleme modu dışındaysa reddedilir */
-	bt_conn_set_security(conn, BT_SECURITY_L2);
+	/* eşleşmiş bir hedef: şifrelemeyi kart hemen başlatsın (hızlı geri bağlanma) */
+	bool bonded = conn_id(conn) == BT_ID_DEFAULT && bt_addr_le_is_bonded(BT_ID_DEFAULT, bt_conn_get_dst(conn));
+
+	pend_add(conn, bonded);
+	k_work_reschedule(&vet, K_SECONDS(1));
+	if (bonded) bt_conn_set_security(conn, BT_SECURITY_L2);
 	OUT("{\"ev\":\"ble\",\"host\":\"connecting\"}\n");
+	adv_kick();
 }
 
 static void disconnected(struct bt_conn *conn, uint8_t reason)
 {
-	if (conn != host) return;
+	if (!is_host_role(conn)) return;
 	bt_hids_disconnected(&hids_obj, conn);
-	bt_conn_unref(host);
-	host = NULL;
-	host_ready = false;
-	OUT("{\"ev\":\"ble\",\"host\":\"\",\"reason\":%u}\n", reason);
+	pend_del(conn);
+	ble_cfg_disconnected(conn);
+	if (conn == host) {
+		bt_conn_unref(host);
+		host = NULL;
+		host_ready = false;
+		OUT("{\"ev\":\"ble\",\"host\":\"\",\"reason\":%u}\n", reason);
+	}
 	adv_kick();
 }
 
@@ -164,23 +258,22 @@ static void security_changed(struct bt_conn *conn, bt_security_t level, enum bt_
 {
 	char s[BT_ADDR_LE_STR_LEN];
 
-	if (conn != host) return;
-	if (err) {
-		bt_conn_disconnect(conn, BT_HCI_ERR_AUTH_FAIL);
-		return;
-	}
+	if (!is_host_role(conn) || conn_id(conn) != BT_ID_DEFAULT) return;
+	/* Uygun olmayan bağlantılar hemen kesilmez: ayar telefonu da olabilir. 20 sn içinde
+	 * doğrulanmazsa vet_fn keser. */
+	if (err) return;
+	if (host && host != conn) return; /* zaten bir hedef var */
 	const bt_addr_le_t *a = bt_conn_get_dst(conn);
 
-	/* seçili hedef varsa ve bu o değilse (ve eşleme modunda değilsek) bırak */
-	if (target_set && !pairing && bt_addr_le_cmp(a, &target)) {
-		bt_conn_disconnect(conn, BT_HCI_ERR_REMOTE_USER_TERM_CONN);
-		return;
-	}
+	/* seçili hedef varsa ve bu o değilse (ve eşleme modunda değilsek) hedef yapma */
+	if (target_set && !pairing && bt_addr_le_cmp(a, &target)) return;
 	if (pairing || !target_set) {
 		target = *a;
 		target_set = true;
 		settings_save_one("pmb/target", &target, sizeof(target));
 	}
+	if (!host) host = bt_conn_ref(conn);
+	pend_del(conn);
 	host_ready = true;
 	addr_str(a, s, sizeof(s));
 	OUT("{\"ev\":\"ble\",\"host\":\"%s\"}\n", s);
@@ -189,7 +282,10 @@ static void security_changed(struct bt_conn *conn, bt_security_t level, enum bt_
 
 	bt_conn_le_param_update(conn, &p);
 	bt_conn_le_phy_update(conn, BT_CONN_LE_PHY_PARAM_2M);
+	adv_kick();
 }
+
+void ble_out_adv_kick(void) { adv_kick(); }
 
 BT_CONN_CB_DEFINE(ble_out_cb) = {
 	.connected = connected,
@@ -200,7 +296,8 @@ BT_CONN_CB_DEFINE(ble_out_cb) = {
 /* Eşleme sadece pad tarafında ya da eşleme modunda kabul edilir */
 static enum bt_security_err pairing_accept(struct bt_conn *conn, const struct bt_conn_pairing_feat *const feat)
 {
-	if (!is_host_role(conn) || pairing) return BT_SECURITY_ERR_SUCCESS;
+	if (!is_host_role(conn)) return BT_SECURITY_ERR_SUCCESS;
+	if (pairing && conn_id(conn) == BT_ID_DEFAULT && !ble_cfg_is(conn)) return BT_SECURITY_ERR_SUCCESS;
 	return BT_SECURITY_ERR_PAIR_NOT_ALLOWED;
 }
 
@@ -304,7 +401,7 @@ bool ble_cmd(char *l)
 	if (!strcmp(l, "pair")) {
 		pairing = true;
 		/* başka bir hedefe bağlıysa yeni cihaz için boşalt */
-		if (host) bt_conn_disconnect(host, BT_HCI_ERR_REMOTE_USER_TERM_CONN);
+		drop_host();
 		k_work_reschedule(&pair_end, K_SECONDS(60));
 		OUT("{\"ev\":\"ble\",\"pairing\":1}\n");
 		adv_kick();
@@ -319,13 +416,13 @@ bool ble_cmd(char *l)
 		target = a;
 		target_set = true;
 		settings_save_one("pmb/target", &target, sizeof(target));
-		if (host && bt_addr_le_cmp(bt_conn_get_dst(host), &a)) bt_conn_disconnect(host, BT_HCI_ERR_REMOTE_USER_TERM_CONN);
+		if (host && bt_addr_le_cmp(bt_conn_get_dst(host), &a)) drop_host();
 		print_targets();
 		return true;
 	}
 	if (!strncmp(l, "unpair ", 7)) {
 		if (parse(l + 7, &a)) return true;
-		if (host && !bt_addr_le_cmp(bt_conn_get_dst(host), &a)) bt_conn_disconnect(host, BT_HCI_ERR_REMOTE_USER_TERM_CONN);
+		if (host && !bt_addr_le_cmp(bt_conn_get_dst(host), &a)) drop_host();
 		bt_unpair(BT_ID_DEFAULT, &a);
 		if (target_set && !bt_addr_le_cmp(&target, &a)) {
 			target_set = false;
