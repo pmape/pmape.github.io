@@ -414,6 +414,8 @@ public class Main extends Activity {
                 try { doFlash(); } finally { flashing = false; }
             }, "pm-flash").start();
         }
+
+        @JavascriptInterface public String version() {
             try { return getPackageManager().getPackageInfo(getPackageName(), 0).versionName; } catch (Exception e) { return "?"; }
         }
     }
