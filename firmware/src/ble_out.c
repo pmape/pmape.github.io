@@ -177,9 +177,11 @@ static void security_changed(struct bt_conn *conn, bt_security_t level, enum bt_
 	host_ready = true;
 	addr_str(a, s, sizeof(s));
 	OUT("{\"ev\":\"ble\",\"host\":\"%s\"}\n", s);
-	struct bt_le_conn_param p = BT_LE_CONN_PARAM_INIT(6, 12, 0, 400);
+	/* en kısa aralık (7,5–11 ms) ve 2M PHY: daha az gecikme */
+	struct bt_le_conn_param p = BT_LE_CONN_PARAM_INIT(6, 9, 0, 400);
 
 	bt_conn_le_param_update(conn, &p);
+	bt_conn_le_phy_update(conn, BT_CONN_LE_PHY_PARAM_2M);
 }
 
 BT_CONN_CB_DEFINE(ble_out_cb) = {

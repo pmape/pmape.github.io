@@ -11,3 +11,6 @@ void out_set_connected(bool c);
 void out_usb_status(int status);
 /* Teşhis sayaçlarını seri porta yaz */
 void out_print_stats(void);
+
+/* pad raporu geldi: çıkışı hemen hesapla */
+void out_kick(void);

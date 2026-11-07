@@ -312,6 +312,8 @@ static struct bst bs[NBTN];
 static uint8_t layer_toggle;
 static uint32_t prev_btn;
 static float acc[2][2], wacc;
+static float tscale = 1.0f; /* geçen süre / 8 ms */
+static int64_t last_tick;
 
 static void reset_state(void)
 {
@@ -491,13 +493,13 @@ static void stick_tick(int s, uint8_t x, uint8_t y, int8_t *mx, int8_t *my, uint
 		if (mag <= dz) { acc[s][0] = acc[s][1] = 0; break; }
 		float k = (mag - dz) / (1.0f - dz) / mag;
 		float v[2] = { nx * k, ny * k };
-		float mx_ = 3.5f * (st->sens ? st->sens : 8);
+		float mx_ = 3.5f * (st->sens ? st->sens : 8) * tscale;
 
 		for (int i = 0; i < 2; i++) {
 			float a = v[i] < 0 ? -v[i] : v[i];
 
 			if (a < 0.001f) continue;
-			acc[s][i] += v[i] * (0.35f * a + 0.65f * a * a) * mx_ + (v[i] > 0 ? 0.1f : -0.1f);
+			acc[s][i] += v[i] * (0.35f * a + 0.65f * a * a) * mx_ + (v[i] > 0 ? 0.1f : -0.1f) * tscale;
 			int o = (int)acc[s][i];
 
 			acc[s][i] -= o;
@@ -519,7 +521,7 @@ static void stick_tick(int s, uint8_t x, uint8_t y, int8_t *mx, int8_t *my, uint
 	}
 	case SM_SCROLL:
 		if (ay <= dz) { wacc = 0; break; }
-		wacc += -ny * (st->sens ? st->sens : 8) * 0.02f;
+		wacc += -ny * (st->sens ? st->sens : 8) * 0.02f * tscale;
 		while (wacc >= 1) { wheel++; wacc -= 1; }
 		while (wacc <= -1) { wheel--; wacc += 1; }
 		break;
@@ -634,6 +636,12 @@ enum eng_mode engine_tick(const struct pad_state *p, int64_t now, struct out_rep
 	/* çubuklar */
 	int8_t mx = 0, my = 0;
 
+	{
+		int64_t dt = last_tick ? now - last_tick : 8;
+
+		last_tick = now;
+		tscale = (dt < 1 ? 1 : dt > 30 ? 30 : (float)dt) / 8.0f;
+	}
 	memcpy(r->g, g_idle, 9);
 	ntick = 0;
 	stick_tick(0, p->lx, p->ly, &mx, &my, &r->g[3], &r->g[4]);

@@ -74,6 +74,12 @@ static void start_scan(void)
 	OUT("{\"ev\":\"scanning\"}\n");
 }
 
+/* Pad bağlantısı: 7,5–15 ms aralık, gecikmesiz (varsayılan 30–50 ms gecikme ekliyordu) */
+#define PAD_CONN_PARAM BT_LE_CONN_PARAM(6, 12, 0, 400)
+
+/* Tuş raporlarını ayar ekranına yazmak sadece tuş tanıtma sırasında (her raporu yazmak kartı yavaşlatıyordu) */
+static int64_t replog_until;
+
 /* ---------- kayıtlı kontrolcüler ---------- */
 
 #define MAXC 4
@@ -278,7 +284,7 @@ static void scan_filter_match(struct bt_scan_device_info *info,
 	strcpy(cur_name, ctx.name);
 	bt_scan_stop();
 	int err = bt_conn_le_create(info->recv_info->addr, BT_CONN_LE_CREATE_CONN,
-				    BT_LE_CONN_PARAM_DEFAULT, &cur_conn);
+				    PAD_CONN_PARAM, &cur_conn);
 
 	if (err) {
 		print_err("conn_create", err);
@@ -320,7 +326,7 @@ static int scan_init(void)
 {
 	struct bt_scan_init_param param = {
 		.scan_param = NULL,
-		.conn_param = BT_LE_CONN_PARAM_DEFAULT,
+		.conn_param = PAD_CONN_PARAM,
 		.connect_if_match = 0,
 	};
 	int err;
@@ -406,6 +412,7 @@ static void connected(struct bt_conn *conn, uint8_t conn_err)
 	}
 
 	OUT("{\"ev\":\"connected\",\"addr\":\"%s\",\"name\":\"%s\"}\n", addr, cur_name);
+	bt_conn_le_phy_update(conn, BT_CONN_LE_PHY_PARAM_2M);
 	cur_addr = *bt_conn_get_dst(conn);
 	if (listing) bt_scan_start(BT_SCAN_TYPE_SCAN_ACTIVE);
 	want_set = false;
@@ -441,7 +448,25 @@ static void security_changed(struct bt_conn *conn, bt_security_t level, enum bt_
 	start_discovery(conn);
 }
 
+/* Pad daha uzun bağlantı aralığı isterse en fazla 15 ms'ye izin ver */
+static bool le_param_req(struct bt_conn *conn, struct bt_le_conn_param *param)
+{
+	if (!is_pad_conn(conn)) return true;
+	if (param->interval_min > 12) return false;
+	if (param->interval_max > 12) param->interval_max = 12;
+	param->latency = 0;
+	return true;
+}
+
+static void le_param_updated(struct bt_conn *conn, uint16_t interval, uint16_t latency, uint16_t timeout)
+{
+	if (!is_pad_conn(conn)) return;
+	OUT("{\"ev\":\"pad_interval\",\"us\":%u,\"latency\":%u}\n", interval * 1250, latency);
+}
+
 BT_CONN_CB_DEFINE(conn_callbacks) = {
+	.le_param_req = le_param_req,
+	.le_param_updated = le_param_updated,
 	.connected = connected,
 	.disconnected = disconnected,
 	.security_changed = security_changed,
@@ -477,6 +502,7 @@ static uint8_t rep_cb(struct bt_hogp *h, struct bt_hogp_rep_info *rep, uint8_t e
 	size_t len = MIN(bt_hogp_rep_size(rep), MAX_REP_LEN);
 
 	pad_input(id, data, bt_hogp_rep_size(rep));
+	out_kick(); /* çıkışı beklemeden hemen hesapla */
 	int slot = -1;
 
 	for (int i = 0; i < MAX_REPS; i++) {
@@ -498,7 +524,7 @@ static uint8_t rep_cb(struct bt_hogp *h, struct bt_hogp_rep_info *rep, uint8_t e
 		rep_cache[slot].len = len;
 		memcpy(rep_cache[slot].last, data, len);
 	}
-	if (!host_listening()) {
+	if (!host_listening() || k_uptime_get() > replog_until) {
 		return BT_GATT_ITER_CONTINUE;
 	}
 
@@ -683,7 +709,12 @@ bool bt_cmd(char *l)
 		print_ctrls();
 		return true;
 	}
+	if (!strncmp(l, "replog ", 7)) {
+		replog_until = l[7] == '1' ? k_uptime_get() + 600000 : 0;
+		return true;
+	}
 	if (!strcmp(l, "map")) {
+		replog_until = k_uptime_get() + 180000;
 		char s[BT_ADDR_LE_STR_LEN];
 
 		bt_addr_le_to_str(&cur_addr, s, sizeof(s));

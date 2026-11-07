@@ -352,6 +352,11 @@ static void build_mapped(const struct pad_state *p, uint8_t kb[8], uint8_t ms[4]
 
 /* ---------- ana döngü (yaklaşık 125 Hz) ---------- */
 
+static K_SEM_DEFINE(kick, 0, 1);
+
+/* pad'den rapor gelince çağrılır: 8 ms beklemeden hesapla */
+void out_kick(void) { k_sem_give(&kick); }
+
 static void out_thread(void *a, void *b, void *c)
 {
 	struct pad_state p;
@@ -367,8 +372,14 @@ static void out_thread(void *a, void *b, void *c)
 	pad_reset();
 
 	while (1) {
-		k_sleep(K_MSEC(8));
-		tick++;
+		/* pad'den yeni rapor gelirse hemen, yoksa en geç 8 ms'de bir */
+		k_sem_take(&kick, K_MSEC(8));
+		{
+			static int64_t last_led;
+			int64_t n = k_uptime_get();
+
+			if (n - last_led >= 8) { last_led = n; tick++; }
+		}
 		led_update(tick);
 		pad_get(&p);
 
