@@ -76,12 +76,13 @@ header select{flex:1;min-width:0;max-width:240px}
 .layers button.on[data-l="3"]{background:var(--l3);border-color:var(--l3)}
 @media (max-width:620px){.layers button{flex:1}.acts{width:100%;margin-left:0}.acts .sp{flex:1}}
 
-main{align-items:start;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:10px;padding:10px;max-width:1200px;margin:0 auto}
+main{align-items:start;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px;padding:12px 14px;max-width:1200px;margin:0 auto}
 @media (max-width:860px){main{grid-template-columns:minmax(0,1fr)}}
 .card{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:12px}
 
 /* kontrolcü */
-svg{width:100%;height:auto;display:block;max-height:46vh}
+svg:not([width]){width:100%;height:auto;display:block;max-height:46vh}
+.btn svg,.pchip svg{vertical-align:-3px}
 #pad{max-width:520px;margin:0 auto}
 .grip{fill:var(--grip);stroke:var(--gripl);stroke-width:1.5}
 .b{cursor:pointer}
@@ -92,7 +93,8 @@ svg{width:100%;height:auto;display:block;max-height:46vh}
 .lb{font-size:7px;font-weight:600;fill:var(--acc2);pointer-events:none;dominant-baseline:central}
 .lb.inh{fill:var(--inht)}
 .b text{fill:var(--text);font-size:9px;font-weight:700;text-anchor:middle;dominant-baseline:central;pointer-events:none}
-.alist{display:flex;flex-direction:column;margin-top:8px;border-top:1px solid var(--line)}
+.col{display:flex;flex-direction:column;gap:10px;min-width:0}
+.alist{display:flex;flex-direction:column}
 .arow{display:flex;align-items:center;gap:12px;padding:10px 4px;background:none;border:0;border-bottom:1px solid var(--line);cursor:pointer;text-align:left;width:100%}
 .arow:last-child{border-bottom:0}
 .arow .akey{min-width:44px;height:32px;padding:0 10px;border-radius:16px;background:var(--panel2);border:1px solid var(--line);display:inline-flex;align-items:center;justify-content:center;font-weight:600;font-size:13px;flex:none}
@@ -100,6 +102,47 @@ svg{width:100%;height:auto;display:block;max-height:46vh}
 .arow .atx{flex:1;min-width:0}.arow .atx b{display:block;font-weight:600;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.arow .atx small{display:block;color:var(--mute);font-size:12px}
 .arow .achev{color:var(--mute);font-size:20px}
 .eback{display:none}
+.ehead{display:flex;align-items:center;gap:10px;margin-bottom:12px}.ehead h2{flex:1;margin:0;font-size:18px}
+.tag .sdot{display:inline-block;width:8px;height:8px;border-radius:4px;background:var(--l2);margin-right:6px}.tag .sdot.w{background:var(--warn)}
+.li2{display:flex;align-items:center;gap:10px;padding:10px 0;border-top:1px solid var(--line);width:100%;background:none;border-left:0;border-right:0;border-bottom:0;text-align:left;color:inherit;font:inherit}
+.card>.li2:first-child,.card>.li2:first-of-type{border-top:0}
+.card>.li2:first-child{padding-top:12px}
+.lnk{background:none;border:0;cursor:pointer;text-align:left;padding:0;color:inherit;font:inherit}
+.pdot{width:10px;height:10px;border-radius:5px;background:var(--keyl);flex:none}.pdot.on{background:var(--acc)}
+.sl{margin-top:12px}.sl input[type=range]{width:100%;accent-color:var(--acc)}
+.rad{width:20px;height:20px;border-radius:10px;border:2px solid var(--keyl);display:inline-flex;align-items:center;justify-content:center;flex:none}.rad.on{border-color:var(--acc)}.rad.on i{width:10px;height:10px;border-radius:5px;background:var(--acc)}
+.stbox{display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:10px;background:var(--bg);border:1px solid var(--line);margin:4px 0 6px;color:var(--mute)}
+.row.grow{flex:1;min-width:0}
+.sheet.full .in{max-width:none;max-height:100vh;height:100%;border-radius:0}.sheet.full .in::before{display:none}
+@media (min-width:700px){.sheet.full .in{max-width:640px;height:auto;max-height:92vh;border-radius:16px}}
+.thm{flex:1;height:44px;border-radius:12px;border:2px solid var(--line);font-size:12px;font-weight:600;cursor:pointer}.thm.on{border-color:var(--acc)}
+.pchips{display:flex;flex-wrap:wrap;gap:6px}
+.pchip{height:34px;padding:0 12px;border-radius:17px;background:var(--panel2);border:1px solid var(--line);font-size:13px;font-weight:500;cursor:pointer;display:inline-flex;align-items:center;gap:6px}
+.pchip.on{background:color-mix(in srgb,var(--acc) 22%,var(--panel2));border-color:var(--acc);color:var(--text)}
+.orow{display:flex;align-items:center;gap:8px;padding:8px 0;border-top:1px solid var(--line)}
+.orow.off,.srow2.off{opacity:.5}
+.omain{flex:1;min-width:0;display:flex;align-items:center;gap:12px;background:none;border:0;padding:2px 0;cursor:pointer;text-align:left}
+.obox{width:36px;height:36px;border-radius:10px;background:var(--bg);border:1px solid var(--line);display:flex;align-items:center;justify-content:center;flex:none;color:var(--acc)}
+.otx{flex:1;min-width:0}.otx small{display:block;color:var(--mute);font-size:11px}.otx b{display:block;font-weight:600;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.btn.ico.sm{width:32px;min-height:32px;height:32px;font-size:13px;border-radius:10px}
+.btn.grow,.grow{flex:1}
+.tl{display:flex;gap:3px;margin-top:10px}
+.tlb{min-width:0;display:flex;flex-direction:column;gap:3px}
+.tlb>div{height:28px;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#1a1205;overflow:hidden;white-space:nowrap;padding:0 2px}
+.tlb.w>div{background:none;border:1px dashed var(--keyl);color:var(--mute);font-weight:500;font-size:10px}
+.tlb>span{font-size:10px;color:var(--mute);text-align:center;white-space:nowrap;overflow:hidden}
+.srow2{display:flex;align-items:center;gap:10px;width:100%;padding:11px 0;background:none;border:0;border-top:1px solid var(--line);cursor:pointer;text-align:left}
+.srow2:first-child{border-top:0}
+.srow2 .grip{color:var(--mute);font-size:12px;letter-spacing:-2px}
+.srow2 .cbar{width:6px;align-self:stretch;border-radius:3px;flex:none}
+.bigval{display:flex;align-items:center;justify-content:center;width:100%;min-height:52px;border-radius:12px;background:var(--bg);border:1px dashed var(--acc);font-size:18px;font-weight:700;color:var(--acc);cursor:pointer}
+.kb{display:flex;flex-direction:column;gap:4px}
+.kbr{display:flex;gap:3px}
+.kk{flex:1;min-width:0;height:38px;border-radius:7px;border:1px solid var(--line);background:var(--panel2);font-size:12px;font-weight:600;padding:0;white-space:nowrap;overflow:hidden;cursor:pointer}
+.kk.m{background:color-mix(in srgb,var(--panel2) 70%,var(--line));color:var(--mute)}
+.kk.s{height:30px;font-size:10px}
+.kk.on{background:var(--acc);border-color:var(--acc);color:var(--acctx)}
+body.editing #panel{background:var(--bg)}
 @media (max-width:860px){
   #panel{display:none}
   body.editing #panel{display:block;position:fixed;inset:0;z-index:15;border-radius:0;border:0;overflow:auto;padding:14px 16px 60px;margin:0}
@@ -221,17 +264,20 @@ textarea{width:100%;min-height:140px;font-family:ui-monospace,Consolas,monospace
 <header>
   <span class="logo" aria-hidden="true" style="color:var(--acctx)"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 11h4M8 9v4M15 12h.01M18 10h.01"/><path d="M17.3 5H6.7a4 4 0 0 0-3.96 3.43l-.7 5A3 3 0 0 0 5 17c1 0 1.8-.6 2.2-1.4L8 14h8l.8 1.6c.4.8 1.2 1.4 2.2 1.4a3 3 0 0 0 2.96-3.57l-.7-5A4 4 0 0 0 17.3 5z"/></svg></span>
   <button class="hchip grow" id="profBtn" onclick="openSheet('profiller')" title="Profiller"><span id="profName"></span><span aria-hidden="true">▾</span></button>
-  <button class="hchip acc" id="outBtn" onclick="openSheet('profil')" title="Bu profilin ayarları"><span id="outName"></span><span aria-hidden="true">⚙</span></button>
-  <button class="btn ico" title="Ayarlar" aria-label="Ayarlar" onclick="openSheet('ayarlar')">☰</button>
+  <button class="hchip acc" id="outBtn" onclick="openSheet('profil')" title="Bu profilin ayarları"><span id="outName"></span><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/></svg></button>
+  <button class="btn ico" title="Ayarlar" aria-label="Ayarlar" onclick="openSheet('ayarlar')"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg></button>
 </header>
 
 <main>
   <div id="updBar"></div>
   <section class="card" id="status"></section>
-  <section class="card">
-    <svg viewBox="0 0 340 222" id="pad"></svg>
-    <div class="alist" id="summary"></div><p class="hint" style="text-align:center;margin:8px 0 0">Düzenlemek için çizimdeki tuşa dokun</p>
-  </section>
+  <div class="col">
+    <section class="card" style="padding:10px 10px 6px">
+      <svg viewBox="0 0 340 222" id="pad"></svg>
+      <p class="hint" style="text-align:center;margin:2px 0 4px;font-size:12px">Turuncu = atanmış · düzenlemek için tuşa dokun</p>
+    </section>
+    <section class="card" style="padding:4px 14px"><div class="alist" id="summary"></div></section>
+  </div>
   <section class="card" id="panel"></section>
 </main>
 
@@ -913,77 +959,198 @@ function gapRow(val,on,loop){
   return `<div class="gap${loop?' loop':''}"><span>${loop?'↻ tekrar arası':'⏱ sonra bekle'}</span>
     <button class="x" onclick="${on}(-1)">−</button><input type="number" min="0" max="60000" step="10" value="${val}" onchange="${on}(0,this.value)"><button class="x" onclick="${on}(1)">+</button><span>ms${val>=1000?' ('+fmtMs(val)+')':''}</span></div>`;
 }
+/* ---------- Tuş düzenleme (taslaktaki düzen) ---------- */
+const IC_TUNE='<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/></svg>';
+function countBinds(q){let n=0;for(const bd of Object.values(q.layers[0].btn))if(bindSet(bd))n++;return n;}
+function setDead(v){for(const l of P().layers)for(const k of ['LS','RS'])if(l.sticks[k])l.sticks[k].dead=v;}
+const IC_BT='<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 7l10 10-5 5V2l5 5L7 17"/></svg>';
+const IC_USB='<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 2v14M8 6l4-4 4 4M7 12v2l5 3 5-3v-3"/><circle cx="12" cy="19" r="2"/></svg>';
+const IC_BOLT='<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><path d="M13 2L4 14h7l-1 8 9-12h-7z"/></svg>';
+const IC_DRIVE='<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--acc)" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><path d="M8 3h8l6 11-4 7H6l-4-7z"/><path d="M8 3l6 11H2M16 3l-6 11h12"/></svg>';
+const IC_PULSE='<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12h4l3-8 4 16 3-8h4"/></svg>';
+const IC={
+  key:'<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="6" width="20" height="12" rx="2"/><path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M7 14h10"/></svg>',
+  mouse:'<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><rect x="6" y="3" width="12" height="18" rx="6"/><path d="M12 7v4"/></svg>',
+  pad:'<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 11h4M8 9v4M15 12h.01M18 10h.01"/><path d="M17.3 5H6.7a4 4 0 0 0-3.96 3.43l-.7 5A3 3 0 0 0 5 17c1 0 1.8-.6 2.2-1.4L8 14h8l.8 1.6c.4.8 1.2 1.4 2.2 1.4a3 3 0 0 0 2.96-3.57l-.7-5A4 4 0 0 0 17.3 5z"/></svg>',
+  media:'<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><path d="M7 5l12 7-12 7z"/></svg>',
+  move:'<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M15 8l4 4-4 4M9 8l-4 4 4 4"/></svg>',
+  text:'<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 7V5h16v2M12 5v14M9 19h6"/></svg>',
+  book:'<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2z"/><path d="M4 19V5"/></svg>',
+  rec:'<svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="6" fill="#ff5d5d"/></svg>',
+};
+const TCOL={key:'#ff8a3d',mouse:'#4cc38a',pad:'#a78bfa',media:'#6aa8ff',move:'#4cc38a',text:'#6aa8ff'};
+const TLBL={key:'Klavye',mouse:'Fare',pad:'Gamepad',media:'Medya',move:'Fare kaydır',text:'Yazı'};
+function stepValue(s){
+  if(s.t==='key')return keyName(s.k);
+  if(s.t==='mouse')return MOUSE_LABEL[s.b]||s.b;
+  if(s.t==='pad')return PAD_LABEL[s.p]||s.p;
+  if(s.t==='media')return (MEDIA_LABEL[s.m]||s.m).replace(/^\S+\s/,'');
+  if(s.t==='move')return `→ ${s.x|0}  ↓ ${s.y|0}`;
+  if(s.t==='text')return '“'+String(s.s||'').slice(0,24)+(String(s.s||'').length>24?'…':'')+'”';
+  return '';
+}
+function stepSub(s){
+  const p=[];
+  if(s.t==='move'||s.t==='text')p.push(s.t==='text'?(S.device.layout==='us'?'US düzen':'Türkçe Q'):'kaydır');
+  else if(!(s.t==='mouse'&&String(s.b).startsWith('wheel')))p.push(s.a==='hold'?'süreli · '+fmtMs(+s.hold||100):(KACT.find(x=>x[0]===s.a)||KACT[0])[1].toLowerCase());
+  if((s.rep|0)>1)p.push('×'+(s.rep|0));
+  return p.join(' · ');
+}
+/* bir eylem "sıralı" (makro) görünümünde mi düzenlenir */
+const isSeq=a=>!!(a.seq||a.mode==='macro'||a.steps.some((s,i)=>s.t==='text'||s.t==='move'||(s.a&&s.a!=='press')||(s.rep|0)>1||(i<a.steps.length-1&&(+s.after||0)>0)));
+function pressSeg(bd){
+  const main=[['single','Kısa bas'],['long','Uzun bas'],['double','Çift bas']];
+  const other=actList(bd).filter(([k])=>!main.some(m=>m[0]===k));
+  const otherOn=!main.some(m=>m[0]===ui.act);
+  return `<div class="seg" role="tablist" aria-label="Basış türü">${main.map(([k,n])=>`<button class="${ui.act===k?'on':''}" onclick="ui.act='${k}';ui.more=false;render()">${n}${isSet(bd[k])?' •':''}</button>`).join('')}<button class="${otherOn||ui.more?'on':''}" style="flex:0 0 46px" aria-label="Diğer basış türleri" onclick="ui.more=!ui.more;render()">⋯</button></div>
+  ${ui.more||otherOn?`<div class="pchips" style="margin-top:8px">${other.map(([k,n])=>`<button class="pchip ${ui.act===k?'on':''}" onclick="ui.act='${k}';render()">${esc(n)}${isSet(bd[k])?' •':''}</button>`).join('')}<button class="pchip ${ui.act==='_new'?'on':''}" onclick="ui.act='_new';render()">＋ Birlikte basış</button></div>`:''}`;
+}
 function renderPanel(){
   const b=BY_ID[ui.sel],el=document.getElementById('panel');
-  const head=`<div class="ehead"><button class="btn ico eback" onclick="closeEditor()" aria-label="Geri">‹</button><h2>${esc(b.name)}</h2><span class="tag"><span class="dot on" style="display:inline-block;width:8px;height:8px;border-radius:4px;background:var(--l2);margin-right:6px"></span>${card.busy?'yazılıyor…':'kaydedildi'}</span></div>`;
+  const a0=(L().btn[b.id]||{})[ui.act];
+  const head=`<div class="ehead"><button class="btn ico eback" onclick="closeEditor()" aria-label="Geri">‹</button><h2>${esc(b.t.length<3?b.t+' tuşu':b.name)}${a0&&!b.stick&&a0.kind!=='layer'&&isSeq(a0)?' · Makro':''}</h2><span class="tag"><i class="sdot ${card.busy?'w':''}"></i>${!PM.connected()?'telefonda kaydedildi':card.busy?'karta yazılıyor…':'karta kaydedildi'}</span></div>`;
   if(b.stick){el.innerHTML=head+stickPanel(b);return;}
   const bd=L().btn[b.id]||(L().btn[b.id]={});
   if(ui.act.startsWith('c_')&&(!bd[ui.act]||ui.act==='c_'+b.id))ui.act='single';
-  let h=head;
-  const pills=`<div class="scroll">${actList(bd).map(([k,n])=>`<button class="pill ${k===ui.act?'on':''}" onclick="ui.act='${k}';render()">${n}${isSet(bd[k])?'<span class="dot"></span>':''}</button>`).join('')}<button class="pill ${ui.act==='_new'?'on':''}" onclick="ui.act='_new';render()">＋ Birleşim</button></div>`;
+  let h=head+pressSeg(bd);
   if(ui.act==='_new'){
     const others=BTNS.filter(x=>!x.stick&&x.id!==b.id&&!bd['c_'+x.id]);
-    h+=pills+`<div class="lbl">${esc(b.name)} hangi tuşla birlikte basılınca?</div><div class="chips">${others.map(x=>{const there=L().btn[x.id]&&L().btn[x.id]['c_'+b.id];
-      return `<span class="chip" style="padding:8px 12px;font-size:14px" onclick="${there?`ui.sel='${x.id}';ui.act='c_${b.id}'`:`cur()['c_${x.id}']=act();ui.act='c_${x.id}'`};render()">${esc(x.t)}${there?' <span class="hint">(orada var)</span>':''}</span>`;}).join('')}</div>
-      <div class="explain">Örneğin LB seçersen: <b>${esc(b.t)} + LB</b> birlikte basılınca ayrı bir tuş ya da makro gönderilir. Tek başlarına basılınca kendi ayarları çalışmaya devam eder.</div>`;
+    h+=`<div class="card" style="margin-top:12px"><p class="lbl">${esc(b.t)} hangi tuşla birlikte basılınca?</p><div class="pchips">${others.map(x=>{const there=L().btn[x.id]&&L().btn[x.id]['c_'+b.id];
+      return `<button class="pchip" onclick="${there?`ui.sel='${x.id}';ui.act='c_${b.id}'`:`cur()['c_${x.id}']=act();ui.act='c_${x.id}'`};render()">${esc(x.t)}${there?' (orada var)':''}</button>`;}).join('')}</div>
+      <p class="hint" style="margin:8px 0 0">Örneğin LB seçersen: ${esc(b.t)} + LB birlikte basılınca ayrı bir şey yapılır. Tek başlarına basılınca kendi ayarları çalışır.</p></div>`;
     el.innerHTML=h;return;
   }
   const a=bd[ui.act]||(bd[ui.act]=act());
-  if(ui.layer>0&&!bindSet(bd)){
-    const m=P().layers[0].btn[b.id];
-    h+=`<div class="note">${bd.noInherit?'Bu katmanda bu tuş hiçbir şey yapmaz.':bindSet(m)?'Boş: Ana katmandaki ayar geçerli ('+descAct(m[actList(m).find(([k])=>isSet(m[k]))[0]])+').':'Boş: Ana katmanda da atama yok.'}
-      <label style="display:block;margin-top:4px"><input type="checkbox" ${bd.noInherit?'checked':''} onchange="cur().noInherit=this.checked;render()"> Ana katmandan devralma</label></div>`;
-  }
-  h+=pills;
   if(ui.act.startsWith('c_')){const o=BY_ID[ui.act.slice(2)];
-    h+=`<div class="note" style="background:var(--inb);border-color:var(--inl);color:var(--int)"><b>${esc(b.t)} + ${esc(o.t)}</b> birlikte basılınca çalışır. O sırada iki tuşun tek başına ayarları gönderilmez.
-      <div style="margin-top:6px"><button class="btn" onclick="delete cur()['${ui.act}'];ui.act='single';render()">Birleşimi sil</button></div></div>`;}
-  if((ui.act==='single'||ui.act==='double')&&isSet(bd.single)&&isSet(bd.double))h+=`<div class="note">Bu tuşta hem tek hem çift basış var. Kart ikinci basışı beklediği için tek basış yaklaşık ${P().doubleMs} ms gecikmeli gider.</div>`;
-  /* katmanlar şimdilik gizli: eski profilde katman tuşu varsa geri çevrilebilsin */
-  if(a.kind==='layer')h+=`<div class="seg" style="margin-top:4px"><button onclick="curA().kind='combo';render()">Tuş / Makroya çevir</button><button class="on">Katman (eski)</button></div>`;
+    h+=`<div class="note" style="margin-top:10px">${esc(b.t)} + ${esc(o.t)} birlikte basılınca çalışır. <button class="pchip" onclick="delete cur()['${ui.act}'];ui.act='single';render()">Kaldır</button></div>`;}
+  if((ui.act==='single'||ui.act==='double')&&isSet(bd.single)&&isSet(bd.double))h+=`<div class="note" style="margin-top:10px">Bu tuşta hem kısa hem çift basış var: kısa basış yaklaşık ${P().doubleMs} ms gecikmeli gider.</div>`;
   if(a.kind==='layer'){
-    h+=`<div class="lbl">Hangi katman</div><div class="seg">${LAYER_NAMES.map((n,i)=>`<button class="${i===a.layer?'on':''}" onclick="curA().layer=${i};render()">${n}</button>`).join('')}</div>
-      <div class="lbl">Nasıl</div><div class="seg"><button class="${a.how==='hold'?'on':''}" onclick="curA().how='hold';render()">Basılıyken</button><button class="${a.how==='toggle'?'on':''}" onclick="curA().how='toggle';render()">Bas aç / bas kapat</button></div>
-      ${a.how==='toggle'&&a.layer>0&&!hasExit(a.layer)?`<div class="note">${LAYER_NAMES[a.layer]} katmanında geri dönüş tuşu yok. O katmana geçince orada takılı kalırsın. ${LAYER_NAMES[a.layer]} katmanında bir tuşa "Katman değiştir → Ana" ata.</div>`:''}
-      <div class="explain">${a.how==='hold'?`Basılı tuttuğun sürece bütün tuşlar <b>${LAYER_NAMES[a.layer]}</b> katmanındaki gibi çalışır.`:`Bir kez basınca <b>${LAYER_NAMES[a.layer]}</b> katmanına geçilir ve orada kalınır.`}</div>`;
+    h+=`<div class="card" style="margin-top:12px"><p class="lbl">Eski katman ataması</p><p class="hint" style="margin:0 0 10px">Bu tuşa eski sürümde "katman değiştir" atanmış. Katmanlar şimdilik kapalı.</p><button class="btn pri" onclick="Object.assign(curA(),act());render()">Normal tuşa çevir</button></div>`;
     el.innerHTML=h;return;
   }
-  /* makro listesi */
-  const loop=a.mode==='turbo'||(a.mode==='toggle'&&a.steps.length>0);
-  h+=`<div class="lbl">Makro</div><div class="mac">`;
-  if(!a.steps.length)h+=`<div class="empty">Boş. Aşağıdan tuş ekle.</div>`;
-  a.steps.forEach((s,i)=>{
-    h+=`<div class="st${ok(s.t)?'':' off'}"><span class="n">${i+1}</span>`;
-    h+=`<select class="ty" title="Klavye / Fare / Gamepad" onchange="setType(${i},this.value)">${opt(TYPES,s.t)}</select>`;
-    const actSel=`<select class="a" onchange="setStep(${i},'a',this.value)">${opt(KACT,s.a)}</select>`;
-    if(s.t==='key')h+=keySel(s.k,`setStep(${i},'k',this.value)`)+actSel;
-    else if(s.t==='mouse')h+=`<select onchange="setStep(${i},'b',this.value)">${opt(MOUSE,s.b)}</select>`+(s.b.startsWith('wheel')?'':actSel);
-    else if(s.t==='pad')h+=`<select onchange="setStep(${i},'p',this.value)">${opt(PAD,s.p)}</select>`+actSel;
-    else if(s.t==='media')h+=`<select onchange="setStep(${i},'m',this.value)">${opt(MEDIA,s.m)}</select>`+actSel;
-    else if(s.t==='move')h+=`<label class="mvi" title="Sağa (+) / sola (−)">→<input type="number" min="-2000" max="2000" value="${s.x|0}" onchange="setStep(${i},'x',+this.value)"></label><label class="mvi" title="Aşağı (+) / yukarı (−)">↓<input type="number" min="-2000" max="2000" value="${s.y|0}" onchange="setStep(${i},'y',+this.value)"></label>`;
-    else if(s.t==='text')h+=`<input type="text" placeholder="Yazılacak metin" value="${esc(s.s||'')}" style="flex:1;min-width:120px" onchange="setStep(${i},'s',this.value)">`;
-    h+=`<button class="x" title="Yukarı taşı" onclick="mv(${i},-1)">↑</button><button class="x" title="Sil" onclick="rm(${i})">✕</button>`;
-    h+=`<div class="stx">${s.a==='hold'&&s.t!=='move'&&s.t!=='text'?`<label>Basılı kalsın <input type="number" min="10" max="60000" step="10" value="${s.hold||100}" onchange="setStep(${i},'hold',clamp(this.value))"> ms</label>`:''}
-      <label title="Bu adım kaç kez tekrarlansın">Tekrar <input type="number" min="1" max="50" value="${(s.rep|0)||1}" onchange="setStep(${i},'rep',Math.max(1,Math.min(50,+this.value|0)))"> kez</label></div></div>`;
-    if(i<a.steps.length-1)h+=gapRow(s.after,`gap.bind(null,${i})`);
-  });
-  if(loop)h+=gapRow(a.turbo,'loopGap',true);
-  h+=`</div><div class="row" style="margin-top:8px">
-    ${['key','mouse','move','text','media','pad'].filter(ok).map(t=>`<button class="btn" onclick="add('${t}')">+ ${TYPE_NAME[t].replace(/^(\S+) (.)/,(m,a,b)=>a+' '+b.toUpperCase())}</button>`).join('')}
-    <button class="btn ${rec?'rec':''}" onclick="toggleRec()" title="Bilgisayar klavyesinde basarak kaydet">${rec?'■ Durdur':'● Kaydet'}</button>
-    ${ok('key')?`<button class="btn" onclick="voicePreset()" title="Cihazın kendi sesli yazmasını açar">🎤 Sesli yazma</button>`:''}
-    <button class="btn" onclick="libOpen()" title="Kayıtlı makrolar">📚 Kütüphane</button></div>`;
-  if(a.steps.length){const tot=macroMs(a.steps),n=PM.expandCount(a.steps,S.device.layout);
-    h+=`<div class="hint" style="margin-top:6px">Toplam süre ≈ ${fmtMs(tot)} · kartta ${n} adım${n>255?' — <b class="bad">en fazla 255, fazlası kesilir</b>':''}</div>`;}
-  if(a.steps.length>2)h+=`<div class="row" style="margin-top:6px"><span class="hint">Hepsinin arası</span><input type="number" id="allGap" min="0" max="60000" step="10" value="${P().gapMs}" style="width:84px"><span class="hint">ms</span><button class="btn" onclick="setAll()">Uygula</button></div>`;
-  h+=`<div class="lbl">Tekrar</div><div class="seg"><button class="${a.mode==='normal'?'on':''}" onclick="curA().mode='normal';render()">Normal</button><button class="${a.mode==='turbo'?'on':''}" onclick="curA().mode='turbo';render()">Turbo</button><button class="${a.mode==='macro'?'on':''}" onclick="curA().mode='macro';render()">Makro</button><button class="${a.mode==='toggle'?'on':''}" onclick="curA().mode='toggle';render()">Toggle</button></div>`;
-  if(a.mode==='macro'&&a.steps.length<2)h+=`<div class="note">Makro için yukarıdan birden fazla adım ekle (+ Klavye, + Fare…) ya da "● Kaydet" ile klavyede basarak kaydet. Her adımın arasındaki süreyi ms olarak ayarlayabilirsin.</div>`;
-  if(b.id==='LT'||b.id==='RT')h+=`<div class="lbl">Tetik eşiği</div><div class="row"><input type="range" min="5" max="95" value="${P().trigThr}" oninput="P().trigThr=+this.value;this.nextElementSibling.textContent=this.value+'%'" onchange="render()"><span>${P().trigThr}%</span></div>`;
-  h+=`<div class="explain">${explain(a,b)}</div>`;
-  const bad=[...new Set(a.steps.filter(s=>!ok(s.t)).map(s=>TYPE_NAME[s.t]))];
-  if(bad.length)h+=`<div class="note">Bu profilde tablet cihazı <b>${OUT_NAME[P().output||'all']}</b> olarak görüyor. Soluk satırlardaki ${bad.join(', ')} adımları gönderilmez. Üstteki seçiciden değiştirebilirsin.</div>`;
+  h+=isSeq(a)?seqView(a,b):togetherView(a,b);
+  const bad=[...new Set(a.steps.filter(s=>!ok(s.t)).map(s=>TLBL[s.t]))];
+  if(bad.length)h+=`<div class="note" style="margin-top:10px">Bu profilde kart kendini <b>${esc(OUT_SHORT[P().output||'all'])}</b> olarak tanıtıyor: ${bad.join(', ')} gönderilmez. Sağ üstteki profil ayarından değiştirebilirsin.</div>`;
   el.innerHTML=h;
 }
+function togetherView(a,b){
+  const rows=a.steps.map((s,i)=>`<div class="orow ${ok(s.t)?'':'off'}"><button class="omain" onclick="pickFor(${i})"><span class="obox">${IC[s.t]||''}</span><span class="otx"><small>${TLBL[s.t]}</small><b>${esc(stepValue(s))}</b></span><span class="achev">›</span></button><button class="btn ico sm" aria-label="${TLBL[s.t]} kaldır" onclick="rm(${i})">✕</button></div>`).join('');
+  const adds=[['key','Klavye tuşu'],['mouse','Fare'],['pad','Gamepad tuşu'],['media','Medya'],['text','Yazı']].filter(([t])=>ok(t)||t==='text');
+  const modes=[['normal','Normal'],['turbo','Turbo'],['toggle','Aç-kapa']];
+  const m=modes.some(x=>x[0]===a.mode)?a.mode:'normal';
+  const hint={normal:`Normal: ${esc(BY_ID[ui.sel].t)} basılıyken hepsi basılı kalır.`,turbo:`Turbo: basılı tuttukça hızlıca tekrar basar, her ${fmtMs(a.turbo)} bir.`,toggle:'Aç-kapa: bir bas basılı kalsın, bir daha bas bıraksın.'}[m];
+  return `<div class="card" style="margin-top:12px;padding:4px 14px 14px">
+    <p class="lbl" style="margin:12px 0 2px">Basınca hepsi birlikte olsun · değiştirmek için dokun</p>
+    ${rows||'<p class="hint" style="margin:10px 0">Henüz bir şey yok. Aşağıdan ekle.</p>'}
+    <div class="pchips" style="margin-top:10px">${adds.map(([t,n])=>`<button class="pchip" onclick="addTogether('${t}')">＋ ${n}</button>`).join('')}</div>
+  </div>
+  <div class="card" style="margin-top:12px">
+    <p class="lbl">Nasıl çalışsın?</p>
+    <div class="seg">${modes.map(([k,n])=>`<button class="${m===k?'on':''}" onclick="curA().mode='${k}';render()">${n}</button>`).join('')}</div>
+    ${m==='turbo'?`<div class="row" style="margin-top:10px"><span class="hint" style="flex:1">Hız (her basış arası)</span><input type="number" min="20" max="2000" step="10" value="${a.turbo}" style="width:84px" onchange="curA().turbo=Math.max(20,clamp(this.value));render()"><span class="hint">ms</span></div>`:''}
+    <p class="hint" style="margin:8px 0 0">${hint}</p>
+  </div>
+  <div class="row" style="margin-top:12px;gap:8px"><button class="btn grow" onclick="clearAct()">Temizle</button><button class="btn pri grow" onclick="toSeq()" ${a.steps.length?'':'disabled'}>${IC.book} Sıralı yap (makro)</button></div>
+  <p class="hint" style="text-align:center;margin:8px 0 0">Sırayla ve aralarında süre olsun istersen makroya çevir</p>`;
+}
+function seqDur(s){return (s.t==='text'?Math.max(1,Array.from(s.s||'').length)*35:s.a==='hold'?(+s.hold||100):50)*Math.max(1,s.rep|0||1);}
+function seqView(a,b){
+  const modes=[['macro','Bir kez'],['turbo','Basılıyken tekrar'],['toggle','Aç-kapa']];
+  const m=modes.some(x=>x[0]===a.mode)?a.mode:'macro';
+  /* zaman çizelgesi */
+  let blocks='',tot=0;
+  a.steps.forEach((s,i)=>{
+    const d=seqDur(s);tot+=d;
+    blocks+=`<div class="tlb" style="flex:${Math.sqrt(d).toFixed(1)}"><div style="background:${TCOL[s.t]}">${esc(s.t==='key'?keyName(s.k):s.t==='mouse'?'Tık':s.t==='text'?'Aa':s.t==='move'?'↔':s.t==='pad'?(PAD_LABEL[s.p]||'').slice(0,3):'♪')}</div><span>${fmtMs(d)}</span></div>`;
+    const w=i<a.steps.length-1||m!=='macro'?(+s.after||0):0;
+    if(w>0){tot+=w;blocks+=`<div class="tlb w" style="flex:${Math.sqrt(w).toFixed(1)}"><div>bekle</div><span>${fmtMs(w)}</span></div>`;}
+  });
+  const rows=a.steps.map((s,i)=>`<button class="srow2 ${ok(s.t)?'':'off'}" onclick="openStep(${i})"><span class="grip" aria-hidden="true">⋮⋮</span><span class="cbar" style="background:${TCOL[s.t]}"></span><span class="otx"><b>${TLBL[s.t]}: ${esc(stepValue(s))}</b><small>${esc(stepSub(s))}</small></span><span class="hint" style="white-space:nowrap">${i<a.steps.length-1||m!=='macro'?'sonra '+fmtMs(+s.after||0):''}</span></button>`).join('');
+  const adds=[['key','Tuş'],['mouse','Fare tık'],['move','Kaydır'],['text','Yazı'],['wait','Bekle'],['media','Medya'],['pad','Gamepad']].filter(([t])=>t==='wait'||t==='text'||ok(t));
+  const n=PM.expandCount(a.steps,S.device.layout);
+  return `<div class="seg" style="margin-top:10px">${modes.map(([k,t])=>`<button class="${m===k?'on':''}" onclick="curA().mode='${k}';render()">${t}</button>`).join('')}</div>
+  ${m!=='macro'?`<div class="row" style="margin-top:8px"><span class="hint" style="flex:1">${m==='turbo'?'Basılı tuttukça baştan tekrarlar. Tekrar arası':'Bir bas başlar, bir daha bas durur. Tekrar arası'}</span><input type="number" min="0" max="60000" step="10" value="${a.turbo}" style="width:84px" onchange="curA().turbo=Math.max(10,clamp(this.value));render()"><span class="hint">ms</span></div>`:''}
+  <div class="card" style="margin-top:12px">
+    <div class="row" style="justify-content:space-between"><p class="lbl" style="margin:0">Zaman çizelgesi</p><span class="hint">toplam ${fmtMs(tot)}</span></div>
+    ${a.steps.length?`<div class="tl">${blocks}</div><div class="row hint" style="justify-content:space-between;font-size:11px;margin-top:4px"><span>0</span><span>${fmtMs(Math.round(tot/2))}</span><span>${fmtMs(tot)}</span></div>`:'<p class="hint" style="margin:8px 0 0">Boş. Aşağıdan adım ekle ya da canlı kaydet.</p>'}
+  </div>
+  ${a.steps.length?`<div class="card" style="margin-top:12px;padding:2px 14px">${rows}</div>`:''}
+  <div class="pchips" style="margin-top:12px">${adds.map(([t,nm])=>`<button class="pchip" onclick="addSeq('${t}')">＋ ${nm}</button>`).join('')}</div>
+  <div class="row" style="margin-top:10px;gap:8px"><button class="btn grow ${rec?'rec':''}" onclick="toggleRec()">${rec?'■ Kaydı durdur':IC.rec+' Canlı kaydet'}</button><button class="btn grow" onclick="libOpen()">${IC.book} Kütüphane</button></div>
+  <div class="row" style="margin-top:8px;gap:8px">${ok('key')?`<button class="btn grow" onclick="voicePreset()">🎤 Sesli yazma</button>`:''}<button class="btn grow" onclick="toTogether()" ${a.steps.every(s=>s.t!=='text'&&s.t!=='move')?'':'disabled'}>Birlikte yap</button></div>
+  <p class="hint" style="text-align:center;margin:8px 0 0">Adıma dokun: değiştir, süre, tekrar, sırala${n>255?' · <b class="bad">kartta en fazla 255 adım, fazlası kesilir</b>':''}</p>`;
+}
+function clearAct(){const a=curA();a.steps=[];a.seq=false;a.mode='normal';render();}
+function toSeq(){const a=curA();a.seq=true;if(a.mode==='normal')a.mode='macro';a.steps.forEach((s,i)=>{if(i<a.steps.length-1&&!(+s.after))s.after=P().gapMs||50;});render();}
+function toTogether(){const a=curA();a.seq=false;if(a.mode==='macro')a.mode='normal';a.steps.forEach(s=>{s.after=0;s.a='press';delete s.rep;});render();}
+function addTogether(t){
+  const a=curA();
+  if(t==='text'){a.seq=true;if(a.mode==='normal')a.mode='macro';a.steps.push({t:'text',s:'',after:0});render();openStep(a.steps.length-1);return;}
+  a.steps.forEach(s=>{s.after=0;});a.steps.push(Object.assign(newStep(t,0),{a:'press'}));render();pickFor(a.steps.length-1);
+}
+function addSeq(t){
+  const a=curA();
+  if(t==='wait'){if(!a.steps.length){toast('Önce bir adım ekle');return;}const s=a.steps[a.steps.length-1];s.after=(+s.after||0)+100;render();openStep(a.steps.length-1);return;}
+  if(a.steps.length&&!(+a.steps[a.steps.length-1].after))a.steps[a.steps.length-1].after=P().gapMs||50;
+  a.steps.push(newStep(t,0));render();openStep(a.steps.length-1);
+}
+/* adım düzenleme paneli */
+function openStep(i){ui.step=i;openSheet('step');}
+function stepSheet(){
+  const a=curA(),i=ui.step,s=a.steps[i];if(!s)return '<p class="hint">Adım yok.</p>';
+  const T=[['key','Tuş'],['mouse','Fare'],['pad','Gamepad'],['media','Medya'],['move','Kaydır'],['text','Yazı']];
+  let v='';
+  if(s.t==='key'||s.t==='mouse'||s.t==='pad'||s.t==='media')v=`<button class="bigval" onclick="pickFor(${i},true)">${esc(stepValue(s))}</button>`;
+  else if(s.t==='move')v=`<div class="row" style="gap:8px"><label class="hint" style="flex:1">Sağa (+) / sola (−)<input type="number" min="-2000" max="2000" value="${s.x|0}" style="width:100%" onchange="setStepS(${i},'x',+this.value)"></label><label class="hint" style="flex:1">Aşağı (+) / yukarı (−)<input type="number" min="-2000" max="2000" value="${s.y|0}" style="width:100%" onchange="setStepS(${i},'y',+this.value)"></label></div>`;
+  else v=`<textarea rows="3" style="width:100%" placeholder="Yazılacak metin" onchange="setStepS(${i},'s',this.value)">${esc(s.s||'')}</textarea><p class="hint" style="margin:4px 0 0">${S.device.layout==='us'?'US':'Türkçe Q'} klavye düzenine göre yazılır (Ayarlar › Görünüm).</p>`;
+  const press=!(s.t==='move'||s.t==='text'||(s.t==='mouse'&&String(s.b).startsWith('wheel')));
+  return `<div class="pchips">${T.map(([t,n])=>`<button class="pchip ${s.t===t?'on':''}" onclick="setStepType(${i},'${t}')">${n}</button>`).join('')}</div>
+    <div class="card" style="margin-top:10px">${v}</div>
+    ${press?`<div class="card" style="margin-top:10px"><p class="lbl">Basış</p><div class="seg">${KACT.map(([k,n])=>`<button class="${(s.a||'press')===k?'on':''}" onclick="setStepS(${i},'a','${k}')">${n}</button>`).join('')}</div>
+      ${s.a==='hold'?`<div class="row" style="margin-top:10px"><span style="flex:1">Basılı kalsın</span><input type="number" min="10" max="60000" step="10" value="${s.hold||100}" style="width:90px" onchange="setStepS(${i},'hold',clamp(this.value))"><span class="hint">ms</span></div>`:''}</div>`:''}
+    <div class="card" style="margin-top:10px">
+      <div class="row"><span style="flex:1">Sonra bekle</span><button class="btn ico sm" onclick="setStepS(${i},'after',Math.max(0,(+curA().steps[${i}].after||0)-50))">−</button><input type="number" min="0" max="60000" step="10" value="${+s.after||0}" style="width:84px" onchange="setStepS(${i},'after',clamp(this.value))"><button class="btn ico sm" onclick="setStepS(${i},'after',(+curA().steps[${i}].after||0)+50)">＋</button><span class="hint">ms</span></div>
+      <div class="row" style="margin-top:10px"><span style="flex:1">Tekrar</span><input type="number" min="1" max="50" value="${(s.rep|0)||1}" style="width:84px" onchange="setStepS(${i},'rep',Math.max(1,Math.min(50,+this.value|0)))"><span class="hint">kez</span></div>
+    </div>
+    <div class="row" style="margin-top:12px;gap:8px"><button class="btn" onclick="mvStep(${i},-1)" ${i?'':'disabled'}>↑ Yukarı</button><button class="btn" onclick="mvStep(${i},1)" ${i<a.steps.length-1?'':'disabled'}>↓ Aşağı</button><button class="btn" onclick="rm(${i});closeSheet()">Sil</button><button class="btn pri grow" onclick="closeSheet()">Tamam</button></div>`;
+}
+function setStepS(i,k,v){curA().steps[i][k]=v;render();renderSheet();}
+function setStepType(i,t){const s=curA().steps;s[i]=Object.assign(newStep(t,s[i].after),{a:'press'});render();renderSheet();}
+function mvStep(i,d){const s=curA().steps,j=i+d;if(j<0||j>=s.length)return;[s[i],s[j]]=[s[j],s[i]];ui.step=j;render();renderSheet();}
+/* değer seçiciler: klavye (bilgisayar düzeni), fare, gamepad, medya */
+function pickFor(i,fromStep){ui.pick={i,back:fromStep?'step':null};openSheet('pick');}
+const KB_ROWS=[
+  ['Escape','F1','F2','F3','F4','F5','F6','F7','F8','F9','F10','F11','F12'],
+  ['Digit1','Digit2','Digit3','Digit4','Digit5','Digit6','Digit7','Digit8','Digit9','Digit0','Minus','Equal','Backspace'],
+  ['Tab','KeyQ','KeyW','KeyE','KeyR','KeyT','KeyY','KeyU','KeyI','KeyO','KeyP','BracketLeft','BracketRight'],
+  ['CapsLock','KeyA','KeyS','KeyD','KeyF','KeyG','KeyH','KeyJ','KeyK','KeyL','Semicolon','Quote','Backslash','Enter'],
+  ['ShiftLeft','IntlBackslash','KeyZ','KeyX','KeyC','KeyV','KeyB','KeyN','KeyM','Comma','Period','Slash','ShiftRight'],
+  ['ControlLeft','MetaLeft','AltLeft','Space','AltRight','ControlRight'],
+  ['Insert','Home','PageUp','Delete','End','PageDown','PrintScreen','|','ArrowLeft','ArrowUp','ArrowDown','ArrowRight'],
+];
+const KB_SHORT={Escape:'Esc',Backspace:'⌫',Tab:'Tab',CapsLock:'Caps',Enter:'Enter',ShiftLeft:'Shift',ShiftRight:'Shift',ControlLeft:'Ctrl',ControlRight:'Ctrl',MetaLeft:'Win',AltLeft:'Alt',AltRight:'AltGr',Space:'Boşluk',Insert:'Ins',Home:'Home',PageUp:'PgUp',Delete:'Del',End:'End',PageDown:'PgDn',PrintScreen:'PrtSc',ArrowLeft:'←',ArrowUp:'↑',ArrowDown:'↓',ArrowRight:'→'};
+const KB_FLEX={Backspace:1.4,Tab:1.4,CapsLock:1.6,Enter:1.8,ShiftLeft:2,ShiftRight:2,Space:5,ControlLeft:1.3,ControlRight:1.3,MetaLeft:1.2,AltLeft:1.2,AltRight:1.4};
+const KB_MOD=new Set(['Escape','Backspace','Tab','CapsLock','Enter','ShiftLeft','ShiftRight','ControlLeft','ControlRight','MetaLeft','AltLeft','AltRight','Insert','Home','PageUp','Delete','End','PageDown','PrintScreen','ArrowLeft','ArrowUp','ArrowDown','ArrowRight']);
+function pickSheet(){
+  const a=curA(),s=a.steps[ui.pick.i];if(!s)return '';
+  const done=`<div class="row" style="margin-top:12px;gap:8px">${ui.pick.back?`<button class="btn grow" onclick="openStep(${ui.pick.i})">‹ Adım</button>`:''}<button class="btn pri grow" onclick="${ui.pick.back?`openStep(${ui.pick.i})`:'closeSheet()'}">Tamam</button></div>`;
+  if(s.t==='key'){
+    const small=r=>r===0||r===6;
+    return `<div class="bigval">${esc(keyName(s.k))}</div>
+      <p class="hint" style="margin:8px 0">Bir tuşa dokun${PM.native?'':' ya da bilgisayar klavyende bas'}. Ctrl + C gibi kombinasyon için iki klavye tuşu ekle (Ctrl ve C).</p>
+      <div class="kb">${KB_ROWS.map((r,ri)=>`<div class="kbr">${r.map(c=>c==='|'?'<span style="width:8px;flex:none"></span>':`<button class="kk ${KB_MOD.has(c)?'m':''} ${small(ri)?'s':''} ${s.k===c?'on':''}" style="flex:${KB_FLEX[c]||1}" onclick="setPick('k','${c}')">${esc(KB_SHORT[c]||keyName(c))}</button>`).join('')}</div>`).join('')}</div>${done}`;
+  }
+  const list=s.t==='mouse'?MOUSE:s.t==='pad'?PAD:MEDIA,k=s.t==='mouse'?'b':s.t==='pad'?'p':'m';
+  return `<div class="pchips">${list.map(([v,n])=>`<button class="pchip ${s[k]===v?'on':''}" onclick="setPick('${k}','${v}')">${esc(n)}</button>`).join('')}</div>${done}`;
+}
+function setPick(k,v){const a=curA(),s=a.steps[ui.pick.i];if(!s)return;s[k]=v;render();renderSheet();}
+document.addEventListener('keydown',e=>{
+  if(stab!=='pick'||!sheetOpen()||!ui.pick)return;
+  const s=curA().steps[ui.pick.i];if(!s||s.t!=='key'||!PM.HID[e.code])return;
+  if(document.activeElement&&/INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName))return;
+  e.preventDefault();setPick('k',e.code);
+});
+
 function explain(a,b){
   const an=actName(ui.act).toLowerCase();
   if(!a.steps.length)return `${esc(b.name)} için ${an} boş.`;
@@ -1105,10 +1272,10 @@ document.addEventListener('keydown',e=>{if(rec)recEv(e,'down');});
 document.addEventListener('keyup',e=>{if(rec)recEv(e,'up');});
 
 /* ---------- Ayarlar paneli ---------- */
-function openSheet(mode){stab=mode||'ayarlar';document.getElementById('sheet').classList.add('open');renderSheet();}
+function openSheet(mode){stab=mode||'ayarlar';const sh=document.getElementById('sheet');sh.classList.toggle('full',stab==='ayarlar');sh.classList.add('open');renderSheet();}
 function closeSheet(){document.getElementById('sheet').classList.remove('open');}
 let stab='ayarlar';
-const SHEET_TITLE={ayarlar:'Ayarlar',profiller:'Profiller',profil:'Profil ayarları',giris:'Giriş cihazı (pad)',cikis:'Çıkış cihazı'};
+const SHEET_TITLE={step:'Adım',pick:'Seç',ayarlar:'Ayarlar',profiller:'Profiller',profil:'Profil ayarları',giris:'Giriş cihazı (pad)',cikis:'Çıkış cihazı'};
 /* bir ayar satırı: solda ad (+ isteğe bağlı açıklama ⓘ), sağda kontrol */
 const srow=(name,ctrl,info)=>`<div class="srow"><div class="sname">${name}${info?`<details class="sinfo"><summary aria-label="Açıklama">ⓘ</summary><div>${info}</div></details>`:''}</div><div class="sctl">${ctrl}</div></div>`;
 const sgroup=(title,body)=>`<div class="sgroup">${title?`<div class="sgt">${title}</div>`:''}<div class="sgb">${body}</div></div>`;
@@ -1117,34 +1284,48 @@ function renderSheet(){
   const d=S.device,p=P();
   const bo=v=>BTNS.filter(b=>!b.stick).map(b=>`<option value="${b.id}" ${b.id===v?'selected':''}>${esc(b.name)}</option>`).join('');
   let body='';
-  if(stab==='profiller'){
-    body=sgroup('',`<div class="plist">${S.profiles.map((q,i)=>`<div class="prow ${i===S.cur?'on':''}"><button class="pmain" onclick="selProfile(${i});closeSheet()"><span class="r">${i===S.cur?'◉':'○'}</span><span style="flex:1;min-width:0"><b>${esc(q.name)}</b><small>${OUT_SHORT[q.output||'all']}</small></span></button><button class="btn ico" title="Ayarlar" aria-label="${esc(q.name)} ayarları" onclick="selProfile(${i});openSheet('profil')">⚙</button></div>`).join('')}</div>
-      <div class="sbtns"><button class="btn pri" onclick="newProfile()">＋ Yeni profil</button><button class="btn" onclick="dupProfile()">Kopyala</button><button class="btn" onclick="delProfile()" ${S.profiles.length>1?'':'disabled'}>Sil</button></div>`)+
-      sgroup('Yedek',`<div class="slist"><button onclick="backupProfiles()"><span>💾</span>Profilleri yedekle (dışa aktar)<small>Drive, WhatsApp, e-posta…</small></button>
-        <button onclick="importProfiles()"><span>📂</span>Yedekten yükle (içe aktar)</button></div>`)+
-      sgroup('',`<p class="hint" style="margin:0">Pad\'den geçiş: ${d.profSwitch?esc(BY_ID[d.profMod].name)+' basılıyken '+esc(BY_ID[d.profPrev].name)+' önceki, '+esc(BY_ID[d.profNext].name)+' sonraki profil.':'kapalı.'} Profiller kartta saklanır.</p>`);
+  if(stab==='step'){body=stepSheet();}
+  else if(stab==='pick'){const st=curA().steps[(ui.pick||{}).i];body=pickSheet();SHEET_TITLE.pick=st?({key:'Klavye tuşu',mouse:'Fare',pad:'Gamepad tuşu',media:'Medya'}[st.t]||'Seç'):'Seç';}
+  else if(stab==='profiller'){
+    body=`<div class="card" style="padding:2px 14px">${S.profiles.map((q,i)=>`<div class="li2"><span class="pdot ${i===S.cur?'on':''}"></span><button class="otx lnk" onclick="selProfile(${i});closeSheet()"><b>${esc(q.name)}</b><small>${esc(OUT_SHORT[q.output||'all'])} · ${countBinds(q)} atama</small></button>${i===S.cur?'<span class="pchip on" style="height:30px">Etkin</span>':`<button class="pchip" style="height:30px" onclick="selProfile(${i});closeSheet()">Seç</button>`}<button class="btn ico sm" aria-label="${esc(q.name)} ayarları" onclick="selProfile(${i});openSheet('profil')">${IC_TUNE}</button></div>`).join('')}</div>
+      <div class="row" style="gap:8px;margin-top:12px"><button class="btn pri grow" onclick="newProfile()">＋ Yeni profil</button><button class="btn" onclick="dupProfile()">Kopyala</button></div>
+      <div class="row" style="gap:8px;margin-top:8px"><button class="btn grow" onclick="importProfiles()">İçe aktar</button><button class="btn grow" onclick="backupProfiles()">Dışa aktar</button></div>
+      <p class="hint" style="margin:10px 0 0">Pad'den geçiş: ${d.profSwitch?esc(BY_ID[d.profMod].t)+' basılıyken '+esc(BY_ID[d.profPrev].t)+' önceki, '+esc(BY_ID[d.profNext].t)+' sonraki profil.':'kapalı.'} Profiller kartta saklanır. Ayar simgesi o profilin ayarlarını açar.</p>`;
   }else if(stab==='profil'){
-    body=sgroup('Kart kendini ne olarak tanıtsın?',`<div class="seg">${[['pad','Gamepad'],['kbm','Klavye+fare'],['all','Hepsi']].map(([k,t])=>`<button class="${(p.output||'all')===k?'on':''}" onclick="setOutput('${k}')">${t}</button>`).join('')}</div>
-      <p class="hint" style="margin:6px 0 0">Gamepad: oyunlar normal kol görür. Hepsi: kol + klavye + fare birlikte.</p>`)+
-      sgroup('Profil',srow('Adı',`<button class="btn" onclick="renameProfile()">${esc(p.name)} ✎</button>`)+
-      srow('Uzun basış',`<input type="number" min="100" max="3000" step="50" value="${p.longMs}" onchange="P().longMs=clamp(this.value);render()"><span class="hint">ms</span>`)+
-      srow('Çift basış arası',`<input type="number" min="100" max="1000" step="10" value="${p.doubleMs}" onchange="P().doubleMs=clamp(this.value);render()"><span class="hint">ms</span>`)+
-      '')+
-    sgroup('Profil geçişi (pad\'den)',
-      srow('Açık',tog(d.profSwitch,"S.device.profSwitch=!S.device.profSwitch;save();renderSheet()"),'Basılı tutulan tuş eşleme açıkken tablete gitmez. Kablo ↔ Bluetooth geçişi: Home + Start 2 sn.')+
-      (d.profSwitch?srow('Basılı tut',`<select onchange="S.device.profMod=this.value;save();renderSheet()">${bo(d.profMod)}</select>`)+
-        srow('Önceki / sonraki',`<select onchange="S.device.profPrev=this.value;save();renderSheet()">${bo(d.profPrev)}</select><select onchange="S.device.profNext=this.value;save();renderSheet()">${bo(d.profNext)}</select>`)+
-        (new Set([d.profMod,d.profPrev,d.profNext]).size<3?'<div class="note">Üç farklı tuş seç.</div>':''):''))+
-      sgroup('',`<details class="sinfo2"><summary>Bu profilin metni (ileri düzey)</summary><textarea id="jsonTa" spellcheck="false">${esc(snap(p,2))}</textarea><div class="sbtns"><button class="btn" onclick="copyJson()">Kopyala</button><button class="btn" onclick="importJson()">İçe aktar</button></div></details>`);
+    const dz=(p.layers[0].sticks.LS||{}).dead??12;
+    body=`<div class="card"><p class="lbl">Kart kendini ne olarak tanıtsın?</p>
+      <div class="seg">${[['pad','Gamepad'],['kbm','Klavye+fare'],['all','Hepsi']].map(([k,t])=>`<button class="${(p.output||'all')===k?'on':''}" onclick="setOutput('${k}')">${t}</button>`).join('')}</div>
+      <p class="hint" style="margin:8px 0 0">Gamepad: oyunlar normal kol görür. Hepsi: kol + klavye + fare birlikte.</p></div>
+      <div class="card" style="margin-top:10px"><p class="lbl" style="margin:0">Çubuklar ve tetikler</p>
+        <div class="sl"><div class="row"><span style="flex:1">Çubuk ölü bölgesi</span><span class="hint" id="dzv">%${dz}</span></div><input type="range" min="0" max="50" value="${dz}" oninput="setDead(+this.value);document.getElementById('dzv').textContent='%'+this.value" onchange="render()"><small class="hint">Çubuk fareye ya da tuşlara çevrildiğinde geçerli</small></div>
+        <div class="sl"><div class="row"><span style="flex:1">Tetik basma eşiği</span><span class="hint" id="ttv">%${p.trigThr}</span></div><input type="range" min="5" max="95" value="${p.trigThr}" oninput="P().trigThr=+this.value;document.getElementById('ttv').textContent='%'+this.value" onchange="render()"></div>
+      </div>
+      <div class="card" style="margin-top:10px;padding:2px 14px">
+        <button class="li2 lnk" onclick="renameProfile()"><span class="grow">Profil adı</span><span class="hint">${esc(p.name)}</span><span class="achev">✎</span></button>
+        <div class="li2"><span class="grow">Pad'den profil değiştir</span>${tog(d.profSwitch,"S.device.profSwitch=!S.device.profSwitch;save();renderSheet()")}</div>
+        ${d.profSwitch?`<div class="li2" style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px"><label class="hint">Basılı tut<select style="width:100%" onchange="S.device.profMod=this.value;save();renderSheet()">${bo(d.profMod)}</select></label><label class="hint">Önceki<select style="width:100%" onchange="S.device.profPrev=this.value;save();renderSheet()">${bo(d.profPrev)}</select></label><label class="hint">Sonraki<select style="width:100%" onchange="S.device.profNext=this.value;save();renderSheet()">${bo(d.profNext)}</select></label></div>${new Set([d.profMod,d.profPrev,d.profNext]).size<3?'<p class="hint bad" style="margin:0 0 8px">Üç farklı tuş seç.</p>':''}`:''}
+      </div>
+      <details class="card sinfo2" style="margin-top:10px"><summary>Gelişmiş</summary>
+        ${srow('Uzun basış',`<input type="number" min="100" max="3000" step="50" value="${p.longMs}" onchange="P().longMs=clamp(this.value);render()"><span class="hint">ms</span>`)}
+        ${srow('Çift basış arası',`<input type="number" min="100" max="1000" step="10" value="${p.doubleMs}" onchange="P().doubleMs=clamp(this.value);render()"><span class="hint">ms</span>`)}
+        <div class="row" style="gap:8px;margin-top:8px"><button class="btn" onclick="delProfile()" ${S.profiles.length>1?'':'disabled'}>Profili sil</button><button class="btn" onclick="resetProf()">Atamaları sıfırla</button></div>
+        <details class="sinfo2"><summary>Bu profilin metni</summary><textarea id="jsonTa" spellcheck="false">${esc(snap(p,2))}</textarea><div class="sbtns"><button class="btn" onclick="copyJson()">Kopyala</button><button class="btn" onclick="importJson()">İçe aktar</button></div></details>
+      </details>`;
   }else if(stab==='giris'){
-    body=sgroup('Kontrolcüler',ctrlListHtml()+`<div class="sbtns"><button class="btn pri" onclick="openScan()" ${PM.connected()?'':'disabled'}>🔍 Cihaz ara</button><button class="btn" onclick="openLearn()" ${PM.connected()&&cardCtl.cur?'':'disabled'}>🎯 Tuşları tanıt</button></div>`)+
-      sgroup('',`<p class="hint" style="margin:0">Yeni pad'i eşleşme moduna al (D8 Pro'da X + Home), sonra "Cihaz ara".</p>`);
+    const c=PM.connected(),st=cardState;
+    const cur=cardCtl.cur;
+    body=`${cur?`<div class="card" style="border-color:var(--acc)"><div class="row" style="gap:12px"><span class="obox">${IC.pad}</span><div class="grow"><b>${esc(ctrlName(cur))}</b><div class="hint">${st&&st.pad?'<span class="ok">bağlı</span>':'bekleniyor'}</div></div><button class="pchip" onclick="forgetCtrl('${cur}')">Unut</button></div></div>`:''}
+      <button class="btn pri" style="width:100%;margin-top:10px" onclick="${scan.on?'stopScan();renderSheet()':'startScan();renderSheet()'}" ${c?'':'disabled'}>${scan.on?'<span class="spin"></span> Aranıyor… (durdur)':'＋ Pad ekle (ara)'}</button>
+      ${scan.on||scan.found.length?`<div class="row" style="margin-top:12px"><p class="lbl grow" style="margin:0">Yakındaki cihazlar</p><span class="hint">${scan.on?'aranıyor…':'arama bitti'}</span></div>
+      <div class="card" style="margin-top:6px;padding:2px 14px">${scan.found.filter(x=>x.hid).sort((a,b)=>b.rssi-a.rssi).map(x=>`<div class="li2"><span class="obox" style="color:var(--mute)">${IC.pad}</span><div class="grow"><b>${esc(x.name||'Adsız pad')}</b><div class="hint">${x.rssi>-60?'güçlü':x.rssi>-75?'orta':'zayıf'} sinyal</div></div>${cardCtl.cur===x.addr?'<span class="ok">bağlı</span>':scan.pairing===x.addr?'<span class="spin"></span>':`<button class="pchip" onclick="pair('${x.addr}')">Bağlan</button>`}</div>`).join('')||'<p class="hint" style="margin:10px 0">Henüz bir şey bulunamadı.</p>'}</div>`:''}
+      ${cardCtl.list.filter(x=>x.addr!==cur).length?`<p class="lbl" style="margin:12px 0 6px">Kayıtlı pad'ler</p><div class="card" style="padding:2px 14px">${cardCtl.list.filter(x=>x.addr!==cur).map(x=>`<div class="li2"><span class="obox" style="color:var(--mute)">${IC.pad}</span><div class="grow"><b>${esc(ctrlName(x.addr))}</b></div><button class="pchip" onclick="useCtrl('${x.addr}')">Seç</button><button class="btn ico sm" aria-label="Unut" onclick="forgetCtrl('${x.addr}')">✕</button></div>`).join('')}</div>`:''}
+      <p class="hint" style="margin:10px 0 0">Yeni pad'i eşleşme moduna al (D8 Pro'da X + Home). Listede görününce Bağlan'a dokun.</p>
+      <button class="btn" style="width:100%;margin-top:10px" onclick="closeSheet();openLearn()" ${c&&cur?'':'disabled'}>🎯 Tuşları tanıt / tanılama</button>`;
   }else if(stab==='cikis'){
-    body=sgroup('Pad\'in tuşları nereye gitsin?',routeHtml());
+    body=routeHtml();
   }else{
-    const c=PM.connected(),i=PM.link.info||{};
-    body=sgroup('Güncelleme',updHtml())+
-sgroup('Kart bağlantısı',`
+    const c=PM.connected(),i=PM.link.info||{},b=bundledFw(),need=cardNeedsUpdate();
+    const adv=sgroup('Kart bağlantısı',`
       <div class="scard"><span class="dot ${!c?'':cardSynced()?'on':'warn'}"></span><div style="flex:1;min-width:0"><b>${!c?'Kart bağlı değil':cardSynced()?'Karttaki ayar güncel':'Karttaki ayar farklı'}</b><div class="hint">${c?(PM.link.via==='ble'?'📶 Bluetooth · ':PM.link.via==='usb'?'🔌 USB · ':'')+'Yazılım '+esc(i.fw||'?'):connMsg||(PM.bleOk&&PM.bleOk()?'USB ile tak ya da Bluetooth ile bağlan':'USB ile tak')}</div></div>
         <button class="btn" onclick="cardBtn()">${c?'Kes':connMsg?'Vazgeç':'Bağlan'}</button></div>
       ${!c&&!connMsg&&PM.bleOk&&PM.bleOk()?`<div class="sbtns"><button class="btn" onclick="cardBtn({ble:true})">📶 Bluetooth ile bağlan</button></div><p class="hint" style="margin:6px 0 0">Kart powerbank'a ya da başka bir cihaza takılıyken telefondan ayar yapmak için. Telefonun karta bir kez USB ile bağlanmış olması gerekir.</p>`:''}
@@ -1169,9 +1350,27 @@ sgroup('Kart bağlantısı',`
       srow('Atanmamış tuşlar gamepad olsun',tog(d.passUnmapped!==false,"S.device.passUnmapped=!(S.device.passUnmapped!==false);save();renderSheet()"))+
       (d.comboA===d.comboB?'<div class="note">İki farklı tuş seç.</div>':''))+
       sgroup('',`<div class="slist"><button onclick="closeSheet();openLearn()" ${PM.connected()&&cardCtl.cur?'':'disabled'}><span>🎯</span>Tanılama / tuşları tanıt<small>Pad'den gelen veri, gelmeyen tuşlar</small></button></div>`);
+    body=`<div class="card" style="padding:4px 14px 14px">
+        <div class="row" style="margin-top:10px"><p class="lbl grow" style="margin:0">Güncellemeler</p></div>
+        <div class="li2">${IC.key.replace('<svg','<svg style="color:var(--acc)"')}<span class="grow"><b>1 · Kart yazılımı</b><small class="hint" style="display:block">${c?'kartta '+esc(i.fw||'?')+' · ':''}uygulamada ${esc(b||'?')}${need?' · <span style="color:var(--acc)">yeni</span>':''}</small></span>${PM.native?`<button class="pchip ${need?'on':''}" ${c&&b&&PM.link.via!=='ble'?'':'disabled'} onclick="closeSheet();updCard()">${need?'Kur':'Yeniden kur'}</button>`:''}</div>
+        <div class="li2">${IC_DRIVE}<span class="grow"><b>2 · Bilgisayar sayfası</b><small class="hint" style="display:block">padmapper.html · Drive'a gönder</small></span><button class="pchip" onclick="shareHtml()">Gönder</button></div>
+        <div class="li2">${IC.pad.replace('<svg','<svg style="color:var(--acc)"')}<span class="grow"><b>3 · Uygulama</b><small class="hint" style="display:block">${PM.native?esc(PMNative.version()):'tarayıcı sürümü'}</small></span>${PM.native?'<button class="pchip" onclick="closeSheet();updApp()">Güncelle</button>':''}</div>
+        ${c&&PM.link.via==='ble'&&need?'<p class="hint" style="margin:8px 0 0">Kart yazılımı şimdilik sadece USB ile kurulur.</p>':''}
+      </div>
+      <div class="card" style="margin-top:10px">
+        <div class="row" style="gap:10px">${IC_DRIVE}<div class="grow"><b>Drive › PadMapper</b><div class="hint">Bilgisayar sayfası, profil yedeği</div></div><button class="pchip" onclick="shareHtml()">Şimdi gönder</button></div>
+        <p class="hint" style="margin:10px 0 0">Gönder deyince paylaşım ekranı açılır: Drive'ı seç, PadMapper klasörüne kaydet.</p>
+      </div>
+      <div class="card" style="margin-top:10px">
+        <div class="row" style="gap:8px">${[['dark','Gece','#14161c','#eef0f4'],['amoled','Siyah','#000','#eef0f4'],['light','Açık','#f4f5f7','#1d2129'],['auto','Sistem','linear-gradient(90deg,#14161c 50%,#f4f5f7 50%)','#a6acba']].map(([k,n,bg,fg])=>`<button class="thm ${themeOf().mode===k?'on':''}" style="background:${bg};color:${fg}" onclick="setTheme({mode:'${k}'})">${n}</button>`).join('')}</div>
+        <div class="swatches" style="margin-top:10px">${ACCENTS.map(x=>`<button aria-label="${x.n}" title="${x.n}" onclick="setTheme({acc:'${x.k}'})" style="background:${x.c};border-color:${themeOf().acc===x.k?'var(--text)':'transparent'}"></button>`).join('')}</div>
+        ${PM.native&&PMNative.notifOn?`<div class="row" style="margin-top:12px"><span class="grow">Bildirimde kart durumu</span>${tog(PMNative.notifOn(),"PMNative.setNotif(!PMNative.notifOn());renderSheet()")}</div>`:''}
+      </div>
+      <button class="card li2 lnk" style="margin-top:10px;padding:12px 14px;border:1px solid var(--line)" onclick="closeSheet();openLearn()" ${c&&cardCtl.cur?'':'disabled'}><span style="color:var(--acc)">${IC_PULSE}</span><span class="otx"><b>Tanılama</b><small>Ham pad verisi · tuş testi</small></span><span class="achev">›</span></button>
+      <details class="card sinfo2" style="margin-top:10px"><summary>Gelişmiş: kart bağlantısı, klavye düzeni, paylaşım, eşleme tuşları</summary>${adv}</details>`;
   }
   document.getElementById('sheetIn').innerHTML=`
-  <div class="shead"><h2>${SHEET_TITLE[stab]||'Ayarlar'}</h2><button class="btn ico" onclick="closeSheet()" aria-label="Kapat">✕</button></div>
+  <div class="shead">${stab==='ayarlar'?'<button class="btn ico" onclick="closeSheet()" aria-label="Geri">‹</button>':''}<h2>${SHEET_TITLE[stab]||'Ayarlar'}</h2>${stab==='ayarlar'?'':'<button class="btn ico" onclick="closeSheet()" aria-label="Kapat">✕</button>'}</div>
   <div class="sbody">${body}</div>`;
 }
 /* ---------- Kontrolcüler: kartla ---------- */
@@ -1225,6 +1424,7 @@ function scanEv(ev){
   if(ev.ev==='dev'){const f=scan.found.find(x=>x.addr===ev.addr);if(f){f.rssi=ev.rssi;if(ev.name)f.name=ev.name;if(ev.hid)f.hid=true;if(ev.app)f.app=ev.app;}else scan.found.push({addr:ev.addr,name:ev.name,rssi:ev.rssi,hid:!!ev.hid,app:ev.app||0});
     if(ev.hid&&ev.name)rememberName(ev.addr,ev.name);}
   if(ev.ev==='scan_end')scan.on=false;
+  if(stab==='giris'&&sheetOpen())setTimeout(()=>{if(stab==='giris'&&sheetOpen())renderSheet();},50);
   if(ev.ev==='connected'&&scan.pairing&&ev.addr===scan.pairing){scan.pairing=null;toast((ev.name||'Kontrolcü')+' bağlandı');}
   if(document.getElementById('scan').classList.contains('open'))renderScan();
 }
@@ -1642,18 +1842,27 @@ let cardBT=null;
 const tName=a=>(S.device.tnames&&S.device.tnames[a])||('Bluetooth cihaz '+String(a).replace(/ \(.*\)$/,'').slice(-5));
 function routeHtml(){
   if(!PM.connected())return '<p class="hint" style="margin:0">Karta bağlanınca burada seçilir. Seçim kartta saklanır; uygulama kapalıyken de geçerlidir.</p>';
-  if(!cardBT)return '<p class="hint" style="margin:0">Kart yazılımı Bluetooth çıkışı desteklemiyor (0.6.0 gerekli).</p>';
-  const bt=cardBT.route===1;
-  let h=`<div class="seg"><button class="${!bt?'on':''}" onclick="setRoute(0)">⚡ Otomatik</button><button class="${bt?'on':''}" onclick="setRoute(1)">📶 Her zaman Bluetooth</button></div>`;
-  if(!bt&&cardState)h+=`<div class="scard" style="margin-top:8px"><span class="dot ${cardState.path===0&&cardState.usb?'on':''}"></span><div style="flex:1"><b>${cardState.path===0?(cardState.usb?'USB veri bağlantısı (OTG) → tuşlar kablodan gidiyor':'Kablo yok'):cardState.path===1?'Sadece güç (veri yok) → Bluetooth':'Sadece güç → Bluetooth hedefi aranıyor'}</b><div class="hint">Otomatik: kart bir bilgisayara ya da tablete veri kablosuyla takılıysa kablo, değilse (powerbank, şarj aleti) Bluetooth.</div></div></div>`;
-  const path=cardState?cardState.path:(bt?(cardBT.host?1:2):0);
-  if(bt&&path===0)h+=`<p class="hint" style="margin:6px 0">Bluetooth hedefi bulunamadığı için tuşlar şu an <b>kablodan</b> gidiyor. Hedef açılınca kendiliğinden Bluetooth'a geçer.</p>`;else
-  h+=`<p class="hint" style="margin:6px 0">${!bt?'Aşağıdaki Bluetooth cihazı, kablo olmadığında kullanılır.':path===1&&cardBT.host?'Tuşlar Bluetooth\'tan <b>'+esc(tName(cardBT.host))+'</b> cihazına gidiyor. Kartın takılı olduğu cihaza tuş gitmez.':'Bluetooth hedefi aranıyor… 10 sn içinde bulunamazsa tuşlar kabloya döner.'}</p>`;
-  h+=(cardBT.list||[]).map(a=>{const sel=a===cardBT.target,on=a===cardBT.host;
-    return `<div class="dev ${sel?'act':''}" onclick="pickTarget('${a}')"><span class="r">${sel?'◉':'○'}</span><div style="flex:1;min-width:0"><b>${esc(tName(a))}</b><div class="hint">${on?'<span class="ok">bağlı</span>':sel?'seçili':'eşleşmiş'}</div></div>
-      <button class="x" title="Adını değiştir" onclick="event.stopPropagation();renameTarget('${a}')">✎</button><button class="x" title="Unut" onclick="event.stopPropagation();unpairTarget('${a}')">✕</button></div>`;}).join('')||'<div class="empty">Eşleşmiş Bluetooth hedefi yok.</div>';
-  h+=`<div class="row" style="margin-top:8px"><button class="btn ${cardBT.pairing?'':'pri'}" onclick="pairNew()" ${cardBT.pairing?'disabled':''}>${cardBT.pairing?'<span class="spin"></span> Eşleşme bekleniyor (60 sn)':'＋ Cihaz ekle'}</button></div>
-    <p class="hint" style="margin:6px 0 0">Yeni cihaz: "Cihaz ekle"ye bas, sonra o cihazın (PC, TV, tablet) Bluetooth ayarlarında <b>PadMapper</b>'ı seç. Kart sadece bu 60 saniyede yeni cihaz kabul eder. Pad'den hızlı geçiş: Home + Start 2 sn.</p>`;
+  if(!cardBT)return '<p class="hint" style="margin:0">Kart yazılımı Bluetooth çıkışı desteklemiyor. Kartı güncelle.</p>';
+  const bt=cardBT.route===1,st=cardState||{};
+  const rad=on=>`<span class="rad ${on?'on':''}"><i></i></span>`;
+  const stbox=(col,ico,t,s)=>`<div class="stbox">${ico}<div class="grow"><div style="font-size:12px;font-weight:600;color:${col}">${t}</div><div class="hint" style="font-size:11px">${s}</div></div></div>`;
+  let now='';
+  if(!bt){
+    if(st.path===0&&st.usb)now=stbox('var(--l2)',IC_USB,'Şu an: USB veri bağlantısı (OTG)','Kart bir bilgisayara ya da tablete takılı → tuşlar kablodan gidiyor');
+    else if(st.path===1)now=stbox('var(--mute)',IC_BT,'Sadece güç (veri yok) → Bluetooth: '+esc(cardBT.host?tName(cardBT.host):'hedef'),'Hata değil; kart kablodan güç alıyor, tuşlar Bluetooth\'tan gidiyor');
+    else now=stbox('var(--warn)',IC_BT,'Sadece güç → Bluetooth hedefi aranıyor…','Seçili cihazın Bluetooth\'u açık mı?');
+  }
+  let h=`<div class="card" style="padding:4px 14px 12px">
+    <button class="li2 lnk" onclick="setRoute(0)">${rad(!bt)}<span class="obox">${IC_BOLT}</span><span class="otx"><b>Otomatik</b><small>Veri kablosu varsa kablo, yoksa Bluetooth</small></span></button>
+    ${now}
+    <p class="lbl" style="margin:12px 0 0">Bluetooth cihazları</p>
+    ${(cardBT.list||[]).map(a=>{const sel=a===cardBT.target,on=a===cardBT.host;
+      return `<div class="li2"><button class="lnk row grow" style="gap:10px" onclick="pickTarget('${a}')">${rad(bt&&sel)}<span class="obox" style="color:${on?'var(--acc)':'var(--mute)'}">${IC_BT}</span><span class="otx"><b>${esc(tName(a))}</b><small>${on?'<span class="ok">bağlı</span>':sel?'seçili':'eşli'}</small></span></button><button class="btn ico sm" aria-label="Adını değiştir" onclick="renameTarget('${a}')">✎</button><button class="btn ico sm" aria-label="Unut" onclick="unpairTarget('${a}')">✕</button></div>`;}).join('')||'<p class="hint" style="margin:8px 0">Eşli Bluetooth cihazı yok.</p>'}
+    ${bt?'':`<button class="li2 lnk" onclick="setRoute(1)">${rad(false)}<span class="otx"><b>Her zaman Bluetooth</b><small>Kablo takılı olsa bile seçili Bluetooth cihazına</small></span></button>`}
+    ${bt?`<button class="li2 lnk" onclick="setRoute(1)">${rad(true)}<span class="otx"><b>Her zaman Bluetooth</b><small>Otomatiğe dönmek için yukarıdaki Otomatik'e dokun</small></span></button>`:''}
+  </div>
+  <button class="btn ${cardBT.pairing?'':'pri'}" style="width:100%;margin-top:10px" onclick="pairNew()" ${cardBT.pairing?'disabled':''}>${cardBT.pairing?'<span class="spin"></span> Kart görünür · 60 sn':'＋ Cihaz ekle (Bluetooth)'}</button>
+  <p class="hint" style="margin:8px 0 0">Cihaz ekle'ye dokununca kart 60 sn görünür olur. Yeni cihazın Bluetooth ayarlarında "PadMapper"ı seç; listeye eklenir ve çıkış ona geçer.</p>`;
   return h;
 }
 async function setRoute(r){await PM.sendLine('route '+r);}

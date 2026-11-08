@@ -241,7 +241,7 @@ static struct { uint8_t t, c, used; int16_t bi; } togs[MAXT];
 static void tog_flip(int bi, uint8_t t, uint8_t c)
 {
 	for (int i = 0; i < MAXT; i++) {
-		if (togs[i].used && togs[i].bi == bi) { togs[i].used = 0; o_up(t, c); return; }
+		if (togs[i].used && togs[i].bi == bi && togs[i].t == t && togs[i].c == c) { togs[i].used = 0; o_up(t, c); return; }
 	}
 	for (int i = 0; i < MAXT; i++) {
 		if (!togs[i].used) { togs[i].used = 1; togs[i].bi = bi; togs[i].t = t; togs[i].c = c; o_down(t, c); return; }
@@ -370,6 +370,20 @@ static bool single_out(const struct bind *b)
 	return b->nsteps == 1 && b->steps[0] != ST_MOVE && b->steps[2] == 0 && !(b->steps[0] == ST_MOUSE && b->steps[1] >= 5);
 }
 
+/* Birden fazla çıkış "birlikte": hepsi bas-bırak, beklemesiz, kaydırma/tekerlek yok.
+ * Normal modda pad tuşu basılıyken hepsi basılı kalır; aç-kapa modunda hepsi birlikte açılıp kapanır. */
+static bool all_out(const struct bind *b)
+{
+	if (b->nsteps < 2 || b->nsteps > 8) return false;
+	for (int i = 0; i < b->nsteps; i++) {
+		const uint8_t *s = b->steps + 5 * i;
+
+		if (s[0] == ST_MOVE || s[2] != 0 || (s[0] == ST_MOUSE && s[1] >= 5)) return false;
+		if (i < b->nsteps - 1 && (s[3] | s[4])) return false;
+	}
+	return true;
+}
+
 /* hb: basılı tutulan tuş (tutma davranışı için), -1: tek seferlik */
 static void fire(int bi, int hb, int64_t now)
 {
@@ -390,11 +404,13 @@ static void fire(int bi, int hb, int64_t now)
 		break;
 	case 2: /* toggle */
 		if (single_out(b)) tog_flip(bi, b->steps[0], b->steps[1]);
+		else if (all_out(b)) { for (int i = 0; i < b->nsteps; i++) tog_flip(bi, b->steps[5 * i], b->steps[5 * i + 1]); }
 		else if (run_find(bi) >= 0) runs[run_find(bi)].used = 0;
 		else run_start(bi, true, -1, now);
 		break;
 	default:
 		if (hb >= 0 && single_out(b)) hold_add(hb, b->steps[0], b->steps[1]);
+		else if (hb >= 0 && all_out(b)) { for (int i = 0; i < b->nsteps; i++) hold_add(hb, b->steps[5 * i], b->steps[5 * i + 1]); }
 		else run_start(bi, false, -1, now);
 	}
 }
