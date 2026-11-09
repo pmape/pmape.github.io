@@ -910,20 +910,24 @@ function shortStick(st){
   if(st.mode==='mouse')return 'Fare';if(st.mode==='scroll')return 'Teker';if(st.mode==='pad')return '🎮';if(st.mode!=='keys')return '';
   const k=['up','left','down','right'].map(d=>keyName(st.keys[d]));return k.every(x=>x.length===1)?k.join(''):'Tuşlar';
 }
+/* pad'in dışarı göndermediği arka tuşlar: ataması yoksa gösterilmez (Profil ayarları › Gelişmiş'ten açılır) */
+const hiddenBtn=b=>(b.id==='M1'||b.id==='M2')&&!S.device.showM&&!bindSet(P().layers[0].btn[b.id]);
 function drawPad(){
   let h=`<path class="grip" d="M92 46h156c30 0 48 18 54 46l18 78c5 24-26 40-44 20l-24-28H88l-24 28c-18 20-49 4-44-20l18-78c6-28 24-46 54-46z"/>`;
   for(const b of BTNS){
+    if(hiddenBtn(b))continue;
     const sh=b.sh==='c'?`<circle class="s" cx="${b.x}" cy="${b.y}" r="${b.r}"/>`:`<rect class="s" x="${b.x}" y="${b.y}" width="${b.w}" height="${b.h}" rx="6"/>`;
     const cx=b.sh==='c'?b.x:b.x+b.w/2,cy=b.sh==='c'?b.y:b.y+b.h/2;
     const inner=b.stick?`<circle cx="${b.x}" cy="${b.y}" r="${b.r*.55}" fill="none" stroke="var(--keyl)" stroke-width="2" pointer-events="none"/>`:'';
     h+=`<g class="b" id="b-${b.id}" onclick="pick('${b.id}')"><title>${esc(b.name)}</title>${sh}${inner}<text x="${cx}" y="${cy}">${b.t}</text></g>`;
   }
-  for(const b of BTNS){const [x,y,an]=LPOS[b.id];h+=`<text class="lb" id="l-${b.id}" x="${x}" y="${y}" text-anchor="${an}"></text>`;}
+  for(const b of BTNS){if(hiddenBtn(b))continue;const [x,y,an]=LPOS[b.id];h+=`<text class="lb" id="l-${b.id}" x="${x}" y="${y}" text-anchor="${an}"></text>`;}
   document.getElementById('pad').innerHTML=h;
 }
 function paintPad(){
+  if(document.querySelectorAll('#pad .b').length!==BTNS.filter(b=>!hiddenBtn(b)).length)drawPad();
   for(const b of BTNS){
-    const g=document.getElementById('b-'+b.id);let mapped,inh=false;
+    const g=document.getElementById('b-'+b.id);if(!g)continue;let mapped,inh=false;
     if(b.stick){const st=L().sticks[b.id];mapped=st.mode!=='inherit'&&st.mode!=='off';
       if(ui.layer>0&&st.mode==='inherit')inh=P().layers[0].sticks[b.id].mode!=='off';}
     else{const bd=L().btn[b.id];mapped=bindSet(bd);
@@ -1020,7 +1024,7 @@ function renderPanel(){
   if(ui.act.startsWith('c_')&&(!bd[ui.act]||ui.act==='c_'+b.id))ui.act='single';
   let h=head+pressSeg(bd);
   if(ui.act==='_new'){
-    const others=BTNS.filter(x=>!x.stick&&x.id!==b.id&&!bd['c_'+x.id]);
+    const others=BTNS.filter(x=>!x.stick&&x.id!==b.id&&!bd['c_'+x.id]&&!hiddenBtn(x));
     h+=`<div class="card" style="margin-top:12px"><p class="lbl">${esc(b.t)} hangi tuşla birlikte basılınca?</p><div class="pchips">${others.map(x=>{const there=L().btn[x.id]&&L().btn[x.id]['c_'+b.id];
       return `<button class="pchip" onclick="${there?`ui.sel='${x.id}';ui.act='c_${b.id}'`:`cur()['c_${x.id}']=act();ui.act='c_${x.id}'`};render()">${esc(x.t)}${there?' (orada var)':''}</button>`;}).join('')}</div>
       <p class="hint" style="margin:8px 0 0">Örneğin LB seçersen: ${esc(b.t)} + LB birlikte basılınca ayrı bir şey yapılır. Tek başlarına basılınca kendi ayarları çalışır.</p></div>`;
@@ -1311,6 +1315,7 @@ function renderSheet(){
         ${d.profSwitch?`<div class="li2" style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px"><label class="hint">Basılı tut<select style="width:100%" onchange="S.device.profMod=this.value;save();renderSheet()">${bo(d.profMod)}</select></label><label class="hint">Önceki<select style="width:100%" onchange="S.device.profPrev=this.value;save();renderSheet()">${bo(d.profPrev)}</select></label><label class="hint">Sonraki<select style="width:100%" onchange="S.device.profNext=this.value;save();renderSheet()">${bo(d.profNext)}</select></label></div>${new Set([d.profMod,d.profPrev,d.profNext]).size<3?'<p class="hint bad" style="margin:0 0 8px">Üç farklı tuş seç.</p>':''}`:''}
       </div>
       <details class="card sinfo2" style="margin-top:10px"><summary>Gelişmiş</summary>
+        <div class="row" style="margin:8px 0"><span class="grow">Arka tuşları göster (M1 / M2)</span>${tog(!!d.showM,"S.device.showM=!S.device.showM;drawPad();render();renderSheet()")}</div>
         ${srow('Uzun basış',`<input type="number" min="100" max="3000" step="50" value="${p.longMs}" onchange="P().longMs=clamp(this.value);render()"><span class="hint">ms</span>`)}
         ${srow('Çift basış arası',`<input type="number" min="100" max="1000" step="10" value="${p.doubleMs}" onchange="P().doubleMs=clamp(this.value);render()"><span class="hint">ms</span>`)}
         <div class="row" style="gap:8px;margin-top:8px"><button class="btn" onclick="delProfile()" ${S.profiles.length>1?'':'disabled'}>Profili sil</button><button class="btn" onclick="resetProf()">Atamaları sıfırla</button></div>
@@ -1817,7 +1822,7 @@ function updClose(){updating=false;const d=document.getElementById('upd');if(d)d
 const UPD_STEPS=['Kart yükleme moduna geçiyor','Kartın sürücüsü bekleniyor','Yeni yazılım yazılıyor','Kart yeniden başlıyor','Bitti'];
 async function updCard(skip){
   if(updating)return;
-  if(!skip&&!await ask('Kart yazılımı '+bundledFw()+' kurulsun mu? Yaklaşık 30 sn sürer. Bu sırada kartı çıkarma.',null))return;
+  if(!skip&&!await ask('Kart yazılımı '+bundledFw()+' kurulsun mu?\n\nKart güncelleme moduna geçer ve telefona USB bellek gibi görünür. Açılan dosya ekranında sol menüden XIAO belleğini seçip "Bu klasörü kullan"a basman gerekir.\n\nXIAO belleği listede yoksa telefonun onu göremiyordur: Vazgeç de, kartı çıkarıp tak (eski yazılımla açılır) ve kartı bilgisayardan güncelle.',null))return;
   updating=true;closeSheet();
   const want=bundledFw();
   updModal(UPD_STEPS,0);
@@ -1828,7 +1833,7 @@ async function updCard(skip){
   window.PM_native.drive=ok=>{if(ok)PMNative.flashUf2();else updModal(UPD_STEPS,1,null,'Sürücü seçilmedi.',`<button class="btn pri" onclick="PMNative.pickDrive()">Sürücüyü seç</button><button class="btn" onclick="updClose()">Vazgeç</button>`);};
   window.PM_native.flash=ev=>{
     if(ev.state==='wait')updModal(UPD_STEPS,1);
-    else if(ev.state==='nodrive')updModal(UPD_STEPS,1,null,'Açılan kart sürücüsünü seç (adı genelde <b>XIAO</b> ile başlar), sonra <b>Bu klasörü kullan</b> de. Bu izin bir kere istenir.',`<button class="btn pri" onclick="PMNative.pickDrive()">Sürücüyü seç</button><button class="btn" onclick="updClose()">Vazgeç</button>`);
+    else if(ev.state==='nodrive')updModal(UPD_STEPS,1,null,'Açılan kart sürücüsünü seç (adı genelde <b>XIAO</b> ile başlar), sonra <b>Bu klasörü kullan</b> de. Bu izin bir kere istenir.<br><br><b>XIAO belleği listede yoksa</b> telefonun onu göremiyor: Vazgeç de, kartı çıkarıp tak (eski yazılımla açılır) ve bilgisayardan güncelle.',`<button class="btn pri" onclick="PMNative.pickDrive()">Sürücüyü seç</button><button class="btn" onclick="updClose()">Vazgeç</button>`);
     else if(ev.state==='write')updModal(UPD_STEPS,2,ev.p);
     else if(ev.state==='err')updModal(UPD_STEPS,2,ev.p,'Yazılamadı: '+esc(ev.msg||'')+'. Kart bozulmaz; kartı çıkarıp takıp tekrar dene ya da bilgisayardan UF2 at.',`<button class="btn pri" onclick="PMNative.flashUf2()">Tekrar dene</button><button class="btn" onclick="updClose()">Kapat</button>`);
     else if(ev.state==='done'){

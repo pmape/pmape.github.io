@@ -7,8 +7,8 @@ android {
         applicationId 'com.padmapper.ayar'
         minSdk 24
         targetSdk 34
-        versionCode 21
-        versionName '0.25'
+        versionCode 22
+        versionName '0.26'
     }
     /* Sabit imza: güncellemeler eskisinin üstüne kurulur, veriler silinmez */
     signingConfigs {
