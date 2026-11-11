@@ -579,8 +579,8 @@ const PM = (() => {
   let permWait = null, plugCb = null, blePerm = null, bleWait = null;
   const BLE_ERR = {
     notfound: 'Kart Bluetooth\'ta bulunamadı. Kart açık mı (güç var mı)? Kart USB ile bir uygulamaya bağlıysa Bluetooth ayarı kapalıdır.',
-    key: 'Bu cihaz karta tanıtılmamış. Pad\'de Select + Start\'a 3 sn bas (kart 60 sn tanıtmaya açılır), sonra tekrar Bağlan. Ya da kartı bir kez USB ile tak.',
-    nokey: 'Bu cihaz karta tanıtılmamış. Pad\'de Select + Start\'a 3 sn bas, sonra tekrar Bağlan.',
+    key: 'Bu cihaz karta henüz tanıtılmamış. Kartı güçten çıkarıp tekrar tak, 1 dakika içinde yeniden Bağlan de: kart bu cihazı kaydeder.',
+    nokey: 'Bu cihaz karta henüz tanıtılmamış. Kartı güçten çıkarıp tekrar tak, 1 dakika içinde yeniden Bağlan de.',
     nosvc: 'Karttaki yazılım eski: kablosuz ayar için kartı USB ile tak ve güncelle.',
     timeout: 'Karta Bluetooth ile bağlanılamadı (süre doldu). Tekrar dene.',
   };

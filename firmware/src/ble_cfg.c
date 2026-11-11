@@ -35,8 +35,14 @@ static int64_t last_usb;        /* USB'den en son dinlenen an */
 static bool want;
 static int64_t open_until;      /* tanıtma penceresi (yeni telefon anahtarını kablosuz bırakabilir) */
 
-/* kayıtlı telefon yoksa kapı hep açık; varsa sadece Select+Start 3 sn ile 60 sn açılır */
-static bool open_now(void) { return nkey == 0 || k_uptime_get() < open_until; }
+/* kapı: kayıtlı cihaz yoksa hep açık; varsa kart güce takıldıktan sonraki ilk 60 sn
+ * (ya da kayıtlı bir cihazdan "Yeni cihaz ekle" denince 60 sn) yeni cihaz kendini tanıtabilir */
+static bool open_now(void)
+{
+	int64_t n = k_uptime_get();
+
+	return nkey == 0 || n < 60000 || n < open_until;
+}
 void ble_cfg_open_window(void)
 {
 	open_until = k_uptime_get() + 60000;
@@ -176,7 +182,6 @@ static void on_line(struct bt_conn *conn, char *l)
 			reply("{\"ev\":\"auth\",\"paired\":0}\n");
 			return;
 		}
-		open_until = 0;
 		reply("{\"ev\":\"auth\",\"paired\":1}\n");
 		OUT("{\"ev\":\"secret\",\"ok\":1,\"n\":%u,\"new\":1}\n", nkey);
 		return;

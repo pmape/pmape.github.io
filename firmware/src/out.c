@@ -472,24 +472,6 @@ static void out_thread(void *a, void *b, void *c)
 			continue;
 		}
 
-		/* Select + Start 3 sn: yeni telefon/bilgisayar 60 sn kablosuz tanıtılabilir */
-		{
-			static int64_t since;
-			static bool done;
-			uint32_t ss = BIT(PB_SELECT) | BIT(PB_START);
-
-			if ((p.btn & ss) == ss && !(p.btn & BIT(PB_HOME))) {
-				if (!since) since = k_uptime_get();
-				if (!done && k_uptime_get() - since > 3000) {
-					done = true;
-					ble_cfg_open_window();
-				}
-			} else {
-				since = 0;
-				done = false;
-			}
-		}
-
 		/* Home + Start 2 sn: tuşlar kablo <-> Bluetooth */
 		{
 			static int64_t since;

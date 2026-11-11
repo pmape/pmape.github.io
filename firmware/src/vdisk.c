@@ -37,8 +37,8 @@ static const char readme[] =
 	"             Uygulama kuruluysa kart takilinca kendisi acilir.\r\n"
 	"\r\n"
 	"BLUETOOTH  : Kart USB'den ayarlanmiyorsa Bluetooth'ta ayar icin gorunur.\r\n"
-	"             Yeni bir cihazi tanitmak icin pad'de Select + Start'a\r\n"
-	"             3 sn bas: kart 60 sn tanitmaya acilir.\r\n"
+	"             Yeni bir cihaz: karti guce tak, 1 dakika icinde\r\n"
+	"             o cihazdan Baglan de; kart cihazi kaydeder.\r\n"
 	"\r\n"
 	"Bu bellek salt okunurdur; dosyalar kart yazilimiyla birlikte gelir.\r\n";
 
