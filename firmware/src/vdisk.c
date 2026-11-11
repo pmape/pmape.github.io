@@ -18,7 +18,7 @@ static const uint8_t html_raw[] = { 0,
 };
 
 #define PAGE_URL "https://imlegennd.github.io/padmapper-indir/"
-#define APK_URL "https://github.com/ImLegennD/padmapper-indir/releases/latest/download/padmapper-ayar.apk"
+#define APK_URL "https://github.com/ImLegennD/padmapper-indir/raw/main/padmapper-ayar.apk"
 
 static const char url_page[] = "[InternetShortcut]\r\nURL=" PAGE_URL "\r\n";
 static const char url_apk[] = "[InternetShortcut]\r\nURL=" APK_URL "\r\n";
