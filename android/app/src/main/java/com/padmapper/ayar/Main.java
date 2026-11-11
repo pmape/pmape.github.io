@@ -337,6 +337,96 @@ public class Main extends Activity {
         flashEv("done", 100, null);
     }
 
+    /* Kartın önyükleyicisi: bizim kart değil ama seri (CDC) arayüzü olan USB cihazı */
+    private UsbDevice findBoot() {
+        for (UsbDevice d : um.getDeviceList().values()) {
+            if (d.getVendorId() == VID) continue;
+            for (int k = 0; k < d.getInterfaceCount(); k++)
+                if (d.getInterface(k).getInterfaceClass() == UsbConstants.USB_CLASS_CDC_DATA) return d;
+        }
+        return null;
+    }
+
+    /* Kablodan kart güncelleme: dosya yöneticisi yok; uygulama yazılımı önyükleyicinin seri kanalından yollar */
+    private void doDfu() {
+        byte[] bin;
+        try {
+            long[] base = new long[1];
+            bin = Dfu.uf2ToBin(readAll(getAssets().open("padmapper.uf2")), base);
+            if (base[0] != 0x27000) throw new Exception("beklenmeyen adres " + Long.toHexString(base[0]));
+        } catch (Exception e) { flashEv("err", 0, "Uygulamadaki kart yazılımı okunamadı: " + e.getMessage()); return; }
+        closeLink();
+        UsbDevice d = null;
+        for (int t = 0; t < 40 && d == null; t++) {
+            flashEv("wait", t, null);
+            d = findBoot();
+            if (d == null) try { Thread.sleep(500); } catch (InterruptedException e) { return; }
+        }
+        if (d == null) { flashEv("noboot", 0, null); return; }
+        if (!um.hasPermission(d)) {
+            flashEv("perm", 0, null);
+            int fl = Build.VERSION.SDK_INT >= 31 ? PendingIntent.FLAG_MUTABLE : 0;
+            um.requestPermission(d, PendingIntent.getBroadcast(Main.this, 1, new Intent(PERM).setPackage(getPackageName()), fl));
+            for (int t = 0; t < 120 && !um.hasPermission(d); t++) try { Thread.sleep(250); } catch (InterruptedException e) { return; }
+            if (!um.hasPermission(d)) { flashEv("err", 0, "USB izni verilmedi"); return; }
+        }
+        UsbDeviceConnection c = um.openDevice(d);
+        if (c == null) { flashEv("err", 0, "Önyükleyici açılamadı"); return; }
+        UsbInterface ci = null, di = null;
+        UsbEndpoint in = null, out = null;
+        for (int k = 0; k < d.getInterfaceCount(); k++) {
+            UsbInterface it = d.getInterface(k);
+            if (it.getInterfaceClass() == UsbConstants.USB_CLASS_COMM && ci == null) ci = it;
+            if (it.getInterfaceClass() == UsbConstants.USB_CLASS_CDC_DATA && di == null) {
+                di = it;
+                for (int e = 0; e < it.getEndpointCount(); e++) {
+                    UsbEndpoint ep = it.getEndpoint(e);
+                    if (ep.getType() != UsbConstants.USB_ENDPOINT_XFER_BULK) continue;
+                    if (ep.getDirection() == UsbConstants.USB_DIR_IN) in = ep; else out = ep;
+                }
+            }
+        }
+        if (di == null || in == null || out == null) { c.close(); flashEv("err", 0, "Önyükleyicide seri kanal yok"); return; }
+        if (ci != null) c.claimInterface(ci, true);
+        c.claimInterface(di, true);
+        int idx = ci != null ? ci.getId() : 0;
+        byte[] lc = { 0x00, (byte) 0xC2, 0x01, 0x00, 0, 0, 8 };
+        c.controlTransfer(0x21, 0x20, 0, idx, lc, lc.length, 500);
+        c.controlTransfer(0x21, 0x22, 3, idx, null, 0, 500);
+        final Dfu.Framer fr = new Dfu.Framer();
+        final boolean[] run = { true };
+        final UsbDeviceConnection cc = c;
+        final UsbEndpoint ein = in, eout = out;
+        Thread rd = new Thread(() -> {
+            byte[] b = new byte[64];
+            while (run[0]) {
+                int n = cc.bulkTransfer(ein, b, b.length, 100);
+                if (n > 0) fr.push(b, n);
+            }
+        }, "pm-dfu-rx");
+        rd.start();
+        try {
+            try { Thread.sleep(300); } catch (InterruptedException e) { }
+            new Dfu(new Dfu.Io() {
+                public void write(byte[] b) throws Exception {
+                    for (int o = 0; o < b.length; ) {
+                        int n = cc.bulkTransfer(eout, java.util.Arrays.copyOfRange(b, o, Math.min(b.length, o + 512)), Math.min(512, b.length - o), 2000);
+                        if (n <= 0) throw new Exception("USB'ye yazılamadı");
+                        o += n;
+                    }
+                }
+                public byte[] frame(int ms) throws Exception { return fr.next(ms); }
+            }).run(bin, (st, pp) -> flashEv(st.equals("start") ? "write" : st, pp, null));
+        } catch (Exception e) {
+            flashEv("err", 0, e.getMessage());
+        } finally {
+            run[0] = false;
+            try { rd.join(500); } catch (InterruptedException e) { }
+            try { c.releaseInterface(di); if (ci != null) c.releaseInterface(ci); } catch (Exception e) { }
+            c.close();
+        }
+    }
+
     private void closeLink() {
         boolean was = reading;
         reading = false;
@@ -534,7 +624,7 @@ public class Main extends Activity {
             if (flashing) return;
             flashing = true;
             new Thread(() -> {
-                try { doFlash(); } finally { flashing = false; }
+                try { doDfu(); } finally { flashing = false; }
             }, "pm-flash").start();
         }
 

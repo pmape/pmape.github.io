@@ -72,8 +72,19 @@ extern bool pad_addr_known(const bt_addr_le_t *a);
 
 /* ---------- saklama ---------- */
 
+/* Bluetooth'ta görünen ad: ayar sayfasının adresini taşır, ayarlardan değiştirilebilir */
+#define NAME_DEF "PM imlegennd.github.io"
+static char devname[30] = NAME_DEF;
+
 static int h_set(const char *key, size_t len, settings_read_cb rd, void *arg)
 {
+	if (!strcmp(key, "name")) {
+		char b[30] = "";
+		int n = rd(arg, b, sizeof(b) - 1);
+
+		if (n > 0) { b[n] = 0; strcpy(devname, b); }
+		return 0;
+	}
 	if (!strcmp(key, "route")) { rd(arg, &route, 1); return 0; }
 	if (!strcmp(key, "target")) { target_set = rd(arg, &target, sizeof(target)) == sizeof(target); return 0; }
 	return -ENOENT;
@@ -82,23 +93,31 @@ SETTINGS_STATIC_HANDLER_DEFINE(pmb, "pmb", NULL, h_set, NULL, NULL);
 
 /* ---------- görünürlük ---------- */
 
+/* reklam 31 bayt: 128 bitlik kimlik reklamda, ad (en fazla 29 bayt) tarama yanıtında tek başına */
 static const struct bt_data ad[] = {
 	BT_DATA_BYTES(BT_DATA_GAP_APPEARANCE, 0xc4, 0x03), /* gamepad */
 	BT_DATA_BYTES(BT_DATA_FLAGS, (BT_LE_AD_GENERAL | BT_LE_AD_NO_BREDR)),
 	BT_DATA_BYTES(BT_DATA_UUID16_ALL, BT_UUID_16_ENCODE(BT_UUID_HIDS_VAL)),
-};
-static const struct bt_data sd[] = {
-	BT_DATA(BT_DATA_NAME_COMPLETE, CONFIG_BT_DEVICE_NAME, sizeof(CONFIG_BT_DEVICE_NAME) - 1),
 	BT_DATA_BYTES(BT_DATA_UUID128_ALL, PM_CFG_UUID_BYTES),
+};
+static struct bt_data sd[] = {
+	BT_DATA(BT_DATA_NAME_COMPLETE, devname, 0),
 };
 /* sadece ayar telefonu için (ikinci kimlik): HID olarak görünmez */
 static const struct bt_data cfg_ad[] = {
 	BT_DATA_BYTES(BT_DATA_FLAGS, (BT_LE_AD_GENERAL | BT_LE_AD_NO_BREDR)),
 	BT_DATA_BYTES(BT_DATA_UUID128_ALL, PM_CFG_UUID_BYTES),
 };
-static const struct bt_data cfg_sd[] = {
-	BT_DATA(BT_DATA_NAME_COMPLETE, CONFIG_BT_DEVICE_NAME, sizeof(CONFIG_BT_DEVICE_NAME) - 1),
+static struct bt_data cfg_sd[] = {
+	BT_DATA(BT_DATA_NAME_COMPLETE, devname, 0),
 };
+
+static void name_apply(void)
+{
+	sd[0].data_len = strlen(devname);
+	cfg_sd[0].data_len = strlen(devname);
+	bt_set_name(devname);
+}
 static uint8_t adv_id;
 
 static void adv_update(struct k_work *w)
@@ -428,6 +447,28 @@ bool ble_cmd(char *l)
 		print_targets();
 		return true;
 	}
+	if (!strcmp(l, "name")) {
+		OUT("{\"ev\":\"name\",\"name\":\"%s\",\"def\":\"" NAME_DEF "\"}\n", devname);
+		return true;
+	}
+	if (!strncmp(l, "name ", 5)) {
+		/* düz ASCII, tırnak ve ters bölü yok, en fazla 29 karakter; boş = varsayılan */
+		const char *n = l + 5;
+		char b[30];
+		size_t k = 0;
+
+		for (; *n && k < sizeof(b) - 1; n++) {
+			if (*n >= 32 && *n < 127 && *n != '"' && *n != '\\') b[k++] = *n;
+		}
+		b[k] = 0;
+		strcpy(devname, k ? b : NAME_DEF);
+		settings_save_one("pmb/name", devname, strlen(devname));
+		name_apply();
+		if (adv_on) { bt_le_adv_stop(); adv_on = false; }
+		adv_kick();
+		OUT("{\"ev\":\"name\",\"name\":\"%s\",\"def\":\"" NAME_DEF "\"}\n", devname);
+		return true;
+	}
 	if (!strncmp(l, "target ", 7)) {
 		if (parse(l + 7, &a)) return true;
 		target = a;
@@ -458,6 +499,7 @@ int ble_out_init(void)
 	struct bt_hids_inp_rep *r;
 	static const uint8_t sizes[4] = { 8, 4, 9, 2 };
 
+	name_apply();
 	p.rep_map.data = report_map;
 	p.rep_map.size = sizeof(report_map);
 	p.info.bcd_hid = 0x0101;

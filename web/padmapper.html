@@ -708,6 +708,109 @@ const PM = (() => {
     return w.q;
   }
 
+  /* ---------- Kablodan kart güncelleme: XIAO önyükleyicisinin seri DFU'su (Nordic eski HCI/SLIP) ---------- */
+  const DFU = (() => {
+    function crc16(d, c = 0xFFFF) {
+      for (let i = 0; i < d.length; i++) {
+        c = ((c >> 8) & 0xFF) | ((c << 8) & 0xFFFF); c ^= d[i]; c ^= (c & 0xFF) >> 4;
+        c ^= (c << 12) & 0xFFFF; c ^= ((c & 0xFF) << 5) & 0xFFFF;
+      }
+      return c;
+    }
+    const u32 = v => [v & 255, (v >>> 8) & 255, (v >>> 16) & 255, (v >>> 24) & 255];
+    const u16 = v => [v & 255, (v >>> 8) & 255];
+    /* UF2 -> düz görüntü (başlangıç adresi ile) */
+    function uf2ToBin(u) {
+      let lo = Infinity, hi = 0;
+      const dv = new DataView(u.buffer, u.byteOffset, u.byteLength);
+      const blocks = [];
+      for (let o = 0; o + 512 <= u.length; o += 512) {
+        if (dv.getUint32(o, true) !== 0x0A324655 || dv.getUint32(o + 4, true) !== 0x9E5D5157) continue;
+        const flags = dv.getUint32(o + 8, true);
+        if (flags & 1) continue; /* ana flaşa değil */
+        const addr = dv.getUint32(o + 12, true), n = dv.getUint32(o + 16, true);
+        blocks.push([addr, u.subarray(o + 32, o + 32 + n)]);
+        lo = Math.min(lo, addr); hi = Math.max(hi, addr + n);
+      }
+      if (!blocks.length) throw new Error('Dosya geçerli bir UF2 değil');
+      const bin = new Uint8Array(hi - lo).fill(0xFF);
+      for (const [a, d] of blocks) bin.set(d, a - lo);
+      return { base: lo, bin };
+    }
+    /* io: write(Uint8Array) -> Promise, frame() -> Promise<Uint8Array|null> (bir SLIP çerçevesi ya da zaman aşımı) */
+    async function run(bin, io, prog) {
+      let seq = 0;
+      const sleep = ms => new Promise(r => setTimeout(r, ms));
+      function frame(payload) {
+        seq = (seq + 1) % 8;
+        const ack = (seq + 1) % 8, len = payload.length;
+        const h = [seq | (ack << 3) | (1 << 6) | (1 << 7), 14 | ((len & 15) << 4), (len >> 4) & 255];
+        h.push((~(h[0] + h[1] + h[2]) + 1) & 255);
+        const body = h.concat(Array.from(payload));
+        const c = crc16(body);
+        body.push(c & 255, c >> 8);
+        const out = [0xC0];
+        for (const b of body) {
+          if (b === 0xC0) out.push(0xDB, 0xDC); else if (b === 0xDB) out.push(0xDB, 0xDD); else out.push(b);
+        }
+        out.push(0xC0);
+        return new Uint8Array(out);
+      }
+      async function send(payload, what) {
+        const f = frame(payload), want = (seq + 1) % 8;
+        for (let t = 0; t < 4; t++) {
+          await io.write(f);
+          const r = await io.frame(t ? 2000 : 1500);
+          if (r && r.length && ((r[0] >> 3) & 7) === want) return;
+        }
+        throw new Error('Kart cevap vermedi (' + what + ')');
+      }
+      const len = bin.length;
+      prog('start', 0);
+      await send([...u32(3), ...u32(4), ...u32(0), ...u32(0), ...u32(len)], 'başlat');
+      /* önyükleyici uygulama alanını siliyor */
+      await sleep(Math.max(500, (Math.floor(len / 4096) + 1) * 90));
+      const init = [...u16(0x0052), ...u16(0xFFFF), ...u32(0xFFFFFFFF), ...u16(1), ...u16(0xFFFE), ...u16(crc16(bin))];
+      await send([...u32(1), ...init, 0, 0], 'tanıtım');
+      let n = 0;
+      for (let o = 0; o < len; o += 512) {
+        await send([...u32(4), ...bin.subarray(o, Math.min(len, o + 512))], 'veri');
+        if (++n % 8 === 0) await sleep(110); /* bir sayfa (4 KB) yazılsın */
+        prog('write', Math.min(99, Math.round(o * 100 / len)));
+      }
+      await sleep(200);
+      await send(u32(5), 'bitir');
+      prog('done', 100);
+    }
+    /* bayt akışından SLIP çerçeveleri */
+    function framer() {
+      let cur = null, esc = false;
+      const q = [], waiters = [];
+      return {
+        push(bytes) {
+          for (const b of bytes) {
+            if (b === 0xC0) {
+              if (cur && cur.length) { const f = new Uint8Array(cur); if (waiters.length) waiters.shift()(f); else q.push(f); cur = null; }
+              else cur = [];
+              continue;
+            }
+            if (!cur) continue;
+            if (esc) { cur.push(b === 0xDC ? 0xC0 : b === 0xDD ? 0xDB : b); esc = false; } else if (b === 0xDB) esc = true; else cur.push(b);
+          }
+        },
+        next(ms) {
+          if (q.length) return Promise.resolve(q.shift());
+          return new Promise(res => {
+            const w = f => { clearTimeout(t); res(f); };
+            const t = setTimeout(() => { const i = waiters.indexOf(w); if (i >= 0) waiters.splice(i, 1); res(null); }, ms);
+            waiters.push(w);
+          });
+        }
+      };
+    }
+    return { crc16, uf2ToBin, run, framer };
+  })();
+
   const isCard = d => d && (d.vendorId === 0x2fe3 || d.productName === 'PadMapper');
   const android = /Android/i.test(navigator.userAgent);
 
@@ -802,7 +905,7 @@ const PM = (() => {
   }
 
   return { HID, expandCount: (st, lay) => expand(st, lay).length, decompile, readCard, writeJson, findKnown, onPlug, compile, crc32, hex, link, connect, disconnect, sendLine, writeConfig,
-    connected: () => !!link.kind, OLD, bleOk, webBleOk, supported: () => native || 'serial' in navigator || 'usb' in navigator, native };
+    connected: () => !!link.kind, OLD, bleOk, webBleOk, DFU, webKey, supported: () => native || 'serial' in navigator || 'usb' in navigator, native };
 })();
 if (typeof module !== 'undefined') module.exports = PM;
 
@@ -1416,8 +1519,10 @@ function renderSheet(){
     const adv=sgroup('Kart bağlantısı',`
       <div class="scard"><span class="dot ${!c?'':cardSynced()?'on':'warn'}"></span><div style="flex:1;min-width:0"><b>${!c?'Kart bağlı değil':cardSynced()?'Karttaki ayar güncel':'Karttaki ayar farklı'}</b><div class="hint">${c?(PM.link.via==='ble'?'📶 Bluetooth · ':PM.link.via==='usb'?'🔌 USB · ':'')+'Yazılım '+esc(i.fw||'?'):connMsg||(PM.bleOk&&PM.bleOk()?'USB ile tak ya da Bluetooth ile bağlan':'USB ile tak')}</div></div>
         <button class="btn" onclick="cardBtn()">${c?'Kes':connMsg?'Vazgeç':'Bağlan'}</button></div>
-      ${!c&&!connMsg&&PM.bleOk&&PM.bleOk()?`<div class="sbtns"><button class="btn" onclick="cardBtn({ble:true})">📶 Bluetooth ile bağlan</button></div><p class="hint" style="margin:6px 0 0">Kart powerbank'a ya da başka bir cihaza takılıyken telefondan ayar yapmak için. Telefonun karta bir kez USB ile bağlanmış olması gerekir.</p>`:''}
-      <div class="sbtns"><button class="btn" ${c?'':'disabled'} onclick="writeCard()">Karta yeniden yaz</button><button class="btn" ${c&&(i.cfg||i.jlen)?'':'disabled'} onclick="takeFromCard(false)">Karttakileri al</button></div>`)+
+      ${!c&&!connMsg&&PM.bleOk&&PM.bleOk()?`<div class="sbtns"><button class="btn" onclick="cardBtn({ble:true})">📶 Bluetooth ile bağlan</button></div><p class="hint" style="margin:6px 0 0">Kart powerbank'a ya da başka bir cihaza takılıyken ayar yapmak için. Yeni bir cihaz: kartı güce tak, 1 dakika içinde Bağlan de.</p>`:''}
+      <div class="sbtns"><button class="btn" ${c?'':'disabled'} onclick="writeCard()">Karta yeniden yaz</button><button class="btn" ${c&&(i.cfg||i.jlen)?'':'disabled'} onclick="takeFromCard(false)">Karttakileri al</button></div>
+      <div class="sbtns"><button class="btn" ${c&&PM.link.via==='usb'?'':'disabled'} onclick="forgetDevices()">Kayıtlı cihazları sil</button></div>
+      <p class="hint" style="margin:6px 0 0">Kaybolan telefon gibi eski cihazların Bluetooth'tan ayar yapmasını engeller. Sadece USB'den, bu cihaz kayıtlı kalır.</p>`)+
       (PM.native&&PMNative.notifOn?sgroup('Bildirim ve ana ekran',srow('Bildirimde kart durumu',tog(PMNative.notifOn(),"PMNative.setNotif(!PMNative.notifOn());renderSheet()"),'Kart bağlıyken bildirimde profil ve eşleme durumu, profil değiştirme ve eşleme aç/kapat düğmeleri görünür. Ana ekrana PadMapper aracını (widget) da ekleyebilirsin: ana ekranda boş yere basılı tut → Araçlar → PadMapper.')):'')+
       (PM.native&&PMNative.accessOn?sgroup('Bu tablet',srow('🎤 Google Sesle Yazma izni',PMNative.accessOn()?'<span class="ok">Açık ✓</span>':'<button class="btn" onclick="gvoiceSetup()">Aç</button>','Pad\'deki sesli yazma tuşu klavyeyi Google Sesle Yazma\'ya çevirebilsin diye. Uygulama sadece o tuşa bakar.')):'')+
       sgroup('Paylaş',`<div class="slist">
@@ -1426,7 +1531,7 @@ function renderSheet(){
         <button onclick="shareApk()"><span>📱</span>Uygulama<small>Başka telefona kurmak için</small></button>`:''}</div>`)+
       sgroup('Yedek',`<div class="slist"><button onclick="backupProfiles()"><span>💾</span>Profilleri yedekle<small>Drive, WhatsApp, e-posta…</small></button>
         <button onclick="importProfiles()"><span>📂</span>Yedekten yükle</button></div>`)+
-      sgroup('',`<div class="slist"><button onclick="openLink('https://github.com/ImLegennD/padmapper/releases/tag/son-surum')"><span>🔗</span>Son sürümler<small>GitHub, giriş gerekir${PM.native?' · uygulama '+esc(PMNative.version()):''}</small></button></div>`)+
+      sgroup('',`<div class="slist"><button onclick="openLink(SITE)"><span>🔗</span>Ayar sayfası ve indirmeler<small>imlegennd.github.io${PM.native?' · uygulama '+esc(PMNative.version()):''}</small></button></div>`)+
       sgroup('Tema',`<div class="seg">${[['dark','Koyu'],['amoled','Siyah'],['light','Açık'],['auto','Sistem']].map(([k,t])=>`<button class="${themeOf().mode===k?'on':''}" onclick="setTheme({mode:'${k}'})">${t}</button>`).join('')}</div>
       <div class="swatches">${ACCENTS.map(a=>`<button aria-label="${a.n}" title="${a.n}" onclick="setTheme({acc:'${a.k}'})" style="background:${a.c};border-color:${themeOf().acc===a.k?'var(--text)':'transparent'}"></button>`).join('')}</div>`)+
       sgroup('Klavye düzeni',srow('Tuş adları',`<div class="seg sm"><button class="${S.device.layout!=='us'?'on':''}" onclick="S.device.layout='tr';render();renderSheet()">Türkçe Q</button><button class="${S.device.layout==='us'?'on':''}" onclick="S.device.layout='us';render();renderSheet()">US</button></div>`,'Hedef cihazın klavye ayarıyla aynı olmalı.'))+
@@ -1440,10 +1545,15 @@ function renderSheet(){
       sgroup('',`<div class="slist"><button onclick="closeSheet();openLearn()" ${PM.connected()&&cardCtl.cur?'':'disabled'}><span>🎯</span>Tanılama / tuşları tanıt<small>Pad'den gelen veri, gelmeyen tuşlar</small></button></div>`);
     body=`<div class="card" style="padding:4px 14px 14px">
         <div class="row" style="margin-top:10px"><p class="lbl grow" style="margin:0">Güncellemeler</p></div>
-        <div class="li2">${IC.key.replace('<svg','<svg style="color:var(--acc)"')}<span class="grow"><b>1 · Kart yazılımı</b><small class="hint" style="display:block">${c?'kartta '+esc(i.fw||'?'):'kart bağlı değil'}${b?' · uygulamada '+esc(b):''}${need?' · <span style="color:var(--acc)">yeni</span>':''}</small></span>${PM.native?`<button class="pchip ${need?'on':''}" ${c&&b&&PM.link.via!=='ble'?'':'disabled'} onclick="closeSheet();updCard()">${need?'Kur':'Yeniden kur'}</button>`:''}</div>
-        <div class="li2">${IC_DRIVE}<span class="grow"><b>2 · Bilgisayar sayfası</b><small class="hint" style="display:block">padmapper.html · paylaşım ekranından Drive'ı seç</small></span><button class="pchip" onclick="shareHtml()">Gönder</button></div>
-        <div class="li2">${IC.pad.replace('<svg','<svg style="color:var(--acc)"')}<span class="grow"><b>3 · Uygulama</b><small class="hint" style="display:block">${PM.native?esc(PMNative.version()):'tarayıcı sürümü'}</small></span>${PM.native?'<button class="pchip" onclick="closeSheet();updApp()">Güncelle</button>':''}</div>
-        ${c&&PM.link.via==='ble'&&need?'<p class="hint" style="margin:8px 0 0">Kart yazılımı şimdilik sadece USB ile kurulur.</p>':''}
+        <div class="li2">${IC.key.replace('<svg','<svg style="color:var(--acc)"')}<span class="grow"><b>Kart yazılımı</b><small class="hint" style="display:block">${c?'kartta '+esc(i.fw||'?'):'kart bağlı değil'}${b?' · yeni: '+esc(b):''}${need?' · <span style="color:var(--acc)">güncelle</span>':''}</small></span>${PM.native||'serial' in navigator?`<button class="pchip ${need?'on':''}" ${c&&PM.link.via==='usb'?'':'disabled'} onclick="updCard()">${need?'Güncelle':'Yeniden kur'}</button>`:''}</div>
+        <div class="li2">${IC.pad.replace('<svg','<svg style="color:var(--acc)"')}<span class="grow"><b>Uygulama</b><small class="hint" style="display:block">${PM.native?esc(PMNative.version()):'Android telefon için'}</small></span>${PM.native?'<button class="pchip" onclick="closeSheet();updApp()">Güncelle</button>':'<button class="pchip" onclick="openLink(APK_URL)">İndir</button>'}</div>
+        <div class="li2">${IC_DRIVE}<span class="grow"><b>Ayar sayfası</b><small class="hint" style="display:block">imlegennd.github.io · her bilgisayarda Chrome / Edge</small></span><button class="pchip" onclick="shareLink()">Paylaş</button></div>
+        ${c&&PM.link.via!=='usb'?'<p class="hint" style="margin:8px 0 0">Kart yazılımı kabloyla kurulur: kartı bu cihaza USB ile tak.</p>':''}
+      </div>
+      <div class="card" style="margin-top:10px">
+        <p class="lbl" style="margin:0 0 6px">Kartın Bluetooth adı</p>
+        <div class="row" style="gap:8px"><input id="btname" type="text" maxlength="29" style="flex:1;min-width:0" value="${esc(cardName||'')}" placeholder="${c?'okunuyor…':'kart bağlı değil'}" ${c?'':'disabled'}><button class="btn" ${c?'':'disabled'} onclick="saveBtName()">Kaydet</button></div>
+        <p class="hint" style="margin:6px 0 0">Bluetooth listesinde bu görünür. Varsayılan: ayar sayfasının adresi, böylece adresi hiç unutmazsın. En fazla 29 karakter, Türkçe harfler düz harfe çevrilir.</p>
       </div>
       <div class="card" style="margin-top:10px">
         <div class="row" style="gap:8px">${[['dark','Gece','#14161c','#eef0f4'],['amoled','Siyah','#000','#eef0f4'],['light','Açık','#f4f5f7','#1d2129'],['auto','Sistem','linear-gradient(90deg,#14161c 50%,#f4f5f7 50%)','#a6acba']].map(([k,n,bg,fg])=>`<button class="thm ${themeOf().mode===k?'on':''}" style="background:${bg};color:${fg}" onclick="setTheme({mode:'${k}'})">${n}</button>`).join('')}</div>
@@ -1679,6 +1789,24 @@ async function lCopy(){
   const t=JSON.stringify(rep);try{await navigator.clipboard.writeText(t);toast('Kopyalandı, sohbete yapıştır');}catch(e){ask('Kopyalanamadı, bunu seçip kopyala:',t);}
 }
 
+/* kartın Bluetooth adı */
+let cardName=null;
+function trAscii(t){return String(t).replace(/[ıİ]/g,m=>m==='ı'?'i':'I').replace(/[ğĞ]/g,m=>m==='ğ'?'g':'G').replace(/[üÜ]/g,m=>m==='ü'?'u':'U').replace(/[şŞ]/g,m=>m==='ş'?'s':'S').replace(/[öÖ]/g,m=>m==='ö'?'o':'O').replace(/[çÇ]/g,m=>m==='ç'?'c':'C').replace(/[^\x20-\x7e]|["\\]/g,'').slice(0,29);}
+async function saveBtName(){
+  const el=document.getElementById('btname');if(!el)return;
+  const v=trAscii(el.value.trim());
+  try{await PM.sendLine('name '+v);toast('Kaydedildi. Eşleştirdiğin cihazlarda eski ad kalabilir; yeni adı görmek için Bluetooth listesini yenile.');}catch(e){toast('Kaydedilemedi');}
+}
+async function forgetDevices(){
+  if(!await ask('Kayıtlı cihazlar silinsin mi?\n\nBluetooth ile ayar yapabilen diğer bütün telefon ve bilgisayarlar unutulur, sadece bu cihaz kalır. Yeni cihaz eklemek için kartı güce tak, 1 dakika içinde o cihazdan Bağlan de. Pad ve oyun bağlantıları etkilenmez.',null))return;
+  try{await PM.sendLine('secret clear');await PM.sendLine('secret add '+(PM.native?PMNative.secret():PM.webKey()));toast('Silindi. Bu cihaz kayıtlı kaldı.');}catch(e){toast('Silinemedi');}
+}
+function shareLink(){
+  const t='PadMapper ayar sayfası: '+SITE;
+  if(PM.native&&PMNative.shareText)PMNative.shareText('padmapper.txt',t);
+  else if(navigator.share)navigator.share({title:'PadMapper',url:SITE}).catch(()=>{});
+  else{try{navigator.clipboard.writeText(SITE);toast('Adres kopyalandı: '+SITE);}catch(e){toast(SITE);}}
+}
 /* tarayıcıda bağlantı yolu: USB kablo ya da Bluetooth */
 function chooseLink(){
   return new Promise(res=>{
@@ -1806,6 +1934,7 @@ async function cardBtn(known){
       if(ev.ev==='hello'){renderCard();setTimeout(cardProfilesCheck,300);if(!updating&&PM.link.via!=='ble'&&cardNeedsUpdate()&&!window._updAsked){window._updAsked=true;setTimeout(()=>ask('Kart için yeni yazılım var ('+ev.fw+' → '+bundledFw()+'). Şimdi kurulsun mu?',null).then(ok=>{if(ok)updCard(true);}),1500);}PM.sendLine('ctrls').catch(()=>{});setTimeout(()=>PM.sendLine('targets').catch(()=>{}),150);setTimeout(()=>PM.sendLine('hid list').catch(()=>{}),300);if(document.getElementById('sheet').classList.contains('open'))renderSheet();}
       if(ev.ev==='state')applyState(ev);
       if(ev.ev==='pad')livePad(ev);
+      if(ev.ev==='name'){cardName=ev.name;const el=document.getElementById('btname');if(el&&document.activeElement!==el)el.value=ev.name;}
       if(ev.ev==='pairwin')toast('Kart 60 sn tanıtmaya açık: yeni cihazdan şimdi Bluetooth ile bağlan');
       if(ev.ev==='hids'){cardHid=ev;if(sheetOpen())renderSheet();}
       if(ev.ev==='hid'){if(ev.ready)toast((ev.kb?'⌨ Klavye':'')+(ev.kb&&ev.ms?' + ':'')+(ev.ms?'🖱 Fare':'')+' hazır');if(ev.connected===0||ev.ready||ev.fail!=null)PM.sendLine('hid list').catch(()=>{});}
@@ -1887,7 +2016,7 @@ function livePad(ev){
     }
   }
 }
-setInterval(()=>{try{if(PM.connected()&&!document.hidden)PM.sendLine('live 1').catch(()=>{});if(Date.now()-liveSeen>12000)livePad({v:0,b:0,s:[128,128,128,128],t:[0,0]});}catch(e){}},3000);
+setInterval(()=>{try{if(PM.connected()&&!document.hidden){PM.sendLine('live 1').catch(()=>{});if(cardName===null){cardName='';PM.sendLine('name').catch(()=>{});}}if(!PM.connected())cardName=null;if(Date.now()-liveSeen>12000)livePad({v:0,b:0,s:[128,128,128,128],t:[0,0]});}catch(e){}},3000);
 function applyState(st){
   const prev=cardState;cardState=st;
   if(PM.link.info){PM.link.info.mapping=st.mapping;PM.link.info.prof=st.prof;}
@@ -1914,18 +2043,26 @@ function stateText(){
 }
 
 /* ---------- Güncelleme ---------- */
-const APK_URL='https://github.com/ImLegennD/padmapper-indir/raw/main/padmapper-ayar.apk';
-const PAGE_URL='https://imlegennd.github.io/padmapper-indir/';
+const SITE='https://imlegennd.github.io';
+const APK_URL=SITE+'/padmapper-ayar.apk';
+const PAGE_URL=SITE;
+const FW_URL=SITE+'/padmapper.uf2';
 const vnum=v=>String(v||'0').split('.').map(x=>parseInt(x)||0).reduce((a,x)=>a*1000+x,0);
-const bundledFw=()=>PM.native&&PMNative.assetText?PMNative.assetText('fw_version.txt'):'';
+/* tarayıcıda: en son sürüm internetten (uygulamada: uygulamanın içindeki) */
+let webLatest='';
+if(!PM.native){fetch(SITE+'/version.json',{cache:'no-store'}).then(r=>r.json()).then(j=>{webLatest=j.fw||'';renderCard();}).catch(()=>{});}
+const bundledFw=()=>PM.native&&PMNative.assetText?PMNative.assetText('fw_version.txt'):webLatest;
 function cardNeedsUpdate(){const i=PM.link.info,b=bundledFw();return !!(PM.connected()&&i&&i.fw&&b&&vnum(b)>vnum(i.fw));}
 function updHtml(){
-  if(!PM.native)return srow('Uygulama ve kart','<button class="btn" onclick="openLink(\'https://github.com/ImLegennD/padmapper/releases/tag/son-surum\')">İndirme sayfası</button>');
-  const i=PM.link.info||{},b=bundledFw(),need=cardNeedsUpdate();
-  return srow('Uygulama <span class="hint">'+esc(PMNative.version())+'</span>','<button class="btn" onclick="updApp()">Güncelle</button>','Tarayıcında GitHub\'a giriş yapmış olman gerekir. İndirme bitince aç → Güncelle. Profillerin korunur. Yeni uygulama yeni kart yazılımını da içinde getirir.')+
-    srow('Kart yazılımı <span class="hint">'+(PM.connected()?'kartta '+esc(i.fw||'?')+' · ':'')+'uygulamada '+esc(b||'?')+'</span>',
-      `<button class="btn ${need?'pri':''}" ${PM.connected()&&b&&PM.link.kind==='native'&&PM.link.via!=='ble'?'':'disabled'} onclick="updCard()">${need?'Yeni sürümü kur':'Yeniden kur'}</button>`,
-      (PM.link.via==='ble'?'<b>Kart yazılımı sadece USB ile kurulur:</b> kartı telefona tak. ':'')+'Kart yükleme moduna geçer, uygulama yazılımı karta yazar, kart yeniden başlar. Ayarların ve profillerin kartta kalır. Yarıda kesilirse kart bozulmaz; tekrar denersin.');
+  const i=PM.link.info||{},b=bundledFw(),need=cardNeedsUpdate(),usb=PM.connected()&&PM.link.via==='usb';
+  const canWeb=!PM.native&&'serial' in navigator;
+  const app=PM.native?srow('Uygulama <span class="hint">'+esc(PMNative.version())+'</span>','<button class="btn" onclick="updApp()">Güncelle</button>','Yeni uygulama indirilir, açınca Android "Güncelle" der. Profillerin korunur.')
+    :srow('Telefon uygulaması','<button class="btn" onclick="openLink(APK_URL)">İndir</button>','Android için. Kart takılınca kendisi açılır.');
+  return app+srow('Kart yazılımı <span class="hint">'+(PM.connected()?'kartta '+esc(i.fw||'?'):'')+(b?' · yeni: '+esc(b):'')+'</span>',
+      `<button class="btn ${need?'pri':''}" ${usb&&(PM.native||canWeb)?'':'disabled'} onclick="updCard()">${need?'Güncelle':'Yeniden kur'}</button>`,
+      (!PM.connected()?'Önce kartı bu cihaza <b>USB kabloyla</b> bağla. ':PM.link.via==='ble'?'<b>Kart yazılımı kabloyla kurulur:</b> kartı bu cihaza USB ile tak ve USB ile bağlan. ':'')+
+      (!PM.native&&!canWeb?'Bu tarayıcı kabloyla yazamıyor; Chrome ya da Edge kullan. ':'')+
+      'Basınca her şeyi kendisi yapar: kart yükleme moduna geçer, yeni yazılım kabloyla yazılır, kart yeniden başlar. Dosya sürüklemek yok. Ayarların ve profillerin kartta kalır. Yarıda kesilirse kart bozulmaz, tekrar denersin.');
 }
 /* tam ekran güncelleme penceresi: bu sırada başka hiçbir şey çalışmaz */
 let updating=false;
@@ -1936,39 +2073,93 @@ function updModal(steps,cur,p,msg,btns){
     ${steps.map((s,k)=>`<div class="row" style="margin:6px 0;opacity:${k>cur?.45:1}"><span style="width:22px;text-align:center">${k<cur?'✓':k===cur?(btns?'⚠':'<span class="spin"></span>'):'○'}</span><span style="flex:1">${s}</span></div>`).join('')}
     ${p!=null?`<div style="height:8px;background:var(--panel2);border-radius:4px;margin:12px 0 4px"><i style="display:block;height:8px;border-radius:4px;background:var(--acc);width:${p}%"></i></div><div class="hint">%${p}</div>`:''}
     ${msg?`<p class="hint" style="margin:10px 0 0">${msg}</p>`:''}
-    ${btns?`<div class="sbtns">${btns}</div>`:'<p class="hint" style="margin:10px 0 0">Kartı çıkarma, uygulamayı kapatma.</p>'}</div>`;
+    ${btns?`<div class="sbtns">${btns}</div>`:'<p class="hint" style="margin:10px 0 0">Kartı çıkarma, sayfayı kapatma.</p>'}</div>`;
 }
 function updClose(){updating=false;const d=document.getElementById('upd');if(d)d.remove();}
-const UPD_STEPS=['Kart yükleme moduna geçiyor','Kartın sürücüsü bekleniyor','Yeni yazılım yazılıyor','Kart yeniden başlıyor','Bitti'];
+const UPD_STEPS=['Yeni yazılım hazırlanıyor','Kart yükleme moduna geçiyor','Yeni yazılım yazılıyor','Kart yeniden başlıyor','Bitti'];
+const UPD_FAIL='<br><br>Kart bozulmaz: kartı çıkarıp tak, eski yazılımla açılır; sonra tekrar dene.';
+let updBin=null;
+/* güncellendi mi: kart geri bağlanınca sürümüne bak */
+function updWaitBack(want){
+  updModal(UPD_STEPS,3,100);
+  const t0=Date.now();
+  const chk=setInterval(async()=>{
+    if(PM.connected()&&PM.link.info){clearInterval(chk);const ok=!want||vnum(PM.link.info.fw)>=vnum(want);
+      updModal(UPD_STEPS,ok?5:4,null,ok?'Kart yazılımı '+esc(PM.link.info.fw)+' kuruldu ✓':'Kart bağlandı ama sürümü '+esc(PM.link.info.fw)+'.',`<button class="btn pri" onclick="updClose()">Tamam</button>`);return;}
+    if(!PM.connected()){try{if(PM.native){if(PMNative.present())await PM.connect({native:true});}else{const k=await PM.findKnown();if(k)await PM.connect(k);}}catch(e){}}
+    if(Date.now()-t0>45000){clearInterval(chk);updModal(UPD_STEPS,4,null,'Yazılım yazıldı ama kart henüz geri bağlanmadı. Kartı çıkarıp tak, sonra Bağlan de.',`<button class="btn pri" onclick="updClose()">Tamam</button>`);}
+  },1500);
+}
 async function updCard(skip){
   if(updating)return;
-  if(!skip&&!await ask('Kart yazılımı '+bundledFw()+' kurulsun mu?\n\nKart güncelleme moduna geçer ve telefona USB bellek gibi görünür. Açılan dosya ekranında sol menüden XIAO belleğini seçip "Bu klasörü kullan"a basman gerekir.\n\nXIAO belleği listede yoksa telefonun onu göremiyordur: Vazgeç de, kartı çıkarıp tak (eski yazılımla açılır) ve kartı bilgisayardan güncelle.',null))return;
+  if(PM.link.via!=='usb'){await ask('Kart yazılımı kabloyla kurulur.\n\nKartı bu cihaza USB kabloyla tak ve USB ile bağlan, sonra tekrar Güncelle de.',null,true);return;}
+  if(!skip&&!await ask('Kart yazılımı '+(bundledFw()||'')+' kurulsun mu?\n\nHer şeyi kendisi yapar, yaklaşık 1 dakika sürer. Bu sırada kartı çıkarma. Ayarların kartta kalır.',null))return;
   updating=true;closeSheet();
   const want=bundledFw();
+  if(PM.native){
+    updModal(UPD_STEPS,1);
+    try{await PM.sendLine('dfu');}catch(e){}
+    await new Promise(r=>setTimeout(r,1200));
+    try{await PM.disconnect();}catch(e){}
+    window.PM_native.flash=ev=>{
+      if(ev.state==='wait')updModal(UPD_STEPS,1);
+      else if(ev.state==='perm')updModal(UPD_STEPS,1,null,'Android kartın yükleme moduna erişim izni soruyor: <b>Tamam</b> de.');
+      else if(ev.state==='write')updModal(UPD_STEPS,2,ev.p);
+      else if(ev.state==='noboot')updModal(UPD_STEPS,1,null,'Kart yükleme modunda görünmedi.'+UPD_FAIL,`<button class="btn pri" onclick="updClose()">Kapat</button>`);
+      else if(ev.state==='err')updModal(UPD_STEPS,2,null,'Yazılamadı: '+esc(ev.msg||'')+UPD_FAIL,`<button class="btn pri" onclick="updClose()">Kapat</button>`);
+      else if(ev.state==='done')updWaitBack(want);
+    };
+    PMNative.flashUf2();
+    return;
+  }
+  /* tarayıcı: yazılımı internetten al, kart yükleme moduna geçsin, kullanıcı XIAO'yu seçsin, sayfa yazsın */
   updModal(UPD_STEPS,0);
-  try{await PM.sendLine('dfu');}catch(e){}
-  await new Promise(r=>setTimeout(r,1500));
-  try{await PM.disconnect();}catch(e){}
-  updModal(UPD_STEPS,1,null,'İlk seferde Android, kartın sürücüsüne erişim izni ister.');
-  window.PM_native.drive=ok=>{if(ok)PMNative.flashUf2();else updModal(UPD_STEPS,1,null,'Sürücü seçilmedi.',`<button class="btn pri" onclick="PMNative.pickDrive()">Sürücüyü seç</button><button class="btn" onclick="updClose()">Vazgeç</button>`);};
-  window.PM_native.flash=ev=>{
-    if(ev.state==='wait')updModal(UPD_STEPS,1);
-    else if(ev.state==='nodrive')updModal(UPD_STEPS,1,null,'Açılan kart sürücüsünü seç (adı genelde <b>XIAO</b> ile başlar), sonra <b>Bu klasörü kullan</b> de. Bu izin bir kere istenir.<br><br><b>XIAO belleği listede yoksa</b> telefonun onu göremiyor: Vazgeç de, kartı çıkarıp tak (eski yazılımla açılır) ve bilgisayardan güncelle.',`<button class="btn pri" onclick="PMNative.pickDrive()">Sürücüyü seç</button><button class="btn" onclick="updClose()">Vazgeç</button>`);
-    else if(ev.state==='write')updModal(UPD_STEPS,2,ev.p);
-    else if(ev.state==='err')updModal(UPD_STEPS,2,ev.p,'Yazılamadı: '+esc(ev.msg||'')+'. Kart bozulmaz; kartı çıkarıp takıp tekrar dene ya da bilgisayardan UF2 at.',`<button class="btn pri" onclick="PMNative.flashUf2()">Tekrar dene</button><button class="btn" onclick="updClose()">Kapat</button>`);
-    else if(ev.state==='done'){
-      updModal(UPD_STEPS,3,100);
-      const t0=Date.now();
-      const chk=setInterval(async()=>{
-        if(PM.connected()&&PM.link.info){clearInterval(chk);const ok=vnum(PM.link.info.fw)>=vnum(want);
-          updModal(UPD_STEPS,ok?5:4,null,ok?'Kart yazılımı '+esc(PM.link.info.fw)+' kuruldu ✓':'Kart bağlandı ama sürümü '+esc(PM.link.info.fw)+'.',`<button class="btn pri" onclick="updClose()">Tamam</button>`);}
-        else if(!PM.connected()&&PMNative.present()){try{await PM.connect({native:true});}catch(e){}}
-        if(Date.now()-t0>40000){clearInterval(chk);updModal(UPD_STEPS,3,null,'Kart henüz geri bağlanmadı. Kartı çıkarıp tak.',`<button class="btn" onclick="updClose()">Kapat</button>`);}
-      },1500);
-    }
-  };
-  PMNative.flashUf2();
+  updBin=null;
+  try{
+    const r=await fetch(FW_URL,{cache:'no-store'});if(!r.ok)throw new Error(r.status);
+    updBin=PM.DFU.uf2ToBin(new Uint8Array(await r.arrayBuffer()));
+  }catch(e){
+    updModal(UPD_STEPS,0,null,'Yeni yazılım internetten alınamadı. İnternet yoksa bilgisayarındaki <b>padmapper.uf2</b> dosyasını seç.',`<button class="btn pri" onclick="updPickFile()">Dosya seç</button><button class="btn" onclick="updClose()">Vazgeç</button>`);
+    return;
+  }
+  updToBoot();
 }
+function updPickFile(){
+  const inp=document.createElement('input');inp.type='file';inp.accept='.uf2';
+  inp.onchange=async()=>{try{updBin=PM.DFU.uf2ToBin(new Uint8Array(await inp.files[0].arrayBuffer()));updToBoot();}catch(e){updModal(UPD_STEPS,0,null,esc(e.message),`<button class="btn pri" onclick="updPickFile()">Başka dosya</button><button class="btn" onclick="updClose()">Vazgeç</button>`);}};
+  inp.click();
+}
+async function updToBoot(){
+  if(updBin.base!==0x27000){updModal(UPD_STEPS,0,null,'Bu dosya bu karta ait değil.',`<button class="btn" onclick="updClose()">Kapat</button>`);return;}
+  updModal(UPD_STEPS,1);
+  try{await PM.sendLine('dfu');}catch(e){}
+  await new Promise(r=>setTimeout(r,1200));
+  try{await PM.disconnect();}catch(e){}
+  await new Promise(r=>setTimeout(r,2500));
+  updModal(UPD_STEPS,1,null,'Kart yükleme modunda. Tarayıcı güvenlik için bir kez seçim istiyor: <b>Devam</b>a bas, listeden <b>XIAO</b> (ya da yeni çıkan seri cihazı) seç, <b>Bağlan</b> de.',`<button class="btn pri" onclick="updWebRun()">Devam</button><button class="btn" onclick="updClose()">Vazgeç</button>`);
+}
+async function updWebRun(){
+  let port;
+  try{port=await navigator.serial.requestPort();}catch(e){updToBootMsg('Seçim yapılmadı.');return;}
+  const fr=PM.DFU.framer();let reader,alive=true;
+  try{
+    await port.open({baudRate:115200});
+    try{await port.setSignals({dataTerminalReady:true,requestToSend:true});}catch(e){}
+    reader=port.readable.getReader();
+    (async()=>{try{while(alive){const {value,done}=await reader.read();if(done)break;if(value)fr.push(value);}}catch(e){}})();
+    const writer=port.writable.getWriter();
+    updModal(UPD_STEPS,2,0);
+    await PM.DFU.run(updBin.bin,{write:b=>writer.write(b),frame:ms=>fr.next(ms)},(st,p)=>{if(st==='write')updModal(UPD_STEPS,2,p);});
+    writer.releaseLock();
+  }catch(e){
+    alive=false;try{await reader.cancel();}catch(x){}try{await port.close();}catch(x){}
+    updModal(UPD_STEPS,2,null,'Yazılamadı: '+esc(e.message||String(e))+'. Listeden doğru cihazı seçtiğinden emin ol.'+UPD_FAIL,`<button class="btn pri" onclick="updWebRun()">Tekrar dene</button><button class="btn" onclick="updClose()">Kapat</button>`);
+    return;
+  }
+  alive=false;try{await reader.cancel();}catch(x){}try{await port.close();}catch(x){}
+  updWaitBack(webLatest&&updBin?webLatest:'');
+}
+function updToBootMsg(m){updModal(UPD_STEPS,1,null,m+' <b>Devam</b>a basıp listeden <b>XIAO</b>yu seç.'+UPD_FAIL,`<button class="btn pri" onclick="updWebRun()">Devam</button><button class="btn" onclick="updClose()">Vazgeç</button>`);}
 function updApp(){
   updModal(['Tarayıcıda indiriliyor','İndirme bitince bildirime dokun ya da İndirilenler\'den aç','Android sorunca Güncelle de'],0,null,'İndirme tarayıcıda olur, ilerlemesini orada görürsün. Profillerin ve ayarların korunur. Yeni uygulama açılınca kart eskiyse kart güncellemesini önerir.',`<button class="btn pri" onclick="openLink(APK_URL)">Tarayıcıda indir</button><button class="btn" onclick="updClose()">Kapat</button>`);
   document.querySelector('#upd h2').textContent='Uygulama güncellemesi';

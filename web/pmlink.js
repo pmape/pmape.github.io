@@ -414,6 +414,109 @@ const PM = (() => {
     return w.q;
   }
 
+  /* ---------- Kablodan kart güncelleme: XIAO önyükleyicisinin seri DFU'su (Nordic eski HCI/SLIP) ---------- */
+  const DFU = (() => {
+    function crc16(d, c = 0xFFFF) {
+      for (let i = 0; i < d.length; i++) {
+        c = ((c >> 8) & 0xFF) | ((c << 8) & 0xFFFF); c ^= d[i]; c ^= (c & 0xFF) >> 4;
+        c ^= (c << 12) & 0xFFFF; c ^= ((c & 0xFF) << 5) & 0xFFFF;
+      }
+      return c;
+    }
+    const u32 = v => [v & 255, (v >>> 8) & 255, (v >>> 16) & 255, (v >>> 24) & 255];
+    const u16 = v => [v & 255, (v >>> 8) & 255];
+    /* UF2 -> düz görüntü (başlangıç adresi ile) */
+    function uf2ToBin(u) {
+      let lo = Infinity, hi = 0;
+      const dv = new DataView(u.buffer, u.byteOffset, u.byteLength);
+      const blocks = [];
+      for (let o = 0; o + 512 <= u.length; o += 512) {
+        if (dv.getUint32(o, true) !== 0x0A324655 || dv.getUint32(o + 4, true) !== 0x9E5D5157) continue;
+        const flags = dv.getUint32(o + 8, true);
+        if (flags & 1) continue; /* ana flaşa değil */
+        const addr = dv.getUint32(o + 12, true), n = dv.getUint32(o + 16, true);
+        blocks.push([addr, u.subarray(o + 32, o + 32 + n)]);
+        lo = Math.min(lo, addr); hi = Math.max(hi, addr + n);
+      }
+      if (!blocks.length) throw new Error('Dosya geçerli bir UF2 değil');
+      const bin = new Uint8Array(hi - lo).fill(0xFF);
+      for (const [a, d] of blocks) bin.set(d, a - lo);
+      return { base: lo, bin };
+    }
+    /* io: write(Uint8Array) -> Promise, frame() -> Promise<Uint8Array|null> (bir SLIP çerçevesi ya da zaman aşımı) */
+    async function run(bin, io, prog) {
+      let seq = 0;
+      const sleep = ms => new Promise(r => setTimeout(r, ms));
+      function frame(payload) {
+        seq = (seq + 1) % 8;
+        const ack = (seq + 1) % 8, len = payload.length;
+        const h = [seq | (ack << 3) | (1 << 6) | (1 << 7), 14 | ((len & 15) << 4), (len >> 4) & 255];
+        h.push((~(h[0] + h[1] + h[2]) + 1) & 255);
+        const body = h.concat(Array.from(payload));
+        const c = crc16(body);
+        body.push(c & 255, c >> 8);
+        const out = [0xC0];
+        for (const b of body) {
+          if (b === 0xC0) out.push(0xDB, 0xDC); else if (b === 0xDB) out.push(0xDB, 0xDD); else out.push(b);
+        }
+        out.push(0xC0);
+        return new Uint8Array(out);
+      }
+      async function send(payload, what) {
+        const f = frame(payload), want = (seq + 1) % 8;
+        for (let t = 0; t < 4; t++) {
+          await io.write(f);
+          const r = await io.frame(t ? 2000 : 1500);
+          if (r && r.length && ((r[0] >> 3) & 7) === want) return;
+        }
+        throw new Error('Kart cevap vermedi (' + what + ')');
+      }
+      const len = bin.length;
+      prog('start', 0);
+      await send([...u32(3), ...u32(4), ...u32(0), ...u32(0), ...u32(len)], 'başlat');
+      /* önyükleyici uygulama alanını siliyor */
+      await sleep(Math.max(500, (Math.floor(len / 4096) + 1) * 90));
+      const init = [...u16(0x0052), ...u16(0xFFFF), ...u32(0xFFFFFFFF), ...u16(1), ...u16(0xFFFE), ...u16(crc16(bin))];
+      await send([...u32(1), ...init, 0, 0], 'tanıtım');
+      let n = 0;
+      for (let o = 0; o < len; o += 512) {
+        await send([...u32(4), ...bin.subarray(o, Math.min(len, o + 512))], 'veri');
+        if (++n % 8 === 0) await sleep(110); /* bir sayfa (4 KB) yazılsın */
+        prog('write', Math.min(99, Math.round(o * 100 / len)));
+      }
+      await sleep(200);
+      await send(u32(5), 'bitir');
+      prog('done', 100);
+    }
+    /* bayt akışından SLIP çerçeveleri */
+    function framer() {
+      let cur = null, esc = false;
+      const q = [], waiters = [];
+      return {
+        push(bytes) {
+          for (const b of bytes) {
+            if (b === 0xC0) {
+              if (cur && cur.length) { const f = new Uint8Array(cur); if (waiters.length) waiters.shift()(f); else q.push(f); cur = null; }
+              else cur = [];
+              continue;
+            }
+            if (!cur) continue;
+            if (esc) { cur.push(b === 0xDC ? 0xC0 : b === 0xDD ? 0xDB : b); esc = false; } else if (b === 0xDB) esc = true; else cur.push(b);
+          }
+        },
+        next(ms) {
+          if (q.length) return Promise.resolve(q.shift());
+          return new Promise(res => {
+            const w = f => { clearTimeout(t); res(f); };
+            const t = setTimeout(() => { const i = waiters.indexOf(w); if (i >= 0) waiters.splice(i, 1); res(null); }, ms);
+            waiters.push(w);
+          });
+        }
+      };
+    }
+    return { crc16, uf2ToBin, run, framer };
+  })();
+
   const isCard = d => d && (d.vendorId === 0x2fe3 || d.productName === 'PadMapper');
   const android = /Android/i.test(navigator.userAgent);
 
@@ -508,6 +611,6 @@ const PM = (() => {
   }
 
   return { HID, expandCount: (st, lay) => expand(st, lay).length, decompile, readCard, writeJson, findKnown, onPlug, compile, crc32, hex, link, connect, disconnect, sendLine, writeConfig,
-    connected: () => !!link.kind, OLD, bleOk, webBleOk, supported: () => native || 'serial' in navigator || 'usb' in navigator, native };
+    connected: () => !!link.kind, OLD, bleOk, webBleOk, DFU, webKey, supported: () => native || 'serial' in navigator || 'usb' in navigator, native };
 })();
 if (typeof module !== 'undefined') module.exports = PM;

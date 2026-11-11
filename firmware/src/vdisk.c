@@ -1,8 +1,7 @@
 /*
  * Kartın USB belleği ("PADMAPPER"), salt okunur.
  * İçindeki dosyalar kart yazılımına gömülü gelir; hafızaya yazılmaz:
- *   AYAR.HTM      ayar ekranı (Chrome / Edge; USB ya da Bluetooth ile bağlanır)
- *   SAYFA.URL     ayar ekranının internetteki adresi (telefonda bunu aç)
+ *   AYAR.HTM      ayar ekranı (Chrome / Edge; USB ya da Bluetooth ile bağlanır, internet gerekmez)
  *   UYGULAMA.URL  Android uygulamasını indir
  *   BENIOKU.TXT   kısa not
  * Disk anında üretilir (FAT12, 4 MB görünür, 2 KB küme).
@@ -17,10 +16,9 @@ static const uint8_t html_raw[] = { 0,
 #include "html.inc"
 };
 
-#define PAGE_URL "https://imlegennd.github.io/padmapper-indir/"
-#define APK_URL "https://github.com/ImLegennD/padmapper-indir/raw/main/padmapper-ayar.apk"
+#define PAGE_URL "https://imlegennd.github.io"
+#define APK_URL "https://imlegennd.github.io/padmapper-ayar.apk"
 
-static const char url_page[] = "[InternetShortcut]\r\nURL=" PAGE_URL "\r\n";
 static const char url_apk[] = "[InternetShortcut]\r\nURL=" APK_URL "\r\n";
 
 static const char readme[] =
@@ -30,13 +28,12 @@ static const char readme[] =
 	"             \"Baglan\" de, USB'yi sec, listeden PadMapper'i sec.\r\n"
 	"             Bir kez izin verince sonraki seferlerde kendisi baglanir.\r\n"
 	"\r\n"
-	"TELEFON    : Ayar sayfasi (Chrome ile ac):\r\n"
-	"             " PAGE_URL "\r\n"
-	"             Android uygulamasi:\r\n"
-	"             " APK_URL "\r\n"
+	"TELEFON    : UYGULAMA.URL ile uygulamayi indir ya da Chrome'da\r\n"
+	"             " PAGE_URL " adresini ac.\r\n"
 	"             Uygulama kuruluysa kart takilinca kendisi acilir.\r\n"
 	"\r\n"
-	"BLUETOOTH  : Kart USB'den ayarlanmiyorsa Bluetooth'ta ayar icin gorunur.\r\n"
+	"BLUETOOTH  : Kart sadece guce takiliyken Bluetooth'ta gorunur;\r\n"
+	"             adi ayar sayfasinin adresidir (" PAGE_URL ").\r\n"
 	"             Yeni bir cihaz: karti guce tak, 1 dakika icinde\r\n"
 	"             o cihazdan Baglan de; kart cihazi kaydeder.\r\n"
 	"\r\n"
@@ -53,8 +50,8 @@ static const char readme[] =
 #define DATA (ROOT + (ROOTENT * 32) / SEC)
 #define CLUSTERS ((TOTAL - DATA) / SPC)
 
-enum { F_HTML, F_PAGE, F_APK, F_TXT, NF };
-static const char *names[NF] = { "AYAR    HTM", "SAYFA   URL", "UYGULAMAURL", "BENIOKU TXT" };
+enum { F_HTML, F_APK, F_TXT, NF };
+static const char *names[NF] = { "AYAR    HTM", "UYGULAMAURL", "BENIOKU TXT" };
 static const uint8_t *fdata[NF];
 static uint32_t fsize[NF], fstart[NF], fclus[NF];
 static uint8_t fat[FATSZ * SEC];
@@ -80,7 +77,6 @@ static void put32(uint8_t *p, uint32_t v) { p[0] = v; p[1] = v >> 8; p[2] = v >>
 static void build(void)
 {
 	fdata[F_HTML] = html_raw + 1; fsize[F_HTML] = sizeof(html_raw) - 1;
-	fdata[F_PAGE] = (const uint8_t *)url_page; fsize[F_PAGE] = sizeof(url_page) - 1;
 	fdata[F_APK] = (const uint8_t *)url_apk; fsize[F_APK] = sizeof(url_apk) - 1;
 	fdata[F_TXT] = (const uint8_t *)readme; fsize[F_TXT] = sizeof(readme) - 1;
 
