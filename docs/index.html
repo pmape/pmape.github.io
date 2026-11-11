@@ -1,0 +1,2305 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PadMapper – XIAO reWASD tarzı eşleme</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#14161c; --panel:#1c1f27; --panel2:#22252f; --line:#2c303c; --text:#eef0f4; --mute:#a6acba;
+  --acc:#ff8a3d; --acctx:#1a1205; --acc2:#3dd6c6; --l1:#ff5d6c; --l2:#5fd36a; --l3:#5b9bff; --warn:#ffcc4d;
+  --grip:#1f222b; --gripl:#3a3f4c; --key:#2c303c; --keyl:#4a5060; --sel:#fff;
+  --inhf:#332e25; --inhl:#7a6a4a; --inht:#9a8a62;
+  --exb:#17231f; --exl:#28463c; --ext:#bfeee2; --nob:#2a2414; --nol:#5a4a1f; --not:#f3dfa6;
+  --inb:#16222e; --inl:#2b4660; --int:#cfe3ff; --recb:#5a1f26; --prevb:#3a2f12;
+  color-scheme:dark;
+}
+/* Siyah (AMOLED) */
+:root[data-theme=amoled]{--bg:#000;--panel:#0b0c0f;--panel2:#15171c;--line:#24272f;--grip:#101217;--gripl:#2a2f3a;--key:#1c1f26;--keyl:#3a404d}
+/* Açık */
+:root[data-theme=light]{
+  --bg:#f3f4f7; --panel:#ffffff; --panel2:#eef0f4; --line:#d5d9e2; --text:#1b1e25; --mute:#5c6475;
+  --acc2:#0f8f83; --l1:#d93f50; --l2:#23883a; --l3:#2f6fdc; --warn:#a05f00;
+  --grip:#e6e9ef; --gripl:#c3c9d5; --key:#ffffff; --keyl:#b3bac8; --sel:#1b1e25;
+  --inhf:#f6efe0; --inhl:#c7ad78; --inht:#8a7440;
+  --exb:#e8f6f1; --exl:#a5d9c8; --ext:#14584a; --nob:#fff6dd; --nol:#e6cd85; --not:#6b5210;
+  --inb:#e8f0fb; --inl:#abc6ec; --int:#1d4372; --recb:#ffd9dd; --prevb:#fff1cc;
+  color-scheme:light;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{margin:0;background:var(--bg);color:var(--text);font:14px/1.45 Inter,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+button,select,input,textarea{font:inherit;color:inherit}
+select,input[type=number],input[type=text],textarea{background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:6px 8px;min-height:36px}
+.btn{background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:6px 14px;min-height:40px;cursor:pointer;font-weight:600}
+.btn:hover{border-color:var(--acc)}
+.btn.pri{background:var(--acc);border-color:var(--acc);color:var(--acctx);font-weight:600}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.ico{width:38px;padding:0;font-size:18px}
+.hint{color:var(--mute);font-size:13px}
+
+/* üst (yeni düzen) */
+.logo{width:34px;height:34px;border-radius:10px;background:var(--acc);display:inline-flex;align-items:center;justify-content:center;font-size:18px;flex:none}
+.hchip{display:inline-flex;align-items:center;gap:8px;min-height:38px;padding:0 12px;border-radius:19px;background:var(--panel2);border:1px solid var(--line);cursor:pointer;font-weight:600;white-space:nowrap;min-width:0}
+.hchip>span:first-child{overflow:hidden;text-overflow:ellipsis}
+.hchip.grow{flex:1;justify-content:space-between}
+.hchip.acc{border-color:var(--acc);color:var(--acc)}
+#status{padding:10px 12px}
+.flow{display:flex;align-items:center;gap:4px}
+.fnode{flex:1;min-width:0;display:flex;align-items:center;gap:8px;background:none;border:0;padding:4px;border-radius:10px;cursor:pointer;text-align:left}
+.fnode:hover{background:var(--panel2)}
+.fnode .fi{width:36px;height:36px;flex:none;border-radius:11px;display:flex;align-items:center;justify-content:center;background:var(--bg);border:1px solid var(--line);font-size:18px}
+.fnode.on .fi{border-color:var(--acc)}
+.fnode.bad .fi{border-color:var(--l1)}
+.fnode small{display:block;color:var(--mute);font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.fnode b{display:block;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.farr{color:var(--mute);flex:none}
+.fline{display:flex;align-items:center;gap:8px;margin-top:8px;padding-top:8px;border-top:1px solid var(--line);font-size:13px}
+#status,#updBar{grid-column:1/-1}#updBar:empty{display:none}
+.plist{display:flex;flex-direction:column;gap:6px}.prow{display:flex;gap:6px;align-items:center}.prow .pmain{flex:1;display:flex;align-items:center;gap:10px;background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:8px 10px;cursor:pointer;text-align:left;min-width:0}.prow.on .pmain{border-color:var(--acc)}.prow small{display:block;color:var(--mute);font-size:12px}.prow .r{color:var(--acc)}
+.fi0{width:40px;height:40px;flex:none;border-radius:12px;display:flex;align-items:center;justify-content:center;background:var(--bg);border:1px solid var(--line);color:var(--mute)}
+.updbar{display:flex;align-items:center;gap:10px;background:var(--prevb);border:1px solid var(--warn);border-radius:12px;padding:8px 12px;margin-bottom:10px;font-size:13px}
+/* üst (eski) */
+header{position:sticky;top:0;z-index:5;background:var(--panel);border-bottom:1px solid var(--line);padding:8px 10px;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.acts{display:flex;gap:6px;align-items:center;margin-left:auto}
+.acts .st8{font-size:13px;white-space:nowrap;padding:0 4px}
+.dirty{color:var(--warn)}.clean{color:var(--l2)}
+header b{color:var(--acc);font-size:16px;white-space:nowrap}
+header select{flex:1;min-width:0;max-width:240px}
+@media (max-width:520px){header b{display:none}}
+.st.off{opacity:.45}
+.layers{display:flex;gap:4px;width:100%}
+.layers button{border:1px solid var(--line);background:var(--panel2);border-radius:20px;padding:5px 11px;min-height:34px;cursor:pointer;font-size:13px;white-space:nowrap}
+.layers button.on{color:#111;font-weight:700}
+.layers button.on[data-l="0"]{background:var(--acc);border-color:var(--acc)}
+.layers button.on[data-l="1"]{background:var(--l1);border-color:var(--l1)}
+.layers button.on[data-l="2"]{background:var(--l2);border-color:var(--l2)}
+.layers button.on[data-l="3"]{background:var(--l3);border-color:var(--l3)}
+@media (max-width:620px){.layers button{flex:1}.acts{width:100%;margin-left:0}.acts .sp{flex:1}}
+
+main{align-items:start;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px;padding:12px 14px;max-width:1200px;margin:0 auto}
+@media (max-width:860px){main{grid-template-columns:minmax(0,1fr)}}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:12px}
+
+/* kontrolcü */
+svg:not([width]){width:100%;height:auto;display:block;max-height:46vh}
+.btn svg,.pchip svg{vertical-align:-3px}
+#pad{max-width:520px;margin:0 auto}
+.grip{fill:var(--grip);stroke:var(--gripl);stroke-width:1.5}
+.b{cursor:pointer}
+.b .s{fill:var(--key);stroke:var(--keyl);stroke-width:1.2}
+.b.map .s{fill:color-mix(in srgb,var(--acc) 32%,var(--key));stroke:var(--acc)}
+.b.inh .s{fill:var(--inhf);stroke:var(--inhl);stroke-dasharray:4 3}
+.b.sel .s{stroke:var(--sel);stroke-width:2}
+.b.live .s{fill:var(--acc);stroke:var(--acc)}
+.lpad{max-width:360px;margin:6px auto 4px;display:block}
+.lpad .b .s{fill:var(--key);stroke:var(--keyl)}
+.lpad .b.ok .s{fill:color-mix(in srgb,var(--ok,#3fb950) 30%,var(--key));stroke:var(--ok,#3fb950)}
+.lpad .b.tgt .s{fill:var(--acc);stroke:var(--acc);animation:lpulse 1s ease-in-out infinite}
+.lpad .b.tgt text{fill:#fff}
+@keyframes lpulse{50%{opacity:.45}}
+.lpad .arr{fill:#fff;font-size:16px;font-weight:800;text-anchor:middle;dominant-baseline:central;pointer-events:none}
+.b.live text{fill:#fff}
+.lb{font-size:7px;font-weight:600;fill:var(--acc2);pointer-events:none;dominant-baseline:central}
+.lb.inh{fill:var(--inht)}
+.b text{fill:var(--text);font-size:9px;font-weight:700;text-anchor:middle;dominant-baseline:central;pointer-events:none}
+.col{display:flex;flex-direction:column;gap:10px;min-width:0}
+.alist{display:flex;flex-direction:column}
+.arow{display:flex;align-items:center;gap:12px;padding:10px 4px;background:none;border:0;border-bottom:1px solid var(--line);cursor:pointer;text-align:left;width:100%}
+.arow:last-child{border-bottom:0}
+.arow .akey{min-width:44px;height:32px;padding:0 10px;border-radius:16px;background:var(--panel2);border:1px solid var(--line);display:inline-flex;align-items:center;justify-content:center;font-weight:600;font-size:13px;flex:none}
+.arow.on .akey{border-color:var(--acc);color:var(--acc)}
+.arow .atx{flex:1;min-width:0}.arow .atx b{display:block;font-weight:600;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.arow .atx small{display:block;color:var(--mute);font-size:12px}
+.arow .achev{color:var(--mute);font-size:20px}
+.eback{display:none}
+.ehead{display:flex;align-items:center;gap:10px;margin-bottom:12px}.ehead h2{flex:1;margin:0;font-size:18px}
+.tag .sdot{display:inline-block;width:8px;height:8px;border-radius:4px;background:var(--l2);margin-right:6px}.tag .sdot.w{background:var(--warn)}
+.li2{display:flex;align-items:center;gap:10px;padding:10px 0;border-top:1px solid var(--line);width:100%;background:none;border-left:0;border-right:0;border-bottom:0;text-align:left;color:inherit;font:inherit}
+.card>.li2:first-child,.card>.li2:first-of-type{border-top:0}
+.card>.li2:first-child{padding-top:12px}
+.lnk{background:none;border:0;cursor:pointer;text-align:left;padding:0;color:inherit;font:inherit}
+.pdot{width:10px;height:10px;border-radius:5px;background:var(--keyl);flex:none}.pdot.on{background:var(--acc)}
+.sl{margin-top:12px}.sl input[type=range]{width:100%;accent-color:var(--acc)}
+.rad{width:20px;height:20px;border-radius:10px;border:2px solid var(--keyl);display:inline-flex;align-items:center;justify-content:center;flex:none}.rad.on{border-color:var(--acc)}.rad.on i{width:10px;height:10px;border-radius:5px;background:var(--acc)}
+.stbox{display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:10px;background:var(--bg);border:1px solid var(--line);margin:4px 0 6px;color:var(--mute)}
+.row.grow{flex:1;min-width:0}
+.sheet.full .in{max-width:none;max-height:100vh;height:100%;border-radius:0}.sheet.full .in::before{display:none}
+@media (min-width:700px){.sheet.full .in{max-width:640px;height:auto;max-height:92vh;border-radius:16px}}
+.thm{flex:1;height:44px;border-radius:12px;border:2px solid var(--line);font-size:12px;font-weight:600;cursor:pointer}.thm.on{border-color:var(--acc)}
+.qgrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:8px 0 0}
+.qbtn{display:flex;align-items:center;gap:10px;min-height:56px;padding:8px 10px;border-radius:12px;background:var(--panel2);border:1px solid var(--line);font-weight:600;font-size:14px;cursor:pointer;text-align:left}
+.pchips{display:flex;flex-wrap:wrap;gap:6px}
+.pchip{height:34px;padding:0 12px;border-radius:17px;background:var(--panel2);border:1px solid var(--line);font-size:13px;font-weight:500;cursor:pointer;display:inline-flex;align-items:center;gap:6px}
+.pchip.on{background:color-mix(in srgb,var(--acc) 22%,var(--panel2));border-color:var(--acc);color:var(--text)}
+.orow{display:flex;align-items:center;gap:8px;padding:8px 0;border-top:1px solid var(--line)}
+.orow.off,.srow2.off{opacity:.5}
+.omain{flex:1;min-width:0;display:flex;align-items:center;gap:12px;background:none;border:0;padding:2px 0;cursor:pointer;text-align:left}
+.obox{width:36px;height:36px;border-radius:10px;background:var(--bg);border:1px solid var(--line);display:flex;align-items:center;justify-content:center;flex:none;color:var(--acc)}
+.otx{flex:1;min-width:0}.otx small{display:block;color:var(--mute);font-size:11px}.otx b{display:block;font-weight:600;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.btn.ico.sm{width:32px;min-height:32px;height:32px;font-size:13px;border-radius:10px}
+.btn.grow,.grow{flex:1}
+.tl{display:flex;gap:3px;margin-top:10px}
+.tlb{min-width:0;display:flex;flex-direction:column;gap:3px}
+.tlb>div{height:28px;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#1a1205;overflow:hidden;white-space:nowrap;padding:0 2px}
+.tlb.w>div{background:none;border:1px dashed var(--keyl);color:var(--mute);font-weight:500;font-size:10px}
+.tlb>span{font-size:10px;color:var(--mute);text-align:center;white-space:nowrap;overflow:hidden}
+.srow2{display:flex;align-items:center;gap:10px;width:100%;padding:11px 0;background:none;border:0;border-top:1px solid var(--line);cursor:pointer;text-align:left}
+.srow2:first-child{border-top:0}
+.srow2 .grip{color:var(--mute);font-size:12px;letter-spacing:-2px}
+.srow2 .cbar{width:6px;align-self:stretch;border-radius:3px;flex:none}
+.bigval{display:flex;align-items:center;justify-content:center;width:100%;min-height:52px;border-radius:12px;background:var(--bg);border:1px dashed var(--acc);font-size:18px;font-weight:700;color:var(--acc);cursor:pointer}
+.kb{display:flex;flex-direction:column;gap:4px}
+.kbr{display:flex;gap:3px}
+.kk{flex:1;min-width:0;height:38px;border-radius:7px;border:1px solid var(--line);background:var(--panel2);font-size:12px;font-weight:600;padding:0;white-space:nowrap;overflow:hidden;cursor:pointer}
+.kk.m{background:color-mix(in srgb,var(--panel2) 70%,var(--line));color:var(--mute)}
+.kk.s{height:30px;font-size:10px}
+.kk.on{background:var(--acc);border-color:var(--acc);color:var(--acctx)}
+body.editing #panel{background:var(--bg)}
+@media (max-width:860px){
+  #panel{display:none}
+  body.editing #panel{display:block;position:fixed;inset:0;z-index:15;border-radius:0;border:0;overflow:auto;padding:14px 16px 60px;margin:0}
+  body.editing{overflow:hidden}
+  .eback{display:inline-flex;align-items:center;justify-content:center}
+}
+details.sum{margin-top:6px}
+details.sum summary{cursor:pointer;color:var(--mute);font-size:13px;padding:4px 2px}
+.chips{display:flex;flex-wrap:wrap;gap:5px;margin-top:6px}
+.chip{background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:3px 8px;font-size:12.5px;cursor:pointer}
+.chip b{color:var(--mute);font-weight:600;margin-right:4px}
+
+/* editör */
+.ehead{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.ehead h2{font-size:17px;margin:0}
+.tag{font-size:11px;padding:2px 8px;border-radius:20px;background:var(--panel2);border:1px solid var(--line);color:var(--mute)}
+.scroll{display:flex;gap:5px;overflow-x:auto;padding:8px 0 4px;scrollbar-width:none}
+.scroll::-webkit-scrollbar{display:none}
+.pill{position:relative;flex:none;border:1px solid var(--line);background:var(--panel2);border-radius:20px;padding:5px 12px;min-height:34px;cursor:pointer;font-size:13px}
+.pill.on{border-color:var(--acc);color:var(--acc);font-weight:600}
+.pill .dot{position:absolute;top:-2px;right:-2px;width:9px;height:9px;border-radius:50%;background:var(--acc2)}
+.seg{display:flex;border:1px solid var(--line);border-radius:9px;overflow:hidden}
+.seg button{flex:1;border:0;background:var(--panel2);padding:6px 8px;min-height:36px;cursor:pointer;font-size:13px}
+.seg button+button{border-left:1px solid var(--line)}
+.seg button.on{background:var(--acc);color:var(--acctx);font-weight:700}
+.lbl{font-size:12px;color:var(--mute);text-transform:uppercase;letter-spacing:.5px;margin:12px 0 5px}
+.row{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+
+/* makro */
+.mac{display:flex;flex-direction:column}
+.st{display:flex;flex-wrap:wrap;align-items:center;gap:6px;background:var(--panel2);border:1px solid var(--line);border-radius:9px;padding:5px 6px}
+.st .n{width:18px;text-align:center;color:var(--mute);font-size:12px;flex:none}
+.st select{flex:1;min-width:0}
+.st .a{flex:0 0 108px}
+.st .ty{flex:0 0 52px;padding:4px 2px;text-align:center}
+.st .stx{flex:1 0 100%;display:flex;gap:10px;align-items:center;padding-left:24px;font-size:12px;color:var(--mute)}
+.st .stx input{width:64px;padding:3px 6px}
+.st .mvi{display:flex;align-items:center;gap:3px;color:var(--mute);flex:1;min-width:0}.st .mvi input{width:100%;min-width:0}
+.x{background:none;border:0;color:var(--mute);cursor:pointer;width:30px;height:32px;border-radius:7px;font-size:15px;flex:none}
+.x:hover{color:var(--text);background:var(--bg)}
+.gap{display:flex;align-items:center;gap:6px;padding:3px 0 3px 26px;color:var(--mute);font-size:13px}
+.gap::before{content:"";width:2px;height:26px;background:var(--line);margin-right:6px}
+.gap input{width:76px;min-height:32px;padding:3px 6px;text-align:right}
+.gap .x{width:30px;height:30px;border:1px solid var(--line);background:var(--panel2);color:var(--text)}
+.gap.loop{color:var(--acc2)}
+.gap.loop::before{background:var(--acc2)}
+.empty{color:var(--mute);font-size:13px;padding:6px 2px}
+.explain{background:var(--exb);border:1px solid var(--exl);color:var(--ext);border-radius:9px;padding:7px 10px;font-size:13px;margin-top:10px}
+.note{background:var(--nob);border:1px solid var(--nol);color:var(--not);border-radius:9px;padding:7px 10px;font-size:13px;margin-top:8px}
+.k{display:inline-block;background:var(--bg);border:1px solid var(--line);border-bottom-width:2px;border-radius:5px;padding:0 5px;font-size:12px;margin:0 1px;font-family:ui-monospace,Consolas,monospace}
+.rec{background:var(--recb)!important;border-color:var(--l1)!important}
+input[type=range]{accent-color:var(--acc);flex:1;min-width:120px}
+.dir{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
+.dir label{display:flex;flex-direction:column;gap:2px;font-size:12px;color:var(--mute)}
+
+/* ayarlar paneli */
+.sheet{position:fixed;inset:0;background:#000a;z-index:20;display:none;align-items:flex-end;justify-content:center}
+.sheet.open{display:flex}
+.sheet .in{background:#1a1d24;border:1px solid var(--line);border-radius:22px 22px 0 0;width:100%;max-width:560px;max-height:88vh;overflow:auto;padding:12px 14px 20px}
+@media (min-width:700px){.sheet{align-items:center}.sheet .in{border-radius:16px}}
+.dev{display:flex;align-items:center;gap:10px;background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:8px 10px;margin-top:6px;cursor:pointer}
+.dev:hover{border-color:var(--acc)}
+.dev.act{border-color:var(--acc2)}
+.dev .r{color:var(--acc2);font-size:16px;width:18px;text-align:center}
+.dev .ic{font-size:22px;width:28px;text-align:center}
+.dev.no{opacity:.5;cursor:default}
+.dev.no:hover{border-color:var(--line)}
+.bars{display:inline-flex;gap:2px;align-items:flex-end;height:14px;vertical-align:middle}
+.bars i{width:4px;background:var(--line);border-radius:1px}
+.bars i.on{background:var(--acc2)}
+.ok{color:var(--l2);font-size:12px}.bad{color:var(--mute);font-size:12px}
+.spin{display:inline-block;width:14px;height:14px;border:2px solid var(--line);border-top-color:var(--acc2);border-radius:50%;animation:sp 0.8s linear infinite;vertical-align:middle}
+@keyframes sp{to{transform:rotate(360deg)}}
+.prev{font-size:11px;padding:2px 8px;border-radius:20px;background:var(--prevb);color:var(--warn);border:1px solid var(--nol)}
+.sheet h2{font-size:18px;margin:0;flex:1}
+.sheet .in::before{content:'';display:block;width:40px;height:5px;border-radius:3px;background:#3a3f4c;margin:0 auto 10px}
+.sec{border-top:1px solid var(--line);padding-top:4px;margin-top:10px}
+textarea{width:100%;min-height:140px;font-family:ui-monospace,Consolas,monospace;font-size:12px}
+#card{display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+#card .dot{width:9px;height:9px;border-radius:50%;background:var(--line);display:inline-block}
+#card .dot.on{background:var(--l2)}#card .dot.warn{background:var(--warn)}
+.shead{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
+.stabs{display:flex;gap:4px;padding:3px;background:var(--panel2);border:1px solid var(--line);border-radius:12px;position:sticky;top:-1px;z-index:2;overflow-x:auto}
+.stabs button{flex:1;min-width:70px;border:0;background:transparent;color:var(--mute);border-radius:9px;padding:6px 4px;min-height:44px;cursor:pointer;font-size:12px;display:flex;flex-direction:column;align-items:center;gap:1px}
+.stabs button span{font-size:17px;line-height:1}
+.stabs button.on{background:var(--panel);color:var(--text);box-shadow:0 0 0 1px var(--line)}
+.sbody{padding-top:10px}
+.sgroup{margin-bottom:14px}
+.sgt{font-size:12px;color:var(--mute);text-transform:uppercase;letter-spacing:.5px;margin:0 2px 6px}
+.sgb{background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:6px 12px}
+.srow{display:flex;align-items:center;justify-content:space-between;gap:10px;min-height:46px;border-bottom:1px solid var(--line);flex-wrap:wrap;padding:4px 0}
+.srow:last-child{border-bottom:0}
+.sname{display:flex;align-items:center;gap:6px;flex:1;min-width:120px}
+.sctl{display:flex;align-items:center;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+.sctl select{max-width:150px}.sctl input[type=number]{width:80px}
+.sinfo{position:relative}.sinfo summary{list-style:none;cursor:pointer;color:var(--mute);font-size:14px;min-width:24px;text-align:center}
+.sinfo summary::-webkit-details-marker{display:none}
+.sinfo[open]>div{position:absolute;z-index:3;left:0;top:24px;width:240px;background:var(--panel);border:1px solid var(--line);border-radius:9px;padding:8px 10px;font-size:13px;color:var(--text);box-shadow:0 6px 18px #0006}
+.sinfo2 summary{cursor:pointer;color:var(--mute);padding:8px 0}
+.sinfo2 textarea{width:100%;min-height:140px}
+.sbtns{display:flex;gap:8px;flex-wrap:wrap;padding:8px 0}
+.sbtns .btn{flex:1;min-width:110px}
+.scard{display:flex;align-items:center;gap:10px;padding:8px 0}
+.scard .dot{width:10px;height:10px;border-radius:50%;background:var(--line)}.scard .dot.on{background:var(--l2)}.scard .dot.warn{background:var(--warn)}
+.seg.sm button{min-height:34px;padding:4px 10px;font-size:13px;white-space:nowrap}
+.tog{width:46px;height:28px;border-radius:14px;border:1px solid var(--line);background:var(--bg);position:relative;cursor:pointer;padding:0}
+.tog i{position:absolute;top:3px;left:3px;width:20px;height:20px;border-radius:50%;background:var(--mute);transition:left .15s}
+.tog.on{background:var(--acc);border-color:var(--acc)}.tog.on i{left:21px;background:var(--acctx)}
+.swatches{display:flex;gap:10px;flex-wrap:wrap;padding:10px 0 4px}
+.swatches button{width:36px;height:36px;border-radius:50%;border:3px solid transparent;cursor:pointer;box-shadow:0 0 0 1px var(--line)}
+.slist{display:flex;flex-direction:column}
+.slist button{display:grid;grid-template-columns:30px 1fr;align-items:center;text-align:left;background:transparent;border:0;border-bottom:1px solid var(--line);color:var(--text);padding:10px 0;min-height:48px;cursor:pointer;font:inherit}
+.slist button:last-child{border-bottom:0}.slist button span{font-size:18px;grid-row:span 2}
+.slist button small{color:var(--mute);font-size:12px;grid-column:2}
+.ubtn{margin-left:10px;background:#062a26;color:#fff;border:0;border-radius:7px;padding:4px 10px;font-weight:700;cursor:pointer}
+#toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:var(--acc2);color:#062a26;padding:8px 16px;border-radius:9px;font-weight:600;opacity:0;transition:opacity .2s;pointer-events:none;z-index:30}
+</style>
+</head>
+<body>
+<header>
+  <span class="logo" aria-hidden="true" style="color:var(--acctx)"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 11h4M8 9v4M15 12h.01M18 10h.01"/><path d="M17.3 5H6.7a4 4 0 0 0-3.96 3.43l-.7 5A3 3 0 0 0 5 17c1 0 1.8-.6 2.2-1.4L8 14h8l.8 1.6c.4.8 1.2 1.4 2.2 1.4a3 3 0 0 0 2.96-3.57l-.7-5A4 4 0 0 0 17.3 5z"/></svg></span>
+  <button class="hchip grow" id="profBtn" onclick="openSheet('profiller')" title="Profiller"><span id="profName"></span><span aria-hidden="true">▾</span></button>
+  <button class="hchip acc" id="outBtn" onclick="openSheet('profil')" title="Bu profilin ayarları"><span id="outName"></span><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/></svg></button>
+  <button class="btn ico" title="Ayarlar" aria-label="Ayarlar" onclick="openSheet('ayarlar')"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg></button>
+</header>
+
+<main>
+  <div id="updBar"></div>
+  <section class="card" id="status"></section>
+  <div class="col">
+    <section class="card" style="padding:10px 10px 6px">
+      <svg viewBox="0 0 340 222" id="pad"></svg>
+      <p class="hint" style="text-align:center;margin:2px 0 4px;font-size:12px">Turuncu = atanmış · düzenlemek için tuşa dokun</p>
+    </section>
+    <section class="card" style="padding:4px 14px"><div class="alist" id="summary"></div></section>
+  </div>
+  <section class="card" id="panel"></section>
+</main>
+
+<div class="sheet" id="sheet" onclick="if(event.target===this)closeSheet()"><div class="in" id="sheetIn"></div></div>
+<div class="sheet" id="scan" onclick="if(event.target===this)closeScan()"><div class="in" id="scanIn"></div></div>
+<div id="toast"></div>
+
+<script>
+/* PadMapper: profilleri kartın anladığı biçime çevir + karta bağlan (bilgisayar: WebSerial, Android: WebUSB).
+ * Biçim firmware/src/engine.h'de. */
+const PM = (() => {
+  const HID = {};
+  'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('').forEach((c, i) => HID['Key' + c] = 4 + i);
+  '1234567890'.split('').forEach((c, i) => HID['Digit' + c] = 30 + i);
+  for (let i = 1; i <= 12; i++) HID['F' + i] = 57 + i;
+  Object.assign(HID, {
+    Enter: 40, Escape: 41, Backspace: 42, Tab: 43, Space: 44, Minus: 45, Equal: 46, BracketLeft: 47,
+    BracketRight: 48, Backslash: 49, Semicolon: 51, Quote: 52, Backquote: 53, Comma: 54, Period: 55,
+    Slash: 56, CapsLock: 57, Insert: 73, Home: 74, PageUp: 75, Delete: 76, End: 77, PageDown: 78,
+    ArrowRight: 79, ArrowLeft: 80, ArrowDown: 81, ArrowUp: 82, IntlBackslash: 100, PrintScreen: 70, ScrollLock: 71, Pause: 72,
+    ControlLeft: 0xe0, ShiftLeft: 0xe1, AltLeft: 0xe2, MetaLeft: 0xe3,
+    ControlRight: 0xe4, ShiftRight: 0xe5, AltRight: 0xe6,
+  });
+  for (let i = 1; i <= 9; i++) HID['Numpad' + i] = 88 + i;
+  HID.Numpad0 = 98;
+
+  const BTN = { A: 0, B: 1, X: 3, Y: 4, LB: 6, RB: 7, LT: 8, RT: 9, SELECT: 10, START: 11, HOME: 12,
+    L3: 13, R3: 14, SHARE: 15, UP: 16, DOWN: 17, LEFT: 18, RIGHT: 19, M1: 20, M2: 21 };
+  const MOUSE = { left: 0, right: 1, middle: 2, back: 3, fwd: 4, wheelUp: 5, wheelDown: 6 };
+  const MEDIA = { voice: 1, search: 2, volUp: 3, volDown: 4, mute: 5, play: 6, next: 7, prev: 8, brUp: 9, brDown: 10, home: 11, back: 12 };
+  const OUT = { kbm: 0, kb: 1, pad: 2, all: 3 };
+  const SM = { inherit: 0, off: 1, mouse: 2, keys: 3, scroll: 4, pad: 5 };
+  const TRIG = { single: 0, double: 1, long: 2, start: 3, release: 4 };
+  const MODE = { normal: 0, turbo: 1, toggle: 2, macro: 3 };
+  const ACTS = { press: 0, down: 1, up: 2 };
+
+  function compile(S) {
+    const b = [];
+    const u8 = v => b.push(v & 255);
+    const u16 = v => { v = Math.max(0, Math.min(65535, Math.round(+v || 0))); b.push(v & 255, v >> 8); };
+    const d = S.device;
+    const profs = S.profiles.map(p => p._applied ? JSON.parse(p._applied) : p).slice(0, 8);
+    b.push(80, 77, 2);
+    u8(d.startMode === 'pad' ? 1 : 0);
+    u8(BTN[d.comboA] ?? 12); u8(BTN[d.comboB] ?? 10);
+    u16(d.holdMs || 1500);
+    u8((d.profSwitch ? 1 : 0) | (d.passUnmapped !== false ? 2 : 0));
+    u8(profs.length); u8(0); /* seçili profil ayrıca 'cs' ile gider */
+    u8(BTN[d.profMod || 'HOME'] ?? 12); u8(BTN[d.profPrev || 'LB'] ?? 6); u8(BTN[d.profNext || 'RB'] ?? 7); u8(0); u8(0);
+    for (const p of profs) {
+      u8(OUT[p.output || 'all']); u8(p.trigThr ?? 30); u16(p.longMs || 300); u16(p.doubleMs || 250);
+      for (const l of p.layers) for (const s of ['LS', 'RS']) {
+        const st = l.sticks[s] || { mode: 'off' };
+        u8(SM[st.mode] ?? 1); u8(st.sens || 8); u8(st.dead ?? 12);
+        for (const k of ['up', 'down', 'left', 'right']) u8(HID[st.keys && st.keys[k]] || 0);
+      }
+      const binds = [];
+      p.layers.forEach((l, li) => {
+        for (const id in l.btn) {
+          if (BTN[id] === undefined) continue;
+          for (const k in l.btn[id]) {
+            const a = l.btn[id][k];
+            if (!a || !(a.kind === 'layer' || (a.steps && a.steps.length))) continue;
+            let trig, other = 255;
+            if (k.startsWith('c_')) { trig = 5; other = BTN[k.slice(2)]; if (other === undefined) continue; }
+            else { trig = TRIG[k]; if (trig === undefined) continue; }
+            binds.push({ li, btn: BTN[id], trig, other, a });
+          }
+        }
+      });
+      u16(binds.length);
+      for (const { li, btn, trig, other, a } of binds) {
+        const steps = a.kind === 'layer' ? [] : expand(a.steps, d.layout).slice(0, 255);
+        u8(li); u8(btn); u8(trig); u8(other);
+        u8(a.kind === 'layer' ? 1 : 0); u8(MODE[a.mode] || 0); u16(a.turbo || 80);
+        u8(a.layer || 0); u8(a.how === 'toggle' ? 1 : 0); u8(steps.length);
+        for (const s of steps) {
+          if (s.t === 'key') { u8(0); u8(HID[s.k] || 0); }
+          else if (s.t === 'mouse') { u8(1); u8(MOUSE[s.b] ?? 0); }
+          else if (s.t === 'media') { u8(3); u8(MEDIA[s.m] ?? 1); }
+          else if (s.t === 'move') { u8(4); u8(s.x & 255); u8(s.y & 255); u16(s.after || 0); continue; }
+          else { u8(2); u8(BTN[s.p] ?? 0); }
+          u8(ACTS[s.a] ?? 0); u16(s.after || 0);
+        }
+      }
+    }
+    return new Uint8Array(b);
+  }
+
+  /* Karttaki ayardan profilleri geri çıkar (profil adları kartta yok: Profil 1, 2…) */
+  const inv = o => Object.fromEntries(Object.entries(o).map(([k, v]) => [v, k]));
+  function decompile(b) {
+    const HIDI = inv(HID), BTNI = inv(BTN), MOUSEI = inv(MOUSE), MEDIAI = inv(MEDIA), OUTI = inv(OUT), SMI = inv(SM), TRIGI = inv(TRIG), MODEI = inv(MODE), ACTSI = inv(ACTS);
+    let i = 0;
+    const u8 = () => b[i++], u16 = () => { const v = b[i] | (b[i + 1] << 8); i += 2; return v; };
+    if (b[0] !== 80 || b[1] !== 77 || b[2] !== 2) throw new Error('Karttaki ayar okunamadı');
+    i = 3;
+    const d = { startMode: u8() ? 'pad' : 'map', comboA: BTNI[u8()] || 'HOME', comboB: BTNI[u8()] || 'SELECT', holdMs: u16() };
+    const fl = u8(); d.profSwitch = !!(fl & 1); d.passUnmapped = !!(fl & 2);
+    const np = u8(); u8();
+    d.profMod = BTNI[u8()] || 'HOME'; d.profPrev = BTNI[u8()] || 'LB'; d.profNext = BTNI[u8()] || 'RB'; u8(); u8();
+    const profiles = [];
+    for (let n = 0; n < np; n++) {
+      const p = { name: 'Profil ' + (n + 1), output: OUTI[u8()] || 'all', trigThr: u8(), longMs: u16(), doubleMs: u16(), gapMs: 50, layers: [] };
+      for (let l = 0; l < 4; l++) {
+        const sticks = {};
+        for (const s of ['LS', 'RS']) {
+          const mode = SMI[u8()] || 'off', sens = u8(), dead = u8(), k = [u8(), u8(), u8(), u8()].map(x => HIDI[x] || '');
+          sticks[s] = { mode, sens, dead, keys: { up: k[0] || 'KeyW', down: k[1] || 'KeyS', left: k[2] || 'KeyA', right: k[3] || 'KeyD' } };
+        }
+        p.layers.push({ btn: {}, sticks });
+      }
+      const nb = u16();
+      for (let k = 0; k < nb; k++) {
+        const li = u8(), btn = BTNI[u8()], trig = u8(), other = u8(), kind = u8(), mode = u8(), loop = u16(), tl = u8(), how = u8(), ns = u8();
+        const a = { kind: kind ? 'layer' : 'combo', mode: MODEI[mode] || 'normal', turbo: loop, layer: tl || 1, how: how ? 'toggle' : 'hold', steps: [] };
+        for (let s = 0; s < ns; s++) {
+          const t = u8(), c = u8(), acr = u8(), ac = ACTSI[acr] || 'press', after = u16();
+          if (t === 4) { a.steps.push({ t: 'move', x: (c << 24) >> 24, y: (acr << 24) >> 24, after }); continue; }
+          a.steps.push(t === 0 ? { t: 'key', k: HIDI[c] || '', a: ac, after } : t === 1 ? { t: 'mouse', b: MOUSEI[c] || 'left', a: ac, after } : t === 3 ? { t: 'media', m: MEDIAI[c] || 'voice', a: ac, after } : { t: 'pad', p: BTNI[c] || 'A', a: ac, after });
+        }
+        if (!btn) continue;
+        const key = trig === 5 ? 'c_' + (BTNI[other] || '') : TRIGI[trig];
+        if (!key || key === 'c_') continue;
+        (p.layers[li].btn[btn] = p.layers[li].btn[btn] || {})[key] = a;
+      }
+      profiles.push(p);
+    }
+    return { cur: 0, profiles, device: d };
+  }
+
+  /* Profillerin düzenlenebilir hali: sıkıştırıp karta da yazılır */
+  async function pack(obj) {
+    const raw = new TextEncoder().encode(JSON.stringify(obj));
+    if (typeof CompressionStream === 'undefined') return Uint8Array.from([74, ...raw]); /* 'J' */
+    const z = new Uint8Array(await new Response(new Blob([raw]).stream().pipeThrough(new CompressionStream('gzip'))).arrayBuffer());
+    const out = new Uint8Array(z.length + 1); out[0] = 71; out.set(z, 1); return out; /* 'G' */
+  }
+  async function unpack(b) {
+    if (b[0] === 74) return JSON.parse(new TextDecoder().decode(b.slice(1)));
+    const r = await new Response(new Blob([b.slice(1)]).stream().pipeThrough(new DecompressionStream('gzip'))).arrayBuffer();
+    return JSON.parse(new TextDecoder().decode(r));
+  }
+  /* Bluetooth daha yavaş: bekleme süresi uzun */
+  const TO = () => link.via === 'ble' ? 25000 : 8000;
+  const unhex = s => Uint8Array.from((s.match(/../g) || []).map(x => parseInt(x, 16)));
+
+  function collect(cmd, ev, ms) {
+    return new Promise((res, rej) => {
+      const prev = link.onLine; let acc = '';
+      const t = setTimeout(() => { link.onLine = prev; rej(new Error('Kart cevap vermedi')); }, ms);
+      link.onLine = e => { prev(e); if (e.ev === ev) acc += e.d; if (e.ev === ev + '_end') { clearTimeout(t); link.onLine = prev; res(unhex(acc)); } };
+      sendLine(cmd).catch(rej);
+    });
+  }
+  async function readCard() {
+    const info = link.info || {};
+    if (info.jlen) { try { return { state: await unpack(await collect('jr', 'jdata', TO())), full: true }; } catch (e) { } }
+    if (info.cfg) return { state: decompile(await collect('cr', 'cfgdata', TO())), full: false };
+    return null;
+  }
+  async function writeJson(state) {
+    const b = await pack(state);
+    if (b.length > 8192) return false;
+    const w = waitEv('json', TO());
+    await sendLine('jb ' + b.length);
+    for (let i = 0; i < b.length; i += 200) { await sendLine('jd ' + hex(b.slice(i, i + 200))); await new Promise(r => setTimeout(r, 15)); }
+    await sendLine('je ' + crc32(b).toString(16).padStart(8, '0'));
+    const r = await w;
+    if (r.ok && link.info) { link.info.jlen = b.length; link.info.jcrc = crc32(b).toString(16).padStart(8, '0'); }
+    return !!r.ok;
+  }
+
+  /* Yazı → tuş basışları (Türkçe Q ya da US düzeni). [kod, shift, altgr] */
+  const TXT_US = {}, TXT_TR = {};
+  (() => {
+    const set = (m, ch, k, sh = 0, ag = 0) => { if (!(ch in m)) m[ch] = [k, sh, ag]; };
+    for (const m of [TXT_US, TXT_TR]) {
+      'abcdefghjklmnopqrstuvwxyz'.split('').forEach(c => { set(m, c, 'Key' + c.toUpperCase()); set(m, c.toUpperCase(), 'Key' + c.toUpperCase(), 1); });
+      '1234567890'.split('').forEach(c => set(m, c, 'Digit' + c));
+      set(m, ' ', 'Space'); set(m, '\n', 'Enter'); set(m, '\t', 'Tab');
+    }
+    set(TXT_US, 'i', 'KeyI'); set(TXT_US, 'I', 'KeyI', 1);
+    const us = { '-': ['Minus'], '=': ['Equal'], '[': ['BracketLeft'], ']': ['BracketRight'], '\\': ['Backslash'], ';': ['Semicolon'], "'": ['Quote'], '`': ['Backquote'], ',': ['Comma'], '.': ['Period'], '/': ['Slash'],
+      '_': ['Minus', 1], '+': ['Equal', 1], '{': ['BracketLeft', 1], '}': ['BracketRight', 1], '|': ['Backslash', 1], ':': ['Semicolon', 1], '"': ['Quote', 1], '~': ['Backquote', 1], '<': ['Comma', 1], '>': ['Period', 1], '?': ['Slash', 1],
+      '!': ['Digit1', 1], '@': ['Digit2', 1], '#': ['Digit3', 1], '$': ['Digit4', 1], '%': ['Digit5', 1], '^': ['Digit6', 1], '&': ['Digit7', 1], '*': ['Digit8', 1], '(': ['Digit9', 1], ')': ['Digit0', 1] };
+    for (const [c, [k, s]] of Object.entries(us)) set(TXT_US, c, k, s || 0);
+    const tr = { 'ı': ['KeyI'], 'I': ['KeyI', 1], 'i': ['Quote'], 'İ': ['Quote', 1], 'ğ': ['BracketLeft'], 'Ğ': ['BracketLeft', 1], 'ü': ['BracketRight'], 'Ü': ['BracketRight', 1],
+      'ş': ['Semicolon'], 'Ş': ['Semicolon', 1], 'ö': ['Comma'], 'Ö': ['Comma', 1], 'ç': ['Period'], 'Ç': ['Period', 1], '.': ['Slash'], ':': ['Slash', 1], ',': ['Backslash'], ';': ['Backslash', 1],
+      '"': ['Backquote'], 'é': ['Backquote', 1], '*': ['Minus'], '?': ['Minus', 1], '-': ['Equal'], '_': ['Equal', 1], '<': ['IntlBackslash'], '>': ['IntlBackslash', 1],
+      '!': ['Digit1', 1], "'": ['Digit2', 1], '^': ['Digit3', 1], '+': ['Digit4', 1], '%': ['Digit5', 1], '&': ['Digit6', 1], '/': ['Digit7', 1], '(': ['Digit8', 1], ')': ['Digit9', 1], '=': ['Digit0', 1],
+      '@': ['KeyQ', 0, 1], '#': ['Digit3', 0, 1], '$': ['Digit4', 0, 1], '{': ['Digit7', 0, 1], '[': ['Digit8', 0, 1], ']': ['Digit9', 0, 1], '}': ['Digit0', 0, 1], '\\': ['Minus', 0, 1], '|': ['Equal', 0, 1], '~': ['BracketRight', 0, 1] };
+    for (const [c, [k, s, g]] of Object.entries(tr)) { TXT_TR[c] = [k, s || 0, g || 0]; }
+  })();
+  /* Düzenleyicideki kolaylıkları kartın anladığı adımlara aç: yazı, basılı tutma süresi, tekrar sayısı */
+  function expand(steps, layout) {
+    const out = [], map = layout === 'us' ? TXT_US : TXT_TR;
+    for (const s of steps || []) {
+      const n = Math.max(1, Math.min(50, (s.rep | 0) || 1));
+      for (let r = 0; r < n; r++) {
+        const after = r < n - 1 ? (s.repGap ?? s.after ?? 0) : (s.after || 0);
+        if (s.t === 'text') {
+          const chars = Array.from(s.s || '');
+          chars.forEach((ch, i) => {
+            const m = map[ch]; if (!m) return;
+            const last = i === chars.length - 1, gap = last ? after : Math.max(30, s.gap || 35);
+            if (m[1]) out.push({ t: 'key', k: 'ShiftLeft', a: 'down', after: 0 });
+            if (m[2]) out.push({ t: 'key', k: 'AltRight', a: 'down', after: 0 });
+            out.push({ t: 'key', k: m[0], a: 'press', after: m[1] || m[2] ? 15 : gap });
+            if (m[2]) out.push({ t: 'key', k: 'AltRight', a: 'up', after: m[1] ? 0 : gap });
+            if (m[1]) out.push({ t: 'key', k: 'ShiftLeft', a: 'up', after: gap });
+          });
+        } else if (s.t === 'move') {
+          /* büyük kaydırmayı 127'lik parçalara böl */
+          let x = Math.round(+s.x || 0), y = Math.round(+s.y || 0);
+          do {
+            const px = Math.max(-127, Math.min(127, x)), py = Math.max(-127, Math.min(127, y));
+            x -= px; y -= py;
+            out.push({ t: 'move', x: px, y: py, after: x || y ? 0 : after });
+          } while (x || y);
+        } else if (s.a === 'hold' && !(s.t === 'mouse' && String(s.b).startsWith('wheel'))) {
+          out.push(Object.assign({}, s, { a: 'down', after: Math.max(0, +s.hold || 100) }));
+          out.push(Object.assign({}, s, { a: 'up', after }));
+        } else {
+          out.push(Object.assign({}, s, { a: s.a === 'hold' ? 'press' : s.a, after }));
+        }
+      }
+    }
+    return out;
+  }
+  const CRC = (() => { const t = []; for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1; t[n] = c >>> 0; } return t; })();
+  function crc32(a) { let c = 0xffffffff; for (const x of a) c = CRC[(c ^ x) & 255] ^ (c >>> 8); return (c ^ 0xffffffff) >>> 0; }
+  const hex = a => Array.from(a, x => x.toString(16).padStart(2, '0')).join('');
+
+  /* ---------- bağlantı ---------- */
+  const link = { kind: null, via: '', onLine: () => {}, onClose: () => {}, onStatus: () => {}, info: null };
+  let buf = '', writer = null, usb = null, closing = false;
+  const OLD = 'Kart komutlara cevap vermiyor. Karttaki yazılım eski olabilir: 0.3.0 padmapper.uf2 dosyasını yükle.';
+  const enc = new TextEncoder(), dec = new TextDecoder();
+
+  function feed(text) {
+    buf += text;
+    let i;
+    while ((i = buf.indexOf('\n')) >= 0) {
+      const l = buf.slice(0, i).trim(); buf = buf.slice(i + 1);
+      if (!l.startsWith('{')) continue;
+      try { const ev = JSON.parse(l); if (ev.ev === 'hello') link.info = ev; link.onLine(ev); } catch (e) {}
+    }
+  }
+
+  async function openSerial(port) {
+    if (!port) port = await navigator.serial.requestPort({ filters: [{ usbVendorId: 0x2fe3 }] }).catch(() => navigator.serial.requestPort());
+    await port.open({ baudRate: 115200 });
+    try { await port.setSignals({ dataTerminalReady: true }); } catch (e) {}
+    writer = port.writable.getWriter();
+    link.kind = 'serial'; link.via = 'usb'; link.port = port;
+    (async () => {
+      const r = port.readable.getReader(); link.reader = r;
+      try { for (;;) { const { value, done } = await r.read(); if (done) break; feed(dec.decode(value)); } }
+      catch (e) {} finally { r.releaseLock(); if (!closing) link.onClose(); }
+    })();
+  }
+
+  async function openUsb(dev) {
+    if (!dev) dev = await navigator.usb.requestDevice({ filters: [] }); /* listede "PadMapper"ı seç */
+    await dev.open();
+    if (!dev.configuration) await dev.selectConfiguration(1);
+    let ctrl = null, data = null, epIn = 0, epOut = 0;
+    for (const itf of dev.configuration.interfaces) {
+      const alt = itf.alternates[0];
+      if (alt.interfaceClass === 2 && ctrl === null) ctrl = itf.interfaceNumber;
+      if (alt.interfaceClass === 10 && data === null) {
+        data = itf.interfaceNumber;
+        for (const ep of alt.endpoints) { if (ep.type === 'bulk') { if (ep.direction === 'in') epIn = ep.endpointNumber; else epOut = ep.endpointNumber; } }
+      }
+    }
+    if (data === null) throw new Error('Kartın seri bağlantısı bulunamadı');
+    try { await dev.claimInterface(ctrl); } catch (e) {}
+    await dev.claimInterface(data);
+    const ctl = (req, val, body) => dev.controlTransferOut({ requestType: 'class', recipient: 'interface', request: req, value: val, index: ctrl }, body);
+    try { await ctl(0x20, 0, new Uint8Array([0x00, 0xc2, 0x01, 0x00, 0, 0, 8])); } catch (e) {}
+    try { await ctl(0x22, 1); } catch (e) {}
+    usb = { dev, epIn, epOut };
+    link.kind = 'usb'; link.via = 'usb';
+    (async () => {
+      try { for (;;) { const r = await dev.transferIn(epIn, 64); if (r.data && r.data.byteLength) feed(dec.decode(r.data)); } }
+      catch (e) {} finally { if (!closing) link.onClose(); }
+    })();
+  }
+
+  /* Android uygulamasının içinde: karta uygulama bağlanır */
+  const native = typeof PMNative !== 'undefined';
+  let permWait = null, plugCb = null, blePerm = null, bleWait = null;
+  const BLE_ERR = {
+    notfound: 'Kart Bluetooth\'ta bulunamadı. Kart açık mı (güç var mı)? Kart USB ile bir uygulamaya bağlıysa Bluetooth ayarı kapalıdır.',
+    key: 'Bu cihaz karta henüz tanıtılmamış. Kartı güçten çıkarıp tekrar tak, 1 dakika içinde yeniden Bağlan de: kart bu cihazı kaydeder.',
+    nokey: 'Bu cihaz karta henüz tanıtılmamış. Kartı güçten çıkarıp tekrar tak, 1 dakika içinde yeniden Bağlan de.',
+    nosvc: 'Karttaki yazılım eski: kablosuz ayar için kartı USB ile tak ve güncelle.',
+    timeout: 'Karta Bluetooth ile bağlanılamadı (süre doldu). Tekrar dene.',
+  };
+  const STAGE = { conn: 'bağlanırken', mtu: 'bağlantı ayarlanırken', svc: 'servisler okunurken', ccc: 'bildirim açılırken', auth: 'doğrulanırken', scan: 'ararken' };
+  function bleErr(msg) {
+    if (BLE_ERR[msg]) return BLE_ERR[msg];
+    const [k, st, code] = String(msg || '').split(':');
+    if (k === 'timeout') return 'Kart bulundu ama ' + (STAGE[st] || st) + ' yanıt vermedi. Kartı powerbank\'tan çıkarıp tak, 10 sn bekle, tekrar dene. (' + msg + ')';
+    if (k === 'drop') return 'Kart bulundu ama ' + (STAGE[st] || st) + ' bağlantı koptu. Telefonun Bluetooth\'unu kapatıp aç, tekrar dene. (' + msg + ')';
+    return 'Bluetooth bağlantısı kurulamadı (' + msg + ')';
+  }
+  window.PM_native = {
+    feed: t => feed(t),
+    closed: () => { const was = link.kind === 'native'; link.kind = null; link.via = ''; link.info = null; if (was && !closing) link.onClose(); },
+    perm: ok => { if (permWait) { const w = permWait; permWait = null; ok ? w.res() : w.rej(new Error('Karta izin verilmedi')); } },
+    plug: () => { if (plugCb) plugCb({ native: true }); },
+    bleperm: ok => { if (blePerm) { const w = blePerm; blePerm = null; ok ? w.res() : w.rej(new Error('Bluetooth izni verilmedi. Telefon Ayarlar → Uygulamalar → PadMapper → İzinler → "Yakındaki cihazlar"a izin ver.')); } },
+    ble: (st, msg) => {
+      link.onStatus(st, msg);
+      if (!bleWait) return;
+      const w = bleWait;
+      if (st === 'ok') { bleWait = null; w.res(); }
+      else if (st === 'fail' || st === 'closed') {
+        bleWait = null;
+        w.rej(new Error(bleErr(msg)));
+      }
+    },
+  };
+  const bleOk = () => native && typeof PMNative.bleOpen === 'function' && PMNative.bleSupported();
+  async function openBle() {
+    let r = PMNative.bleOpen();
+    if (r === 'perm') {
+      await new Promise((res, rej) => { blePerm = { res, rej }; setTimeout(() => { if (blePerm) { blePerm = null; rej(new Error('Bluetooth izni beklenirken süre doldu. Telefon Ayarlar → Uygulamalar → PadMapper → İzinler → "Yakındaki cihazlar"a izin ver.')); } }, 60000); });
+      r = PMNative.bleOpen();
+    }
+    if (r === 'off') throw new Error('Telefonun Bluetooth\'u kapalı. Açıp tekrar dene.');
+    if (r === 'loc') throw new Error('Bu Android sürümünde Bluetooth araması için Konum açık olmalı. Konumu açıp tekrar dene.');
+    if (r !== 'ok') throw new Error('Bluetooth kullanılamıyor (' + r + ')');
+    await new Promise((res, rej) => { bleWait = { res, rej }; setTimeout(() => { if (bleWait === null) return; bleWait = null; try { PMNative.close(); } catch (e) {} rej(new Error(BLE_ERR.timeout)); }, 50000); });
+    link.kind = 'native'; link.via = 'ble';
+  }
+  async function openNative(known) {
+    /* kart USB'de değilse (ya da Bluetooth istendiyse) Bluetooth ile bağlan */
+    if ((known && known.ble) || !PMNative.present()) {
+      if (bleOk()) return openBle();
+      throw new Error('Kart takılı değil');
+    }
+    let r = PMNative.open();
+    if (r === 'perm') {
+      await new Promise((res, rej) => { permWait = { res, rej }; setTimeout(() => { if (permWait) { permWait = null; rej(new Error('İzin beklenirken süre doldu')); } }, 60000); });
+      r = PMNative.open();
+    }
+    if (r === 'ok') { link.kind = 'native'; link.via = 'usb'; return; }
+    throw new Error(r === 'none' ? 'Kart takılı değil' : 'Karta bağlanılamadı (' + r + ')');
+  }
+
+
+  /* Tarayıcıda Bluetooth (Chrome/Edge): telefonla aynı güvenli ayar kanalı */
+  const CFG_SVC = '7a1e0001-3c4b-4a8e-9c1d-50ad2840f00d', CFG_RX = '7a1e0002-3c4b-4a8e-9c1d-50ad2840f00d', CFG_TX = '7a1e0003-3c4b-4a8e-9c1d-50ad2840f00d';
+  const webBleOk = () => !native && typeof navigator !== 'undefined' && 'bluetooth' in navigator && !!(window.crypto && crypto.subtle);
+  function webKey() {
+    let k = null;
+    try { k = localStorage.getItem('pm_key'); } catch (e) {}
+    if (!k || !/^[0-9a-f]{64}$/.test(k)) {
+      const b = new Uint8Array(32); crypto.getRandomValues(b);
+      k = [...b].map(x => x.toString(16).padStart(2, '0')).join('');
+      try { localStorage.setItem('pm_key', k); } catch (e) {}
+    }
+    return k;
+  }
+  async function hmacHex(keyHex, msg) {
+    const kb = new Uint8Array(keyHex.match(/../g).map(h => parseInt(h, 16)));
+    const ck = await crypto.subtle.importKey('raw', kb, { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+    const sig = new Uint8Array(await crypto.subtle.sign('HMAC', ck, enc.encode(msg)));
+    return [...sig].map(x => x.toString(16).padStart(2, '0')).join('');
+  }
+  let wb = null;
+  async function openWebBle(prev) {
+    /* aynı kart kopunca seçim penceresi açmadan yeniden bağlan */
+    const dev = prev || await navigator.bluetooth.requestDevice({ filters: [{ services: [CFG_SVC] }], optionalServices: [CFG_SVC] });
+    link.wbDev = dev;
+    const server = await dev.gatt.connect();
+    const svc = await server.getPrimaryService(CFG_SVC);
+    const rx = await svc.getCharacteristic(CFG_RX), tx = await svc.getCharacteristic(CFG_TX);
+    const key = webKey();
+    wb = { dev, rx, q: Promise.resolve(), authed: false, acc: '' };
+    let done, fail;
+    const authP = new Promise((res, rej) => { done = res; fail = rej; });
+    let pairTried = false;
+    tx.addEventListener('characteristicvaluechanged', async e => {
+      const t = dec.decode(e.target.value);
+      if (wb.authed) { feed(t); return; }
+      wb.acc += t;
+      let i;
+      while ((i = wb.acc.indexOf('\n')) >= 0) {
+        const l = wb.acc.slice(0, i); wb.acc = wb.acc.slice(i + 1);
+        if (wb.authed) { feed(l + '\n'); continue; }
+        let ev; try { ev = JSON.parse(l); } catch (x) { continue; }
+        if (ev.ev !== 'auth') continue;
+        if (ev.paired !== undefined) { wbWrite('nonce\n'); continue; }
+        if (ev.n) {
+          if (ev.open && !pairTried) { pairTried = true; wbWrite('pair ' + key + '\n'); continue; }
+          wbWrite('auth ' + await hmacHex(key, ev.n) + '\n');
+        } else if (ev.ok === 1) { wb.authed = true; done(); }
+        else if (ev.ok === 0) fail(new Error(BLE_ERR.key));
+      }
+    });
+    await tx.startNotifications();
+    if (dev._pmHooked) dev.removeEventListener('gattserverdisconnected', dev._pmHooked);
+    dev._pmHooked = () => {
+      const was = link.kind === 'wble'; fail(new Error(BLE_ERR.timeout));
+      if (was) { link.kind = null; link.via = ''; link.info = null; wb = null; if (!closing) link.onClose(); }
+    };
+    dev.addEventListener('gattserverdisconnected', dev._pmHooked);
+    link.kind = 'wble'; link.via = 'ble';
+    await wbWrite('nonce\n');
+    await Promise.race([authP, new Promise((_, rej) => setTimeout(() => rej(new Error(BLE_ERR.timeout)), 15000))])
+      .catch(async e => { try { dev.gatt.disconnect(); } catch (x) {} link.kind = null; link.via = ''; throw e; });
+  }
+  function wbWrite(str) {
+    const w = wb; if (!w) return Promise.reject(new Error('Kart bağlı değil'));
+    const d = enc.encode(str);
+    w.q = w.q.then(async () => {
+      for (let i = 0; i < d.length; i += 120) {
+        const part = d.slice(i, i + 120);
+        if (w.rx.writeValueWithResponse) await w.rx.writeValueWithResponse(part); else await w.rx.writeValue(part);
+      }
+    });
+    return w.q;
+  }
+
+  /* ---------- Kablodan kart güncelleme: XIAO önyükleyicisinin seri DFU'su (Nordic eski HCI/SLIP) ---------- */
+  const DFU = (() => {
+    function crc16(d, c = 0xFFFF) {
+      for (let i = 0; i < d.length; i++) {
+        c = ((c >> 8) & 0xFF) | ((c << 8) & 0xFFFF); c ^= d[i]; c ^= (c & 0xFF) >> 4;
+        c ^= (c << 12) & 0xFFFF; c ^= ((c & 0xFF) << 5) & 0xFFFF;
+      }
+      return c;
+    }
+    const u32 = v => [v & 255, (v >>> 8) & 255, (v >>> 16) & 255, (v >>> 24) & 255];
+    const u16 = v => [v & 255, (v >>> 8) & 255];
+    /* UF2 -> düz görüntü (başlangıç adresi ile) */
+    function uf2ToBin(u) {
+      let lo = Infinity, hi = 0;
+      const dv = new DataView(u.buffer, u.byteOffset, u.byteLength);
+      const blocks = [];
+      for (let o = 0; o + 512 <= u.length; o += 512) {
+        if (dv.getUint32(o, true) !== 0x0A324655 || dv.getUint32(o + 4, true) !== 0x9E5D5157) continue;
+        const flags = dv.getUint32(o + 8, true);
+        if (flags & 1) continue; /* ana flaşa değil */
+        const addr = dv.getUint32(o + 12, true), n = dv.getUint32(o + 16, true);
+        blocks.push([addr, u.subarray(o + 32, o + 32 + n)]);
+        lo = Math.min(lo, addr); hi = Math.max(hi, addr + n);
+      }
+      if (!blocks.length) throw new Error('Dosya geçerli bir UF2 değil');
+      const bin = new Uint8Array(hi - lo).fill(0xFF);
+      for (const [a, d] of blocks) bin.set(d, a - lo);
+      return { base: lo, bin };
+    }
+    /* io: write(Uint8Array) -> Promise, frame() -> Promise<Uint8Array|null> (bir SLIP çerçevesi ya da zaman aşımı) */
+    async function run(bin, io, prog) {
+      let seq = 0;
+      const sleep = ms => new Promise(r => setTimeout(r, ms));
+      function frame(payload) {
+        seq = (seq + 1) % 8;
+        const ack = (seq + 1) % 8, len = payload.length;
+        const h = [seq | (ack << 3) | (1 << 6) | (1 << 7), 14 | ((len & 15) << 4), (len >> 4) & 255];
+        h.push((~(h[0] + h[1] + h[2]) + 1) & 255);
+        const body = h.concat(Array.from(payload));
+        const c = crc16(body);
+        body.push(c & 255, c >> 8);
+        const out = [0xC0];
+        for (const b of body) {
+          if (b === 0xC0) out.push(0xDB, 0xDC); else if (b === 0xDB) out.push(0xDB, 0xDD); else out.push(b);
+        }
+        out.push(0xC0);
+        return new Uint8Array(out);
+      }
+      async function send(payload, what) {
+        const f = frame(payload), want = (seq + 1) % 8;
+        for (let t = 0; t < 4; t++) {
+          await io.write(f);
+          const r = await io.frame(t ? 2000 : 1500);
+          if (r && r.length && ((r[0] >> 3) & 7) === want) return;
+        }
+        throw new Error('Kart cevap vermedi (' + what + ')');
+      }
+      const len = bin.length;
+      prog('start', 0);
+      await send([...u32(3), ...u32(4), ...u32(0), ...u32(0), ...u32(len)], 'başlat');
+      /* önyükleyici uygulama alanını siliyor */
+      await sleep(Math.max(500, (Math.floor(len / 4096) + 1) * 90));
+      const init = [...u16(0x0052), ...u16(0xFFFF), ...u32(0xFFFFFFFF), ...u16(1), ...u16(0xFFFE), ...u16(crc16(bin))];
+      await send([...u32(1), ...init, 0, 0], 'tanıtım');
+      let n = 0;
+      for (let o = 0; o < len; o += 512) {
+        await send([...u32(4), ...bin.subarray(o, Math.min(len, o + 512))], 'veri');
+        if (++n % 8 === 0) await sleep(110); /* bir sayfa (4 KB) yazılsın */
+        prog('write', Math.min(99, Math.round(o * 100 / len)));
+      }
+      await sleep(200);
+      await send(u32(5), 'bitir');
+      prog('done', 100);
+    }
+    /* bayt akışından SLIP çerçeveleri */
+    function framer() {
+      let cur = null, esc = false;
+      const q = [], waiters = [];
+      return {
+        push(bytes) {
+          for (const b of bytes) {
+            if (b === 0xC0) {
+              if (cur && cur.length) { const f = new Uint8Array(cur); if (waiters.length) waiters.shift()(f); else q.push(f); cur = null; }
+              else cur = [];
+              continue;
+            }
+            if (!cur) continue;
+            if (esc) { cur.push(b === 0xDC ? 0xC0 : b === 0xDD ? 0xDB : b); esc = false; } else if (b === 0xDB) esc = true; else cur.push(b);
+          }
+        },
+        next(ms) {
+          if (q.length) return Promise.resolve(q.shift());
+          return new Promise(res => {
+            const w = f => { clearTimeout(t); res(f); };
+            const t = setTimeout(() => { const i = waiters.indexOf(w); if (i >= 0) waiters.splice(i, 1); res(null); }, ms);
+            waiters.push(w);
+          });
+        }
+      };
+    }
+    return { crc16, uf2ToBin, run, framer };
+  })();
+
+  const isCard = d => d && (d.vendorId === 0x2fe3 || d.productName === 'PadMapper');
+  const android = /Android/i.test(navigator.userAgent);
+
+  /* Daha önce izin verilmiş kart takılıysa sormadan bağlan */
+  async function findKnown() {
+    if (native) return PMNative.present() ? { native: true } : bleOk() && localStorage.getItem('pm_ble') === '1' ? { ble: true, auto: true } : null;
+    if (android && 'usb' in navigator) {
+      const d = (await navigator.usb.getDevices()).find(isCard);
+      return d ? { usb: d } : null;
+    }
+    if ('serial' in navigator) {
+      const p = (await navigator.serial.getPorts()).find(x => (x.getInfo().usbVendorId) === 0x2fe3);
+      return p ? { serial: p } : null;
+    }
+    return null;
+  }
+
+  async function connect(known) {
+    closing = false; link.info = null; buf = '';
+    if (native) await openNative(known);
+    else if (known && known.usb) await openUsb(known.usb);
+    else if (known && known.serial) await openSerial(known.serial);
+    else if (known && known.wble) await openWebBle(known.dev);
+    else
+    /* Android Chrome'daki seri bağlantı yalnızca Bluetooth'u görür; orada USB yolunu kullan */
+    if (android && 'usb' in navigator) await openUsb();
+    else if ('serial' in navigator) await openSerial();
+    else if ('usb' in navigator) await openUsb();
+    else throw new Error('Bu tarayıcı karta bağlanamıyor. Chrome kullan.');
+    for (let i = 0; i < 3 && !link.info; i++) {
+      await sendLine('hello');
+      await new Promise(r => setTimeout(r, link.via === 'ble' ? 1200 : 700));
+    }
+    /* USB'den bağlıyken bu cihazı karta tanıt: sonra kablosuz da bağlanabilsin */
+    if (link.info && link.via === 'usb') {
+      try { await sendLine('secret add ' + (native ? PMNative.secret() : webKey())); } catch (e) {}
+    }
+    return !!link.info;
+  }
+
+  async function sendLine(l) {
+    const d = enc.encode(l + '\n');
+    if (link.kind === 'native') { if (!PMNative.write(l + '\n')) throw new Error('Karta yazılamadı'); if (link.via === 'ble') await new Promise(r => setTimeout(r, 4)); }
+    else if (link.kind === 'serial') await writer.write(d);
+    else if (link.kind === 'usb') for (let i = 0; i < d.length; i += 64) await usb.dev.transferOut(usb.epOut, d.slice(i, i + 64));
+    else if (link.kind === 'wble') await wbWrite(l + '\n');
+    else throw new Error('Kart bağlı değil');
+  }
+
+  async function disconnect() {
+    closing = true;
+    if (bleWait) { const w = bleWait; bleWait = null; w.rej(new Error('Vazgeçildi')); try { PMNative.close(); } catch (e) {} }
+    try {
+      if (link.kind === 'native') PMNative.close();
+      else if (link.kind === 'serial') { try { await link.reader.cancel(); } catch (e) {} writer.releaseLock(); await link.port.close(); }
+      else if (link.kind === 'usb') await usb.dev.close();
+      else if (link.kind === 'wble' && wb) { const d = wb.dev; wb = null; d.gatt.disconnect(); }
+    } catch (e) {}
+    link.kind = null; link.via = ''; link.info = null;
+  }
+
+  function waitEv(name, ms) {
+    return new Promise((res, rej) => {
+      const prev = link.onLine;
+      const t = setTimeout(() => { link.onLine = prev; rej(new Error('Kart cevap vermedi')); }, ms);
+      link.onLine = ev => { prev(ev); if (ev.ev === name) { clearTimeout(t); link.onLine = prev; res(ev); } };
+    });
+  }
+
+  async function writeConfig(S) {
+    if (!link.info) {
+      await sendLine('hello');
+      await new Promise(r => setTimeout(r, 700));
+      if (!link.info) throw new Error(OLD);
+    }
+    const blob = compile(S);
+    const w = waitEv('cfg', TO());
+    await sendLine('cb ' + blob.length);
+    for (let i = 0; i < blob.length; i += 200) { await sendLine('cd ' + hex(blob.slice(i, i + 200))); await new Promise(r => setTimeout(r, 15)); }
+    await sendLine('ce ' + crc32(blob).toString(16).padStart(8, '0'));
+    const r = await w;
+    if (!r.ok) throw new Error('Kart ayarı kabul etmedi (' + (r.err || '?') + ')');
+    await sendLine('cs ' + Math.min(S.cur, S.profiles.length - 1));
+    return { len: blob.length, crc: crc32(blob) };
+  }
+
+  /* takılınca haber ver */
+  function onPlug(cb) {
+    if (native) { plugCb = cb; return; }
+    if (android && 'usb' in navigator) navigator.usb.addEventListener('connect', e => { if (isCard(e.device)) cb({ usb: e.device }); });
+    else if ('serial' in navigator) navigator.serial.addEventListener('connect', e => { const p = e.target; if (p.getInfo && p.getInfo().usbVendorId === 0x2fe3) cb({ serial: p }); });
+  }
+
+  return { HID, expandCount: (st, lay) => expand(st, lay).length, decompile, readCard, writeJson, findKnown, onPlug, compile, crc32, hex, link, connect, disconnect, sendLine, writeConfig,
+    connected: () => !!link.kind, OLD, bleOk, webBleOk, DFU, webKey, supported: () => native || 'serial' in navigator || 'usb' in navigator, native };
+})();
+if (typeof module !== 'undefined') module.exports = PM;
+
+</script>
+<script>
+/* ---------- Sabitler ---------- */
+const LAYER_NAMES=['Ana','Shift 1','Shift 2','Shift 3'];
+const ACTS=[['single','Tek basış'],['double','Çift basış'],['long','Uzun basış'],['start','Basma anı'],['release','Bırakma']];
+const BTNS=[
+  {id:'LT',name:'LT',sh:'r',x:62,y:2,w:62,h:16,t:'LT'},
+  {id:'LB',name:'LB',sh:'r',x:58,y:22,w:70,h:18,t:'LB'},
+  {id:'RT',name:'RT',sh:'r',x:216,y:2,w:62,h:16,t:'RT'},
+  {id:'RB',name:'RB',sh:'r',x:212,y:22,w:70,h:18,t:'RB'},
+  {id:'LS',name:'Sol analog',sh:'c',x:98,y:96,r:22,t:'L',stick:1},
+  {id:'L3',name:'L3 (sol analoga basma)',sh:'r',x:84,y:122,w:28,h:13,t:'L3'},
+  {id:'UP',name:'Yön yukarı',sh:'r',x:118,y:119,w:13,h:13,t:'▲'},
+  {id:'DOWN',name:'Yön aşağı',sh:'r',x:118,y:145,w:13,h:13,t:'▼'},
+  {id:'LEFT',name:'Yön sol',sh:'r',x:105,y:132,w:13,h:13,t:'◀'},
+  {id:'RIGHT',name:'Yön sağ',sh:'r',x:131,y:132,w:13,h:13,t:'▶'},
+  {id:'SELECT',name:'Select',sh:'c',x:149,y:72,r:7,t:'⧉'},
+  {id:'HOME',name:'Home',sh:'c',x:170,y:100,r:9,t:'⌂'},
+  {id:'START',name:'Start',sh:'c',x:191,y:72,r:7,t:'≡'},
+  {id:'SHARE',name:'Ekran görüntüsü',sh:'c',x:170,y:124,r:6,t:'◉'},
+  {id:'Y',name:'Y',sh:'c',x:250,y:66,r:11,t:'Y'},
+  {id:'X',name:'X',sh:'c',x:228,y:88,r:11,t:'X'},
+  {id:'B',name:'B',sh:'c',x:272,y:88,r:11,t:'B'},
+  {id:'A',name:'A',sh:'c',x:250,y:110,r:11,t:'A'},
+  {id:'RS',name:'Sağ analog',sh:'c',x:214,y:140,r:22,t:'R',stick:1},
+  {id:'R3',name:'R3 (sağ analoga basma)',sh:'r',x:200,y:166,w:28,h:13,t:'R3'},
+  {id:'M1',name:'M1 (arka)',sh:'r',x:52,y:188,w:34,h:14,t:'M1'},
+  {id:'M2',name:'M2 (arka)',sh:'r',x:254,y:188,w:34,h:14,t:'M2'},
+];
+const LPOS={LT:[128,10,'start'],LB:[132,31,'start'],RT:[212,10,'end'],RB:[208,31,'end'],LS:[98,68,'middle'],L3:[80,128,'end'],UP:[136,114,'start'],DOWN:[136,163,'start'],LEFT:[101,138,'end'],RIGHT:[148,138,'start'],SELECT:[149,60,'middle'],HOME:[170,86,'middle'],START:[191,60,'middle'],SHARE:[170,136,'middle'],Y:[250,50,'middle'],X:[214,88,'end'],B:[286,88,'start'],A:[250,127,'middle'],RS:[188,140,'end'],R3:[232,172,'start'],M1:[90,195,'start'],M2:[250,195,'end']};
+const BY_ID=Object.fromEntries(BTNS.map(b=>[b.id,b]));
+const actList=bd=>{const l=ACTS.slice();if(bd)for(const k of Object.keys(bd))if(k.startsWith('c_')&&BY_ID[k.slice(2)])l.push([k,'＋'+BY_ID[k.slice(2)].t]);return l;};
+const actName=k=>k.startsWith('c_')?BY_ID[k.slice(2)].name+' ile birlikte basış':ACTS.find(x=>x[0]===k)[1];
+const KEYS=[];
+'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('').forEach(c=>KEYS.push(['Key'+c,c]));
+'1234567890'.split('').forEach(c=>KEYS.push(['Digit'+c,c]));
+for(let i=1;i<=12;i++)KEYS.push(['F'+i,'F'+i]);
+[['Space','Boşluk'],['Enter','Enter'],['Escape','Esc'],['Tab','Tab'],['Backspace','Geri sil'],['ShiftLeft','Sol Shift'],['ControlLeft','Sol Ctrl'],['AltLeft','Sol Alt'],['ShiftRight','Sağ Shift'],['ControlRight','Sağ Ctrl'],['AltRight','AltGr'],['MetaLeft','Win / Meta'],['CapsLock','Caps Lock'],['ArrowUp','↑'],['ArrowDown','↓'],['ArrowLeft','←'],['ArrowRight','→'],['Insert','Insert'],['Delete','Delete'],['Home','Home'],['End','End'],['PageUp','Page Up'],['PageDown','Page Down'],['Minus','-'],['Equal','='],['BracketLeft','['],['BracketRight',']'],['Semicolon',';'],['Quote',"'"],['Backquote','`'],['Backslash','\\'],['Comma',','],['Period','.'],['Slash','/'],['IntlBackslash','< >']].forEach(k=>KEYS.push(k));
+for(let i=0;i<=9;i++)KEYS.push(['Numpad'+i,'Num '+i]);
+KEYS.push(['PrintScreen','Print Screen'],['ScrollLock','Scroll Lock'],['Pause','Pause']);
+const KEY_LABEL=Object.fromEntries(KEYS);
+/* Türkçe Q düzeninde aynı fiziksel tuşun yazdığı karakter */
+const TRQ={KeyI:'I',Quote:'İ',Semicolon:'Ş',BracketLeft:'Ğ',BracketRight:'Ü',Comma:'Ö',Period:'Ç',Slash:'.',Backslash:',',Minus:'*',Equal:'-',Backquote:'"',IntlBackslash:'<'};
+const keyName=c=>(S&&S.device&&S.device.layout!=='us'&&TRQ[c])||KEY_LABEL[c]||c;
+const MOUSE=[['left','Sol tık'],['right','Sağ tık'],['middle','Orta tık'],['back','Yan geri'],['fwd','Yan ileri'],['wheelUp','Tekerlek yukarı'],['wheelDown','Tekerlek aşağı']];
+const PAD=[['A','A'],['B','B'],['X','X'],['Y','Y'],['LB','LB'],['RB','RB'],['LT','LT'],['RT','RT'],['SELECT','Select'],['START','Start'],['HOME','Home'],['L3','L3'],['R3','R3'],['UP','Yön yukarı'],['DOWN','Yön aşağı'],['LEFT','Yön sol'],['RIGHT','Yön sağ']];
+const PAD_LABEL=Object.fromEntries(PAD);
+const TYPES=[['key','⌨'],['mouse','🖱'],['move','↔'],['text','Aa'],['media','🎵'],['pad','🎮']];
+const MEDIA=[['voice','🎤 Sesli komut / Asistan'],['search','🔍 Arama'],['volUp','🔊 Ses +'],['volDown','🔉 Ses −'],['mute','🔇 Sessiz'],['play','⏯ Oynat / Durdur'],['next','⏭ Sonraki'],['prev','⏮ Önceki'],['brUp','☀ Parlaklık +'],['brDown','🔅 Parlaklık −'],['home','🏠 Ana ekran'],['back','↩ Geri']];
+const MEDIA_LABEL=Object.fromEntries(MEDIA);
+const OUTS=[['kbm','⌨🖱 Klavye + Fare'],['kb','⌨ Sadece klavye'],['pad','🎮 Gamepad'],['all','⌨🖱🎮 Hepsi']];
+const OUT_ALLOW={kbm:['key','mouse','media'],kb:['key','media'],pad:['pad'],all:['key','mouse','media','pad']};
+const OUT_SHORT={kbm:'Klavye+fare',kb:'Klavye',pad:'Gamepad',all:'Hepsi'};
+const OUT_NAME={kbm:'klavye + fare',kb:'sadece klavye',pad:'gamepad',all:'klavye + fare + gamepad'};
+const TYPE_NAME={key:'⌨ klavye',mouse:'🖱 fare',move:'↔ fare kaydır',text:'Aa yazı',media:'🎵 medya',pad:'🎮 gamepad'};
+const TYPE_NEED={move:'mouse',text:'key'};
+const ok=t=>OUT_ALLOW[P().output||'all'].includes(TYPE_NEED[t]||t);
+const STICK_NEED={mouse:'mouse',scroll:'mouse',keys:'key',pad:'pad'};
+const MOUSE_LABEL=Object.fromEntries(MOUSE);
+const KACT=[['press','Bas-bırak'],['hold','Süreli bas'],['down','Basılı tut'],['up','Bırak']];
+
+/* ---------- Veri ---------- */
+const act=()=>({kind:'combo',mode:'normal',turbo:80,steps:[],layer:1,how:'hold'});
+const stick=m=>({mode:m,sens:8,dead:12,keys:{up:'KeyW',down:'KeyS',left:'KeyA',right:'KeyD'}});
+const newLayer=main=>({btn:{},sticks:{LS:stick(main?'keys':'inherit'),RS:stick(main?'mouse':'inherit')}});
+const newProf=name=>({name,output:'all',longMs:300,doubleMs:250,trigThr:30,gapMs:50,layers:[newLayer(true),newLayer(),newLayer(),newLayer()]});
+function demoProf(){
+  const p=newProf('Örnek');
+  const k=(c,after=50)=>({t:'key',k:c,a:'press',after});
+  const a=act();a.steps=[k('KeyZ')];p.layers[0].btn.A={single:a};
+  const c=act();c.steps=[k('KeyZ',40),k('KeyX',40),k('KeyC',1000),k('KeyV')];p.layers[0].btn.LB={single:c};
+  const t=act();t.mode='turbo';t.turbo=60;t.steps=[{t:'mouse',b:'left',a:'press',after:50}];p.layers[0].btn.RT={single:t};
+  const q=act();q.steps=[k('KeyQ')];p.layers[1].btn.A={single:q};
+  return p;
+}
+/* eski kayıtlardaki "bekle" satırlarını önceki tuşun bekleme süresine çevir */
+function migrate(p){
+  p.gapMs=p.gapMs||50;p.longMs=p.longMs||300;p.doubleMs=p.doubleMs||250;if(p.trigThr==null)p.trigThr=30;p.output=p.output||'all';
+  /* eksik katman / çubuk bilgisini tamamla (dışarıdan gelen yedekler için) */
+  if(!Array.isArray(p.layers))p.layers=[];
+  for(let i=0;i<4;i++){const d=newLayer(i===0);const l=p.layers[i]=p.layers[i]||d;l.btn=l.btn||{};l.sticks=l.sticks||{};
+    for(const s of ['LS','RS'])if(!l.sticks[s]||!l.sticks[s].mode)l.sticks[s]=d.sticks[s];}
+  for(const l of p.layers)for(const id in l.btn)for(const k of Object.keys(l.btn[id])){
+    const a=l.btn[id][k];if(!a||!a.steps)continue;
+    const out=[];
+    for(const s of a.steps){
+      if(s.t==='wait'){if(out.length)out[out.length-1].after+=s.ms;continue;}
+      if(s.t==='wheel'){out.push({t:'mouse',b:s.d>0?'wheelUp':'wheelDown',a:'press',after:s.after||0});continue;}
+      out.push(Object.assign({after:0},s));
+    }
+    a.steps=out;
+  }
+  return p;
+}
+let S;
+try{S=JSON.parse(localStorage.getItem('padmapper_v1'))}catch(e){S=null}
+/* paylaşılan ayar ekranı: içine gömülü profiller (bu bilgisayarda kayıt yoksa doğrudan kullanılır) */
+let presetPending=null;
+if(window.PM_PRESET&&window.PM_PRESET.profiles){if(!S||!S.profiles)S=JSON.parse(JSON.stringify(window.PM_PRESET));else presetPending=window.PM_PRESET;}
+if(!S||!S.profiles||!S.profiles.length)S={cur:0,profiles:[demoProf()]};
+S.profiles.forEach(migrate);
+if(!S.device)S.device={startMode:'map',comboA:'HOME',comboB:'SELECT',holdMs:1500,profSwitch:true};
+if(S.device.passUnmapped===undefined)S.device.passUnmapped=true;
+/* katmanlar kapalı: eski "katman değiştir" atamalarını bir kez temizle */
+if(!S.device.noLayers){S.device.noLayers=true;for(const q of S.profiles)for(const bd of Object.values(q.layers[0].btn))for(const k of Object.keys(bd))if(bd[k]&&bd[k].kind==='layer')delete bd[k];}
+if(!S.device.profMod){S.device.profMod=S.device.comboA||'HOME';S.device.profPrev='LB';S.device.profNext='RB';}
+if(!S.device.ctrls)S.device.ctrls=[{name:'BSP-D8Pro',addr:'03:24:00:D8:06:04',active:true}];
+let ui={sel:'A',layer:0,act:'single'};
+let rec=null;
+
+const P=()=>S.profiles[S.cur];
+const L=()=>P().layers[ui.layer];
+function save(){try{localStorage.setItem('padmapper_v1',JSON.stringify(S))}catch(e){}renderCard();if(S.device.autoApply)autoWrite();}
+const snap=(p,ind)=>JSON.stringify(p,(k,v)=>k==='_applied'?undefined:v,ind);
+const dirty=p=>p._applied!==snap(p);
+S.profiles.forEach(p=>{if(p._applied===undefined)p._applied=snap(p);});
+/* Uygula düğmesi yok: her değişiklik kaydedilir ve karta gider */
+S.device.autoApply=true;
+if(!S.device.layout)S.device.layout='tr';
+function renderActs(){
+  const el=document.getElementById('acts');if(!el)return;
+  const p=P(),d=dirty(p),auto=S.device.autoApply;
+  el.innerHTML=auto
+    ?`<span class="st8 clean">⚡ Otomatik uygulanıyor</span><span class="sp"></span><button class="btn" onclick="resetProf()">Sıfırla</button>`
+    :`<span class="st8 ${d?'dirty':'clean'}">${d?'● Uygulanmadı':'✓ Uygulandı'}</span><span class="sp"></span>
+      <button class="btn" ${d?'':'disabled'} onclick="revert()" title="Son uygulanan hale dön">Geri al</button>
+      <button class="btn" onclick="resetProf()" title="Bu profildeki bütün atamaları sil">Sıfırla</button>
+      <button class="btn pri" ${d?'':'disabled'} onclick="apply()">Uygula</button>`;
+}
+function apply(){P()._applied=snap(P());render();if(PM.connected())writeCard();else toast('Uygulandı. Kart bağlanınca yazılacak');}
+function revert(){const p=P();if(!p._applied)return;const r=JSON.parse(p._applied);r._applied=p._applied;S.profiles[S.cur]=r;render();toast('Son uygulanan hale dönüldü');}
+async function resetProf(){const p=P();if(!await ask(`"${p.name}" profilindeki bütün atamalar silinsin mi? (Ad ve cihaz türü kalır)`,null))return;
+  const n=newProf(p.name);n.output=p.output;n._applied=p._applied;S.profiles[S.cur]=n;ui.layer=0;render();toast('Profil sıfırlandı');}
+const isSet=a=>a&&(a.kind==='layer'||(a.steps&&a.steps.length));
+const bindSet=b=>b&&actList(b).some(([k])=>isSet(b[k]));
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const fmtMs=ms=>ms>=1000?(ms/1000).toFixed(ms%1000?2:1).replace('.',',')+' sn':ms+' ms';
+
+/* ---------- Kısa açıklamalar ---------- */
+function stepLabel(s){
+  const x=(s.a==='hold'?' '+fmtMs(s.hold||100):'')+((s.rep|0)>1?' ×'+(s.rep|0):'');
+  if(s.t==='move')return `<span class="k">↔ ${s.x|0},${s.y|0}${x}</span>`;
+  if(s.t==='text')return `<span class="k">“${esc(String(s.s||'').slice(0,16))}${String(s.s||'').length>16?'…':''}”${x}</span>`;
+  if(x&&s.t!=='media')return stepLabel(Object.assign({},s,{a:'press',rep:1})).replace('</span>',esc(x)+'</span>');
+  if(s.t==='key')return `<span class="k">${esc(keyName(s.k))}</span>`;
+  if(s.t==='mouse')return `<span class="k">${MOUSE_LABEL[s.b]}</span>`;
+  if(s.t==='pad')return `<span class="k">🎮${esc(PAD_LABEL[s.p])}</span>`;
+  if(s.t==='media')return `<span class="k">${esc(MEDIA_LABEL[s.m]||s.m)}</span>`;
+  return '';
+}
+function descAct(a){
+  if(!isSet(a))return '';
+  if(a.kind==='layer')return `→ ${LAYER_NAMES[a.layer]}`;
+  const p=a.steps.map(stepLabel);
+  let s=p.length>4?p.slice(0,4).join('')+'…':p.join('');
+  if(a.mode==='turbo')s='<span class="k">Turbo</span>'+s;
+  if(a.mode==='toggle')s='⇄'+s;
+  if(a.mode==='macro')s='▶'+s;
+  return s;
+}
+function descStick(st){
+  if(!st||st.mode==='inherit'||st.mode==='off')return '';
+  if(st.mode==='mouse')return 'Fare';
+  if(st.mode==='scroll')return 'Tekerlek';
+  if(st.mode==='pad')return '🎮 Çubuk';
+  return ['up','left','down','right'].map(d=>`<span class="k">${esc(st.keys[d]?keyName(st.keys[d]):'—')}</span>`).join('');
+}
+
+/* ---------- Kontrolcü ---------- */
+const MSHORT={left:'Sol tık',right:'Sağ tık',middle:'Orta tık',back:'Geri',fwd:'İleri',wheelUp:'Teker↑',wheelDown:'Teker↓'};
+function shortAct(a){
+  if(a.kind==='layer')return a.layer?'→S'+a.layer:'→Ana';
+  const s=a.steps[0];let t=a.steps.length>1?'Makro':s.t==='key'?keyName(s.k):s.t==='mouse'?MSHORT[s.b]:'🎮'+s.p;
+  if(t.length>8)t=t.slice(0,7)+'…';
+  return (a.mode==='turbo'?'⚡':a.mode==='toggle'?'⇄':a.mode==='macro'?'▶':'')+t;
+}
+function shortBind(bd){const l=actList(bd).filter(([k])=>isSet(bd[k]));if(!l.length)return '';return shortAct(bd[l[0][0]])+(l.length>1?' +'+(l.length-1):'');}
+function shortStick(st){
+  if(st.mode==='mouse')return 'Fare';if(st.mode==='scroll')return 'Teker';if(st.mode==='pad')return '🎮';if(st.mode!=='keys')return '';
+  const k=['up','left','down','right'].map(d=>keyName(st.keys[d]));return k.every(x=>x.length===1)?k.join(''):'Tuşlar';
+}
+/* pad'in dışarı göndermediği arka tuşlar: ataması yoksa gösterilmez (Profil ayarları › Gelişmiş'ten açılır) */
+const hiddenBtn=b=>(b.id==='M1'||b.id==='M2')&&!S.device.showM&&!bindSet(P().layers[0].btn[b.id]);
+function drawPad(){
+  let h=`<path class="grip" d="M92 46h156c30 0 48 18 54 46l18 78c5 24-26 40-44 20l-24-28H88l-24 28c-18 20-49 4-44-20l18-78c6-28 24-46 54-46z"/>`;
+  for(const b of BTNS){
+    if(hiddenBtn(b))continue;
+    const sh=b.sh==='c'?`<circle class="s" cx="${b.x}" cy="${b.y}" r="${b.r}"/>`:`<rect class="s" x="${b.x}" y="${b.y}" width="${b.w}" height="${b.h}" rx="6"/>`;
+    const cx=b.sh==='c'?b.x:b.x+b.w/2,cy=b.sh==='c'?b.y:b.y+b.h/2;
+    const inner=b.stick?`<circle cx="${b.x}" cy="${b.y}" r="${b.r*.55}" fill="none" stroke="var(--keyl)" stroke-width="2" pointer-events="none"/>`:'';
+    h+=`<g class="b" id="b-${b.id}" onclick="pick('${b.id}')"><title>${esc(b.name)}</title>${sh}${inner}<text x="${cx}" y="${cy}">${b.t}</text></g>`;
+  }
+  for(const b of BTNS){if(hiddenBtn(b))continue;const [x,y,an]=LPOS[b.id];h+=`<text class="lb" id="l-${b.id}" x="${x}" y="${y}" text-anchor="${an}"></text>`;}
+  document.getElementById('pad').innerHTML=h;
+}
+function paintPad(){
+  if(document.querySelectorAll('#pad .b').length!==BTNS.filter(b=>!hiddenBtn(b)).length)drawPad();
+  for(const b of BTNS){
+    const g=document.getElementById('b-'+b.id);if(!g)continue;let mapped,inh=false;
+    if(b.stick){const st=L().sticks[b.id];mapped=st.mode!=='inherit'&&st.mode!=='off';
+      if(ui.layer>0&&st.mode==='inherit')inh=P().layers[0].sticks[b.id].mode!=='off';}
+    else{const bd=L().btn[b.id];mapped=bindSet(bd);
+      if(ui.layer>0&&!mapped&&!(bd&&bd.noInherit))inh=bindSet(P().layers[0].btn[b.id]);}
+    const lb=document.getElementById('l-'+b.id);
+    const src=b.stick?(mapped?L().sticks[b.id]:inh?P().layers[0].sticks[b.id]:null):(mapped?L().btn[b.id]:inh?P().layers[0].btn[b.id]:null);
+    lb.textContent='';lb.classList.toggle('inh',!mapped&&inh);
+    g.classList.toggle('map',!!mapped);g.classList.toggle('inh',!mapped&&inh);g.classList.toggle('sel',ui.sel===b.id);
+  }
+}
+function renderTop(){
+  /* katmanlar şimdilik gizli: her zaman ana katman */
+  ui.layer=0;
+  document.getElementById('profName').textContent=P().name;
+  document.getElementById('outName').textContent='Tür: '+(OUT_SHORT[P().output||'all']||'Hepsi');
+}
+function selProfile(i){
+  if(i===S.cur)return;
+  S.cur=i;render();if(sheetOpen())renderSheet();
+  if(cardSynced())PM.sendLine('cs '+S.cur).catch(()=>{});
+}
+function setOutput(v){P().output=v;render();if(sheetOpen())renderSheet();toast('Kart bunu '+OUT_NAME[v]+' olarak tanıtacak');}
+function renderSummary(){
+  let rows='';
+  for(const b of BTNS){
+    let main='',sub='';
+    if(b.stick){main=descStick(L().sticks[b.id]);sub='';}
+    else{const bd=L().btn[b.id];if(bindSet(bd)){const set=actList(bd).filter(([k])=>isSet(bd[k]));main=descAct(bd[set[0][0]]);sub=set.length===1&&set[0][0]==='single'?'':set.filter(([k])=>k!=='single'||!isSet(bd.single)||set.length===1).filter(([k])=>!(k==='single'&&set.length>1)).map(([k,n])=>n+': '+descAct(bd[k]).replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').trim()).join(' · ');if(set.length>1)main=descAct(bd.single)||main;}}
+    if(main)rows+=`<button class="arow ${ui.sel===b.id?'on':''}" onclick="pick('${b.id}')"><span class="akey">${esc(b.t)}</span><span class="atx"><b>${main}</b>${sub?`<small>${esc(sub)}</small>`:''}</span><span class="achev">›</span></button>`;
+  }
+  document.getElementById('summary').innerHTML=rows||'<div class="empty">Bu profilde atama yok. Çizimdeki bir tuşa dokunarak başla.</div>';
+}
+
+/* ---------- Editör ---------- */
+const keySel=(v,on)=>`<select onchange="${on}">${KEYS.map(([c])=>`<option value="${c}" ${c===v?'selected':''}>${esc(keyName(c))}</option>`).join('')}</select>`;
+const opt=(list,v)=>list.map(([a,n])=>`<option value="${a}" ${a===v?'selected':''}>${n}</option>`).join('');
+function gapRow(val,on,loop){
+  return `<div class="gap${loop?' loop':''}"><span>${loop?'↻ tekrar arası':'⏱ sonra bekle'}</span>
+    <button class="x" onclick="${on}(-1)">−</button><input type="number" min="0" max="60000" step="10" value="${val}" onchange="${on}(0,this.value)"><button class="x" onclick="${on}(1)">+</button><span>ms${val>=1000?' ('+fmtMs(val)+')':''}</span></div>`;
+}
+/* ---------- Tuş düzenleme (taslaktaki düzen) ---------- */
+const IC_TUNE='<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/></svg>';
+function countBinds(q){let n=0;for(const bd of Object.values(q.layers[0].btn))if(bindSet(bd))n++;return n;}
+function setDead(v){for(const l of P().layers)for(const k of ['LS','RS'])if(l.sticks[k])l.sticks[k].dead=v;}
+const IC_BT='<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 7l10 10-5 5V2l5 5L7 17"/></svg>';
+const IC_USB='<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 2v14M8 6l4-4 4 4M7 12v2l5 3 5-3v-3"/><circle cx="12" cy="19" r="2"/></svg>';
+const IC_BOLT='<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><path d="M13 2L4 14h7l-1 8 9-12h-7z"/></svg>';
+const IC_DRIVE='<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--acc)" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><path d="M8 3h8l6 11-4 7H6l-4-7z"/><path d="M8 3l6 11H2M16 3l-6 11h12"/></svg>';
+const IC_PULSE='<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12h4l3-8 4 16 3-8h4"/></svg>';
+const IC_CARD='<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><rect x="5" y="4" width="14" height="16" rx="2"/><path d="M9 8h6M9 12h6M9 16h3"/></svg>';
+const IC={
+  key:'<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="6" width="20" height="12" rx="2"/><path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M7 14h10"/></svg>',
+  mouse:'<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><rect x="6" y="3" width="12" height="18" rx="6"/><path d="M12 7v4"/></svg>',
+  pad:'<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 11h4M8 9v4M15 12h.01M18 10h.01"/><path d="M17.3 5H6.7a4 4 0 0 0-3.96 3.43l-.7 5A3 3 0 0 0 5 17c1 0 1.8-.6 2.2-1.4L8 14h8l.8 1.6c.4.8 1.2 1.4 2.2 1.4a3 3 0 0 0 2.96-3.57l-.7-5A4 4 0 0 0 17.3 5z"/></svg>',
+  media:'<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><path d="M7 5l12 7-12 7z"/></svg>',
+  move:'<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M15 8l4 4-4 4M9 8l-4 4 4 4"/></svg>',
+  text:'<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 7V5h16v2M12 5v14M9 19h6"/></svg>',
+  book:'<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2z"/><path d="M4 19V5"/></svg>',
+  rec:'<svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="6" fill="#ff5d5d"/></svg>',
+};
+const TCOL={key:'#ff8a3d',mouse:'#4cc38a',pad:'#a78bfa',media:'#6aa8ff',move:'#4cc38a',text:'#6aa8ff'};
+const TLBL={key:'Klavye',mouse:'Fare',pad:'Gamepad',media:'Medya',move:'Fare kaydır',text:'Yazı'};
+function stepValue(s){
+  if(s.t==='key')return keyName(s.k);
+  if(s.t==='mouse')return MOUSE_LABEL[s.b]||s.b;
+  if(s.t==='pad')return PAD_LABEL[s.p]||s.p;
+  if(s.t==='media')return (MEDIA_LABEL[s.m]||s.m).replace(/^\S+\s/,'');
+  if(s.t==='move')return `→ ${s.x|0}  ↓ ${s.y|0}`;
+  if(s.t==='text')return '“'+String(s.s||'').slice(0,24)+(String(s.s||'').length>24?'…':'')+'”';
+  return '';
+}
+function stepSub(s){
+  const p=[];
+  if(s.t==='move'||s.t==='text')p.push(s.t==='text'?(S.device.layout==='us'?'US düzen':'Türkçe Q'):'kaydır');
+  else if(!(s.t==='mouse'&&String(s.b).startsWith('wheel')))p.push(s.a==='hold'?'süreli · '+fmtMs(+s.hold||100):(KACT.find(x=>x[0]===s.a)||KACT[0])[1].toLowerCase());
+  if((s.rep|0)>1)p.push('×'+(s.rep|0));
+  return p.join(' · ');
+}
+/* bir eylem "sıralı" (makro) görünümünde mi düzenlenir */
+const isSeq=a=>!!(a.seq||a.mode==='macro'||a.steps.some((s,i)=>s.t==='text'||s.t==='move'||(s.a&&s.a!=='press')||(s.rep|0)>1||(i<a.steps.length-1&&(+s.after||0)>0)));
+function pressSeg(bd){
+  const main=[['single','Kısa bas'],['long','Uzun bas'],['double','Çift bas']];
+  const other=actList(bd).filter(([k])=>!main.some(m=>m[0]===k));
+  const otherOn=!main.some(m=>m[0]===ui.act);
+  return `<div class="seg" role="tablist" aria-label="Basış türü">${main.map(([k,n])=>`<button class="${ui.act===k?'on':''}" onclick="ui.act='${k}';ui.more=false;render()">${n}${isSet(bd[k])?' •':''}</button>`).join('')}<button class="${otherOn||ui.more?'on':''}" style="flex:0 0 46px" aria-label="Diğer basış türleri" onclick="ui.more=!ui.more;render()">⋯</button></div>
+  ${ui.more||otherOn?`<div class="pchips" style="margin-top:8px">${other.map(([k,n])=>`<button class="pchip ${ui.act===k?'on':''}" onclick="ui.act='${k}';render()">${esc(n)}${isSet(bd[k])?' •':''}</button>`).join('')}<button class="pchip ${ui.act==='_new'?'on':''}" onclick="ui.act='_new';render()">＋ Birlikte basış</button></div>`:''}`;
+}
+function renderPanel(){
+  const b=BY_ID[ui.sel],el=document.getElementById('panel');
+  const a0=(L().btn[b.id]||{})[ui.act];
+  const head=`<div class="ehead"><button class="btn ico eback" onclick="closeEditor()" aria-label="Geri">‹</button><h2>${esc(b.stick?(b.id==='LS'?'Sol çubuk':'Sağ çubuk'):b.t.length<3?b.t+' tuşu':b.name)}${a0&&!b.stick&&a0.kind!=='layer'&&isSeq(a0)?' · Makro':''}</h2><span class="tag"><i class="sdot ${card.busy?'w':''}"></i>${!PM.connected()?'bu cihazda kaydedildi':card.busy?'karta yazılıyor…':'karta kaydedildi'}</span></div>`;
+  if(b.stick){el.innerHTML=head+stickPanel(b);return;}
+  const bd=L().btn[b.id]||(L().btn[b.id]={});
+  if(ui.act.startsWith('c_')&&(!bd[ui.act]||ui.act==='c_'+b.id))ui.act='single';
+  let h=head+pressSeg(bd);
+  if(ui.act==='_new'){
+    const others=BTNS.filter(x=>!x.stick&&x.id!==b.id&&!bd['c_'+x.id]&&!hiddenBtn(x));
+    h+=`<div class="card" style="margin-top:12px"><p class="lbl">${esc(b.t)} hangi tuşla birlikte basılınca?</p><div class="pchips">${others.map(x=>{const there=L().btn[x.id]&&L().btn[x.id]['c_'+b.id];
+      return `<button class="pchip" onclick="${there?`ui.sel='${x.id}';ui.act='c_${b.id}'`:`cur()['c_${x.id}']=act();ui.act='c_${x.id}'`};render()">${esc(x.t)}${there?' (orada var)':''}</button>`;}).join('')}</div>
+      <p class="hint" style="margin:8px 0 0">Örneğin LB seçersen: ${esc(b.t)} + LB birlikte basılınca ayrı bir şey yapılır. Tek başlarına basılınca kendi ayarları çalışır.</p></div>`;
+    el.innerHTML=h;return;
+  }
+  const a=bd[ui.act]||(bd[ui.act]=act());
+  if(ui.act.startsWith('c_')){const o=BY_ID[ui.act.slice(2)];
+    h+=`<div class="note" style="margin-top:10px">${esc(b.t)} + ${esc(o.t)} birlikte basılınca çalışır. <button class="pchip" onclick="delete cur()['${ui.act}'];ui.act='single';render()">Kaldır</button></div>`;}
+  if((ui.act==='single'||ui.act==='double')&&isSet(bd.single)&&isSet(bd.double))h+=`<div class="note" style="margin-top:10px">Bu tuşta hem kısa hem çift basış var: kısa basış yaklaşık ${P().doubleMs} ms gecikmeli gider.</div>`;
+  if(a.kind==='layer'){
+    h+=`<div class="card" style="margin-top:12px"><p class="lbl">Eski katman ataması</p><p class="hint" style="margin:0 0 10px">Bu tuşa eski sürümde "katman değiştir" atanmış. Katmanlar şimdilik kapalı.</p><button class="btn pri" onclick="Object.assign(curA(),act());render()">Normal tuşa çevir</button></div>`;
+    el.innerHTML=h;return;
+  }
+  h+=isSeq(a)?seqView(a,b):togetherView(a,b);
+  const bad=[...new Set(a.steps.filter(s=>!ok(s.t)).map(s=>TLBL[s.t]))];
+  if(bad.length)h+=`<div class="note" style="margin-top:10px">Bu profilde kart kendini <b>${esc(OUT_SHORT[P().output||'all'])}</b> olarak tanıtıyor: ${bad.join(', ')} gönderilmez. Sağ üstteki profil ayarından değiştirebilirsin.</div>`;
+  el.innerHTML=h;
+}
+function togetherView(a,b){
+  const rows=a.steps.map((s,i)=>`<div class="orow ${ok(s.t)?'':'off'}"><button class="omain" onclick="pickFor(${i})"><span class="obox">${IC[s.t]||''}</span><span class="otx"><small>${TLBL[s.t]}</small><b>${esc(stepValue(s))}</b></span><span class="achev">›</span></button><button class="btn ico sm" aria-label="${TLBL[s.t]} kaldır" onclick="rm(${i})">✕</button></div>`).join('');
+  const adds=[['key','Klavye tuşu'],['mouse','Fare'],['pad','Gamepad tuşu'],['media','Medya'],['text','Yazı']].filter(([t])=>ok(t)||t==='text');
+  const modes=[['normal','Normal'],['turbo','Turbo'],['toggle','Aç-kapa']];
+  const m=modes.some(x=>x[0]===a.mode)?a.mode:'normal';
+  const hint={normal:`Normal: ${esc(BY_ID[ui.sel].t)} basılıyken hepsi basılı kalır.`,turbo:`Turbo: basılı tuttukça hızlıca tekrar basar, her ${fmtMs(a.turbo)} bir.`,toggle:'Aç-kapa: bir bas basılı kalsın, bir daha bas bıraksın.'}[m];
+  return `<div class="card" style="margin-top:12px;padding:4px 14px 14px">
+    <p class="lbl" style="margin:12px 0 2px">Ne yapsın?</p>
+    ${rows?rows+`<div class="pchips" style="margin-top:10px">${adds.map(([t,n])=>`<button class="pchip" onclick="addTogether('${t}')">＋ ${n}</button>`).join('')}</div>${a.steps.length>1?'<p class="hint" style="margin:8px 0 0">Hepsi aynı anda basılır.</p>':''}`
+      :`<div class="qgrid">${[['key','Klavye tuşu'],['mouse','Fare'],['pad','Gamepad tuşu'],['media','Medya']].filter(([t])=>ok(t)).map(([t,n])=>`<button class="qbtn" onclick="addTogether('${t}')"><span class="obox">${IC[t]}</span>${n}</button>`).join('')}<button class="qbtn" onclick="startSeq()"><span class="obox">${IC.book}</span>Makro</button><button class="qbtn" onclick="addTogether('text')"><span class="obox">${IC.text}</span>Yazı</button></div>`}
+  </div>
+  <div class="card" style="margin-top:12px">
+    <p class="lbl">Nasıl çalışsın?</p>
+    <div class="seg">${modes.map(([k,n])=>`<button class="${m===k?'on':''}" onclick="curA().mode='${k}';render()">${n}</button>`).join('')}</div>
+    ${m==='turbo'?`<div class="row" style="margin-top:10px"><span class="hint" style="flex:1">Hız (her basış arası)</span><input type="number" min="20" max="2000" step="10" value="${a.turbo}" style="width:84px" onchange="curA().turbo=Math.max(20,clamp(this.value));render()"><span class="hint">ms</span></div>`:''}
+    <p class="hint" style="margin:8px 0 0">${hint}</p>
+  </div>
+  <div class="row" style="margin-top:12px;gap:8px"><button class="btn grow" onclick="clearAct()">Temizle</button><button class="btn pri grow" onclick="toSeq()" ${a.steps.length?'':'disabled'}>${IC.book} Sıralı yap (makro)</button></div>
+  <p class="hint" style="text-align:center;margin:8px 0 0">Sırayla ve aralarında süre olsun istersen makroya çevir</p>`;
+}
+function seqDur(s){return (s.t==='text'?Math.max(1,Array.from(s.s||'').length)*35:s.a==='hold'?(+s.hold||100):50)*Math.max(1,s.rep|0||1);}
+function seqView(a,b){
+  const modes=[['macro','Bir kez'],['turbo','Basılıyken tekrar'],['toggle','Aç-kapa']];
+  const m=modes.some(x=>x[0]===a.mode)?a.mode:'macro';
+  /* zaman çizelgesi */
+  let blocks='',tot=0;
+  a.steps.forEach((s,i)=>{
+    const d=seqDur(s);tot+=d;
+    blocks+=`<div class="tlb" style="flex:${Math.sqrt(d).toFixed(1)}"><div style="background:${TCOL[s.t]}">${esc(s.t==='key'?keyName(s.k):s.t==='mouse'?'Tık':s.t==='text'?'Aa':s.t==='move'?'↔':s.t==='pad'?(PAD_LABEL[s.p]||'').slice(0,3):'♪')}</div><span>${fmtMs(d)}</span></div>`;
+    const w=i<a.steps.length-1||m!=='macro'?(+s.after||0):0;
+    if(w>0){tot+=w;blocks+=`<div class="tlb w" style="flex:${Math.sqrt(w).toFixed(1)}"><div>bekle</div><span>${fmtMs(w)}</span></div>`;}
+  });
+  const rows=a.steps.map((s,i)=>`<button class="srow2 ${ok(s.t)?'':'off'}" onclick="openStep(${i})"><span class="grip" aria-hidden="true">⋮⋮</span><span class="cbar" style="background:${TCOL[s.t]}"></span><span class="otx"><b>${TLBL[s.t]}: ${esc(stepValue(s))}</b><small>${esc(stepSub(s))}</small></span><span class="hint" style="white-space:nowrap">${i<a.steps.length-1||m!=='macro'?'sonra '+fmtMs(+s.after||0):''}</span></button>`).join('');
+  const adds=[['key','Tuş'],['mouse','Fare tık'],['move','Kaydır'],['text','Yazı'],['wait','Bekle'],['media','Medya'],['pad','Gamepad']].filter(([t])=>t==='wait'||t==='text'||ok(t));
+  const n=PM.expandCount(a.steps,S.device.layout);
+  return `<div class="seg" style="margin-top:10px">${modes.map(([k,t])=>`<button class="${m===k?'on':''}" onclick="curA().mode='${k}';render()">${t}</button>`).join('')}</div>
+  ${m!=='macro'?`<div class="row" style="margin-top:8px"><span class="hint" style="flex:1">${m==='turbo'?'Basılı tuttukça baştan tekrarlar. Tekrar arası':'Bir bas başlar, bir daha bas durur. Tekrar arası'}</span><input type="number" min="0" max="60000" step="10" value="${a.turbo}" style="width:84px" onchange="curA().turbo=Math.max(10,clamp(this.value));render()"><span class="hint">ms</span></div>`:''}
+  <div class="card" style="margin-top:12px">
+    <div class="row" style="justify-content:space-between"><p class="lbl" style="margin:0">Zaman çizelgesi</p><span class="hint">toplam ${fmtMs(tot)}</span></div>
+    ${a.steps.length?`<div class="tl">${blocks}</div><div class="row hint" style="justify-content:space-between;font-size:11px;margin-top:4px"><span>0</span><span>${fmtMs(Math.round(tot/2))}</span><span>${fmtMs(tot)}</span></div>`:'<p class="hint" style="margin:8px 0 0">Boş. Aşağıdan adım ekle ya da canlı kaydet.</p>'}
+  </div>
+  ${a.steps.length?`<div class="card" style="margin-top:12px;padding:2px 14px">${rows}</div>`:''}
+  <div class="pchips" style="margin-top:12px">${adds.map(([t,nm])=>`<button class="pchip" onclick="addSeq('${t}')">＋ ${nm}</button>`).join('')}</div>
+  <div class="row" style="margin-top:10px;gap:8px"><button class="btn grow ${rec?'rec':''}" onclick="toggleRec()">${rec?'■ Kaydı durdur':IC.rec+' Canlı kaydet'}</button><button class="btn grow" onclick="libOpen()">${IC.book} Kütüphane</button></div>
+  <div class="row" style="margin-top:8px;gap:8px">${ok('key')?`<button class="btn grow" onclick="voicePreset()">Sesli yazma</button>`:''}<button class="btn grow" onclick="toTogether()" ${a.steps.every(s=>s.t!=='text'&&s.t!=='move')?'':'disabled'}>Birlikte yap</button></div>
+  <p class="hint" style="text-align:center;margin:8px 0 0">Adıma dokun: değiştir, süre, tekrar, sırala${n>255?' · <b class="bad">kartta en fazla 255 adım, fazlası kesilir</b>':''}</p>`;
+}
+function startSeq(){const a=curA();a.seq=true;a.mode='macro';render();}
+function clearAct(){undoSave();const a=curA();a.steps=[];a.seq=false;a.mode='normal';render();undoToast('Temizlendi');}
+function toSeq(){const a=curA();a.seq=true;if(a.mode==='normal')a.mode='macro';a.steps.forEach((s,i)=>{if(i<a.steps.length-1&&!(+s.after))s.after=P().gapMs||50;});render();}
+function toTogether(){const a=curA();a.seq=false;if(a.mode==='macro')a.mode='normal';a.steps.forEach(s=>{s.after=0;s.a='press';delete s.rep;});render();}
+function addTogether(t){
+  const a=curA();
+  if(t==='text'){a.seq=true;if(a.mode==='normal')a.mode='macro';a.steps.push({t:'text',s:'',after:0});render();openStep(a.steps.length-1);return;}
+  a.steps.forEach(s=>{s.after=0;});a.steps.push(Object.assign(newStep(t,0),{a:'press'}));render();pickFor(a.steps.length-1);
+}
+function addSeq(t){
+  const a=curA();
+  if(t==='wait'){if(!a.steps.length){toast('Önce bir adım ekle');return;}const s=a.steps[a.steps.length-1];s.after=(+s.after||0)+100;render();openStep(a.steps.length-1);return;}
+  if(a.steps.length&&!(+a.steps[a.steps.length-1].after))a.steps[a.steps.length-1].after=P().gapMs||50;
+  a.steps.push(newStep(t,0));render();openStep(a.steps.length-1);
+}
+/* adım düzenleme paneli */
+function openStep(i){ui.step=i;openSheet('step');}
+function stepSheet(){
+  const a=curA(),i=ui.step,s=a.steps[i];if(!s)return '<p class="hint">Adım yok.</p>';
+  const T=[['key','Tuş'],['mouse','Fare'],['pad','Gamepad'],['media','Medya'],['move','Kaydır'],['text','Yazı']];
+  let v='';
+  if(s.t==='key'||s.t==='mouse'||s.t==='pad'||s.t==='media')v=`<button class="bigval" onclick="pickFor(${i},true)">${esc(stepValue(s))}</button>`;
+  else if(s.t==='move')v=`<div class="row" style="gap:8px"><label class="hint" style="flex:1">Sağa (+) / sola (−)<input type="number" min="-2000" max="2000" value="${s.x|0}" style="width:100%" onchange="setStepS(${i},'x',+this.value)"></label><label class="hint" style="flex:1">Aşağı (+) / yukarı (−)<input type="number" min="-2000" max="2000" value="${s.y|0}" style="width:100%" onchange="setStepS(${i},'y',+this.value)"></label></div>`;
+  else v=`<textarea rows="3" style="width:100%" placeholder="Yazılacak metin" onchange="setStepS(${i},'s',this.value)">${esc(s.s||'')}</textarea><p class="hint" style="margin:4px 0 0">${S.device.layout==='us'?'US':'Türkçe Q'} klavye düzenine göre yazılır (Ayarlar › Görünüm).</p>`;
+  const press=!(s.t==='move'||s.t==='text'||(s.t==='mouse'&&String(s.b).startsWith('wheel')));
+  return `<div class="pchips">${T.map(([t,n])=>`<button class="pchip ${s.t===t?'on':''}" onclick="setStepType(${i},'${t}')">${n}</button>`).join('')}</div>
+    <div class="card" style="margin-top:10px">${v}</div>
+    ${press?`<div class="card" style="margin-top:10px"><p class="lbl">Basış</p><div class="seg">${KACT.map(([k,n])=>`<button class="${(s.a||'press')===k?'on':''}" onclick="setStepS(${i},'a','${k}')">${n}</button>`).join('')}</div>
+      ${s.a==='hold'?`<div class="row" style="margin-top:10px"><span style="flex:1">Basılı kalsın</span><input type="number" min="10" max="60000" step="10" value="${s.hold||100}" style="width:90px" onchange="setStepS(${i},'hold',clamp(this.value))"><span class="hint">ms</span></div>`:''}</div>`:''}
+    <div class="card" style="margin-top:10px">
+      <div class="row"><span style="flex:1">Sonra bekle</span><button class="btn ico sm" onclick="setStepS(${i},'after',Math.max(0,(+curA().steps[${i}].after||0)-50))">−</button><input type="number" min="0" max="60000" step="10" value="${+s.after||0}" style="width:84px" onchange="setStepS(${i},'after',clamp(this.value))"><button class="btn ico sm" onclick="setStepS(${i},'after',(+curA().steps[${i}].after||0)+50)">＋</button><span class="hint">ms</span></div>
+      <div class="row" style="margin-top:10px"><span style="flex:1">Tekrar</span><input type="number" min="1" max="50" value="${(s.rep|0)||1}" style="width:84px" onchange="setStepS(${i},'rep',Math.max(1,Math.min(50,+this.value|0)))"><span class="hint">kez</span></div>
+    </div>
+    <div class="row" style="margin-top:12px;gap:8px"><button class="btn" onclick="mvStep(${i},-1)" ${i?'':'disabled'}>↑ Yukarı</button><button class="btn" onclick="mvStep(${i},1)" ${i<a.steps.length-1?'':'disabled'}>↓ Aşağı</button><button class="btn" onclick="rm(${i});closeSheet()">Sil</button><button class="btn pri grow" onclick="closeSheet()">Tamam</button></div>`;
+}
+function setStepS(i,k,v){curA().steps[i][k]=v;render();renderSheet();}
+function setStepType(i,t){const s=curA().steps;s[i]=Object.assign(newStep(t,s[i].after),{a:'press'});render();renderSheet();}
+function mvStep(i,d){const s=curA().steps,j=i+d;if(j<0||j>=s.length)return;[s[i],s[j]]=[s[j],s[i]];ui.step=j;render();renderSheet();}
+/* değer seçiciler: klavye (bilgisayar düzeni), fare, gamepad, medya */
+function pickFor(i,fromStep){ui.pick={i,back:fromStep?'step':null};openSheet('pick');}
+const KB_ROWS=[
+  ['Escape','F1','F2','F3','F4','F5','F6','F7','F8','F9','F10','F11','F12'],
+  ['Digit1','Digit2','Digit3','Digit4','Digit5','Digit6','Digit7','Digit8','Digit9','Digit0','Minus','Equal','Backspace'],
+  ['Tab','KeyQ','KeyW','KeyE','KeyR','KeyT','KeyY','KeyU','KeyI','KeyO','KeyP','BracketLeft','BracketRight'],
+  ['CapsLock','KeyA','KeyS','KeyD','KeyF','KeyG','KeyH','KeyJ','KeyK','KeyL','Semicolon','Quote','Backslash','Enter'],
+  ['ShiftLeft','IntlBackslash','KeyZ','KeyX','KeyC','KeyV','KeyB','KeyN','KeyM','Comma','Period','Slash','ShiftRight'],
+  ['ControlLeft','MetaLeft','AltLeft','Space','AltRight','ControlRight'],
+  ['Insert','Home','PageUp','Delete','End','PageDown','PrintScreen','|','ArrowLeft','ArrowUp','ArrowDown','ArrowRight'],
+];
+const KB_SHORT={Escape:'Esc',Backspace:'⌫',Tab:'Tab',CapsLock:'Caps',Enter:'Enter',ShiftLeft:'Shift',ShiftRight:'Shift',ControlLeft:'Ctrl',ControlRight:'Ctrl',MetaLeft:'Win',AltLeft:'Alt',AltRight:'AltGr',Space:'Boşluk',Insert:'Ins',Home:'Home',PageUp:'PgUp',Delete:'Del',End:'End',PageDown:'PgDn',PrintScreen:'PrtSc',ArrowLeft:'←',ArrowUp:'↑',ArrowDown:'↓',ArrowRight:'→'};
+const KB_FLEX={Backspace:1.4,Tab:1.4,CapsLock:1.6,Enter:1.8,ShiftLeft:2,ShiftRight:2,Space:5,ControlLeft:1.3,ControlRight:1.3,MetaLeft:1.2,AltLeft:1.2,AltRight:1.4};
+const KB_MOD=new Set(['Escape','Backspace','Tab','CapsLock','Enter','ShiftLeft','ShiftRight','ControlLeft','ControlRight','MetaLeft','AltLeft','AltRight','Insert','Home','PageUp','Delete','End','PageDown','PrintScreen','ArrowLeft','ArrowUp','ArrowDown','ArrowRight']);
+function pickSheet(){
+  const a=curA(),s=a.steps[ui.pick.i];if(!s)return '';
+  const done=`<div class="row" style="margin-top:12px;gap:8px">${ui.pick.back?`<button class="btn grow" onclick="openStep(${ui.pick.i})">‹ Adım</button>`:''}<button class="btn pri grow" onclick="${ui.pick.back?`openStep(${ui.pick.i})`:'closeSheet()'}">Tamam</button></div>`;
+  if(s.t==='key'){
+    const small=r=>r===0||r===6;
+    return `<div class="bigval">${esc(keyName(s.k))}</div>
+      <p class="hint" style="margin:8px 0">Bir tuşa dokun${PM.native?'':' ya da bilgisayar klavyende bas'}. Ctrl + C gibi kombinasyon için iki klavye tuşu ekle (Ctrl ve C).</p>
+      <div class="kb">${KB_ROWS.map((r,ri)=>`<div class="kbr">${r.map(c=>c==='|'?'<span style="width:8px;flex:none"></span>':`<button class="kk ${KB_MOD.has(c)?'m':''} ${small(ri)?'s':''} ${s.k===c?'on':''}" style="flex:${KB_FLEX[c]||1}" onclick="setPick('k','${c}')">${esc(KB_SHORT[c]||keyName(c))}</button>`).join('')}</div>`).join('')}</div>${done}`;
+  }
+  const list=s.t==='mouse'?MOUSE:s.t==='pad'?PAD:MEDIA,k=s.t==='mouse'?'b':s.t==='pad'?'p':'m';
+  return `<div class="pchips">${list.map(([v,n])=>`<button class="pchip ${s[k]===v?'on':''}" onclick="setPick('${k}','${v}')">${esc(n)}</button>`).join('')}</div>${done}`;
+}
+function setPick(k,v){const a=curA(),s=a.steps[ui.pick.i];if(!s)return;s[k]=v;render();renderSheet();}
+document.addEventListener('keydown',e=>{
+  if(stab!=='pick'||!sheetOpen()||!ui.pick)return;
+  const s=curA().steps[ui.pick.i];if(!s||s.t!=='key'||!PM.HID[e.code])return;
+  if(document.activeElement&&/INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName))return;
+  e.preventDefault();setPick('k',e.code);
+});
+
+function explain(a,b){
+  const an=actName(ui.act).toLowerCase();
+  if(!a.steps.length)return `${esc(b.name)} için ${an} boş.`;
+  const seq=a.steps.map(stepLabel).join(' › ');
+  const single=a.steps.length===1&&a.steps[0].a==='press'&&!(a.steps[0].b||'').startsWith('wheel');
+  if(a.mode==='macro')return `Bir basışta ${seq} sırayla, aradaki sürelerle bir kez çalışır. Tuşu bıraksan da sonuna kadar gider.`;
+  if(a.mode==='turbo')return `Basılı durdukça ${seq} tekrar eder, her tekrar arası ${fmtMs(a.turbo)}.`;
+  if(a.mode==='toggle')return single?`Bir bas: ${seq} basılı kalır. Bir daha bas: bırakılır.`:`Bir bas: ${seq} tekrar etmeye başlar. Bir daha bas: durur.`;
+  if(single&&ui.act==='single')return `${esc(b.name)} basılıyken ${seq} de basılı kalır.`;
+  if(ui.act.startsWith('c_'))return `${esc(b.t)} + ${esc(BY_ID[ui.act.slice(2)].t)} birlikte basılınca ${seq} bir kez gönderilir.`;
+  return `${an.charAt(0).toUpperCase()+an.slice(1)} olunca ${seq} bir kez gönderilir.`;
+}
+function stickPanel(b){
+  const st=L().sticks[b.id];
+  const modes=[['off','Kapalı'],['mouse','Fare'],['keys','Tuşlar'],['scroll','Tekerlek'],['pad','Gamepad']];
+  const expl={off:'Çubuk hiçbir şey göndermez.',mouse:'Çubuğu ittikçe imleç o yöne gider; çok itersen hızlı gider.',keys:'Her yön bir klavye tuşu olur. Çapraza itince iki tuş birlikte basılır (W + D gibi).',scroll:'Çubuk fare tekerleği gibi sayfayı kaydırır.',pad:'Çubuk olduğu gibi gamepad çubuğu olarak gider.'};
+  const sl=(lbl,key,min,max,unit)=>`<div class="sl"><div class="row"><span style="flex:1">${lbl}</span><span class="hint">${unit==='%'?'%'+st[key]:st[key]}</span></div><input type="range" min="${min}" max="${max}" value="${st[key]}" oninput="curS().${key}=+this.value;this.previousElementSibling.lastElementChild.textContent=${unit==='%'?"'%'+this.value":'this.value'}" onchange="render()"></div>`;
+  let h=`<div class="card"><p class="lbl">Ne yapsın?</p><div class="pchips">${modes.map(([v,n])=>{const dis=STICK_NEED[v]&&!ok(STICK_NEED[v]);return `<button class="pchip ${st.mode===v?'on':''}" ${dis?'disabled style="opacity:.35"':''} onclick="curS().mode='${v}';render()">${n}</button>`;}).join('')}</div>
+    <p class="hint" style="margin:8px 0 0">${expl[st.mode]||''}</p></div>`;
+  if(STICK_NEED[st.mode]&&!ok(STICK_NEED[st.mode]))h+=`<div class="note" style="margin-top:10px">Bu profilde kart kendini <b>${esc(OUT_SHORT[P().output||'all'])}</b> olarak tanıtıyor; bu çubuk ayarı çalışmaz. Sağ üstteki profil ayarından değiştirebilirsin.</div>`;
+  if(st.mode==='keys'){
+    const c=(d,n)=>`<label class="hint">${n}${keySel(st.keys[d],`curS().keys.${d}=this.value;render()`)}</label>`;
+    h+=`<div class="card" style="margin-top:10px"><p class="lbl">Yön tuşları</p><div class="dir"><span></span>${c('up','Yukarı')}<span></span>${c('left','Sol')}<span></span>${c('right','Sağ')}<span></span>${c('down','Aşağı')}<span></span></div></div>`;
+  }
+  if(st.mode!=='off'&&st.mode!=='inherit')h+=`<div class="card" style="margin-top:10px"><p class="lbl" style="margin:0">İnce ayar</p>${st.mode==='mouse'||st.mode==='scroll'?sl('Hız','sens',1,30,''):''}${sl('Ölü bölge','dead',0,50,'%')}</div>`;
+  h+=`<p class="hint" style="margin:10px 0 0;text-align:center">Çubuğa basma (${b.id==='LS'?'L3':'R3'}) ayrı bir tuştur; çizimde ${b.id==='LS'?'L3':'R3'}'e dokun.</p>`;
+  return h;
+}
+
+/* ---------- Düzenleme ---------- */
+function cur(){const l=L();return l.btn[ui.sel]||(l.btn[ui.sel]={});}
+function curA(){const b=cur();return b[ui.act]||(b[ui.act]=act());}
+function curS(){return L().sticks[ui.sel];}
+function closeEditor(){document.body.classList.remove('editing');renderSummary();paintPad();}
+function pick(id){document.body.classList.add('editing');ui.sel=id;if(ui.act==='_new'||ui.act.startsWith('c_'))ui.act='single';if(rec)stopRec();render();}
+function hasExit(li){const l=P().layers[li];return Object.values(l.btn).some(bd=>Object.values(bd).some(a=>a&&a.kind==='layer'&&a.layer!==li));}
+/* Sesli yazma: cihazın kendi dikte / asistanını açan hazır adımlar */
+const VOICE=[
+  ['win','Windows','Win + H: yazı kutusuna sesle yazar',()=>[{t:'key',k:'MetaLeft',a:'down',after:20},{t:'key',k:'KeyH',a:'press',after:40},{t:'key',k:'MetaLeft',a:'up',after:0}]],
+  ['gvoice','Android: Google Sesle Yazma klavyesi','Yazı kutusunda klavye sesli yazmaya geçer; tekrar basınca eski klavyene döner. Tablette PadMapper uygulaması ve bir kerelik izin gerekir.',()=>[{t:'key',k:'Pause',a:'press',after:0}]],
+  ['android','Android: Google Asistan','Asistan açılır; "… yaz" diyebilirsin',()=>[{t:'media',m:'voice',a:'press',after:0}]],
+  ['tv','Android TV / TV kutusu','Sesli arama açılır',()=>[{t:'media',m:'search',a:'press',after:0}]],
+  ['mac','Mac','Ctrl iki kez (Mac ayarlarında dikte kısayolu "Ctrl iki kez" olmalı)',()=>[{t:'key',k:'ControlLeft',a:'press',after:120},{t:'key',k:'ControlLeft',a:'press',after:0}]],
+  ['cros','Chromebook','Arama + D',()=>[{t:'key',k:'MetaLeft',a:'down',after:20},{t:'key',k:'KeyD',a:'press',after:40},{t:'key',k:'MetaLeft',a:'up',after:0}]],
+];
+function voicePreset(){
+  const d=document.createElement('div');d.className='sheet open';d.style.zIndex=25;
+  d.innerHTML=`<div class="in" style="max-width:420px"><h2 style="margin:0 0 6px">🎤 Sesli yazma</h2><p class="hint" style="margin:0 0 8px">Tuşa basınca hangi cihazın sesli yazması açılsın?</p>
+    <div class="slist">${VOICE.map(([k,n,dsc])=>`<button data-k="${k}"><span>🎤</span>${n}<small>${dsc}</small></button>`).join('')}</div>
+    <div class="sbtns"><button class="btn" data-k="">Vazgeç</button></div></div>`;
+  document.body.appendChild(d);
+  d.onclick=e=>{const b=e.target.closest('[data-k]');if(!b&&e.target!==d)return;d.remove();const v=b&&VOICE.find(x=>x[0]===b.dataset.k);if(!v)return;
+    const a=curA();a.steps=v[3]();a.mode=a.steps.length>1?'macro':'normal';render();toast('Sesli yazma eklendi ('+v[1]+')');
+    if(v[0]==='gvoice')setTimeout(gvoiceSetup,400);};
+}
+/* Google Sesle Yazma için tabletteki izin */
+function gvoiceSetup(){
+  if(!PM.native){ask('Bu özellik tabletteki PadMapper uygulamasıyla çalışır. Tablette uygulamayı açıp oradan izni ver.',null);return;}
+  if(PMNative.sdk&&PMNative.sdk()<33){ask('Bu tablette Android 13 veya üstü gerekli. Onun yerine "Android: Google Asistan" seçeneğini kullanabilirsin.',null);return;}
+  if(PMNative.accessOn&&PMNative.accessOn()){toast('Sesli yazma izni açık ✓');return;}
+  ask('Bir kerelik izin: açılan ekranda "Yüklü uygulamalar" (ya da İndirilen uygulamalar) → "PadMapper sesli yazma" → Aç. Uygulama sadece sesli yazma tuşuna bakar. Ayrıca Ayarlar → Diller ve giriş → Fiziksel klavye → "Ekran klavyesini göster" açık olmalı, yoksa Android klavyeyi gizler.',null).then(ok=>{if(ok)PMNative.openAccess();});
+}
+function add(t){
+  const st=curA().steps,g=P().gapMs;
+  if(st.length&&!st[st.length-1].after)st[st.length-1].after=g;
+  st.push(newStep(t,g));
+  render();
+}
+function newStep(t,after){return t==='move'?{t,x:50,y:0,after}:t==='text'?{t,s:'',after}:t==='key'?{t,k:'KeyZ',a:'press',after}:t==='mouse'?{t,b:'left',a:'press',after}:t==='media'?{t,m:'voice',a:'press',after}:{t,p:'A',a:'press',after};}
+function setType(i,t){const s=curA().steps;s[i]=Object.assign(newStep(t,s[i].after),{a:s[i].a||'press'});render();}
+function rm(i){undoSave();curA().steps.splice(i,1);render();undoToast('Silindi');}
+function macroMs(st){let t=0;for(const s of st){const n=(s.rep|0)||1;const one=(s.t==='text'?Math.max(1,Array.from(s.s||'').length)*35:0)+(s.a==='hold'?(+s.hold||100):0)+(+s.after||0);t+=one*n;}return t;}
+/* Makro kütüphanesi: bu cihazda saklanır, profiller arasında kullanılır */
+function libOpen(){
+  S.lib=S.lib||[];const a=curA();
+  const d=document.createElement('div');d.className='sheet open';d.style.zIndex=25;
+  const draw=()=>{d.innerHTML=`<div class="in" style="max-width:440px"><div class="row"><h2 style="margin:0">📚 Makro kütüphanesi</h2><span style="flex:1"></span><button class="btn ico" data-x="close">✕</button></div>
+    <p class="hint">Sık kullandığın makroları kaydet, istediğin tuşa tek dokunuşla ekle.</p>
+    <div class="slist">${S.lib.map((m,i)=>`<button data-i="${i}"><span>▶</span>${esc(m.name)}<small>${m.steps.length} adım · ${fmtMs(macroMs(m.steps))}</small></button><button class="btn" data-del="${i}" style="justify-self:end">Sil</button>`).join('')||'<div class="empty">Henüz kayıtlı makro yok.</div>'}</div>
+    <div class="sbtns"><button class="btn pri" data-x="save" ${a.steps.length?'':'disabled'}>Bu makroyu kaydet</button></div></div>`;};
+  draw();document.body.appendChild(d);
+  d.onclick=async e=>{
+    if(e.target===d){d.remove();return;}
+    const t=e.target.closest('[data-x],[data-i],[data-del]');if(!t)return;
+    if(t.dataset.x==='close'){d.remove();return;}
+    if(t.dataset.x==='save'){const n=await ask('Makronun adı:',BY_ID[ui.sel].name+' makrosu');if(!n)return;S.lib.push({name:String(n).slice(0,40),steps:JSON.parse(JSON.stringify(a.steps))});save();draw();toast('Kütüphaneye kaydedildi');return;}
+    if(t.dataset.del!=null){S.lib.splice(+t.dataset.del,1);save();draw();return;}
+    const m=S.lib[+t.dataset.i];a.steps.push(...JSON.parse(JSON.stringify(m.steps)));if(a.steps.length>1&&a.mode==='normal')a.mode='macro';d.remove();render();toast(m.name+' eklendi');
+  };
+}
+function mv(i,d){const s=curA().steps,j=i+d;if(j<0||j>=s.length)return;[s[i],s[j]]=[s[j],s[i]];render();}
+function setStep(i,k,v){curA().steps[i][k]=v;render();}
+const clamp=v=>Math.max(0,Math.min(60000,Math.round(+v||0)));
+const stepOf=v=>v>=1000?100:10;
+function gap(i,d,v){const s=curA().steps[i];s.after=d?clamp(s.after+d*stepOf(s.after+(d<0?-1:0))):clamp(v);render();}
+function loopGap(d,v){const a=curA();a.turbo=Math.max(10,d?clamp(a.turbo+d*stepOf(a.turbo+(d<0?-1:0))):clamp(v));render();}
+function setAll(){const ms=clamp(document.getElementById('allGap').value);P().gapMs=ms;curA().steps.forEach(s=>s.after=ms);render();toast('Hepsinin arası '+fmtMs(ms));}
+function toggleRec(){rec?stopRec():(rec={t:0,steps:[]});render();}
+function stopRec(){
+  const st=rec.steps,out=[];
+  for(let i=0;i<st.length;i++){
+    const s=st[i],n=st[i+1];
+    if(s.a==='down'&&n&&n.a==='up'&&n.k===s.k&&s.after<=150){out.push({t:'key',k:s.k,a:'press',after:n.after});i++;continue;}
+    out.push(s);
+  }
+  if(out.length)out[out.length-1].after=out[out.length-1].after||P().gapMs;
+  curA().steps.push(...out);rec=null;render();
+}
+function recEv(e,a){
+  e.preventDefault();if(e.repeat)return;
+  const now=performance.now();
+  if(rec.steps.length)rec.steps[rec.steps.length-1].after=Math.round(now-rec.t);
+  rec.steps.push({t:'key',k:e.code,a,after:0});rec.t=now;
+  if(a==='down')toast('Kayıt: '+keyName(e.code));
+}
+document.addEventListener('keydown',e=>{if(rec)recEv(e,'down');});
+document.addEventListener('keyup',e=>{if(rec)recEv(e,'up');});
+
+/* ---------- Ayarlar paneli ---------- */
+function openSheet(mode){stab=mode||'ayarlar';const sh=document.getElementById('sheet');sh.classList.toggle('full',stab==='ayarlar');sh.classList.add('open');renderSheet();}
+function closeSheet(){document.getElementById('sheet').classList.remove('open');}
+let stab='ayarlar';
+const SHEET_TITLE={step:'Adım',pick:'Seç',ayarlar:'Ayarlar',profiller:'Profiller',profil:'Profil ayarları',giris:'Giriş cihazı (pad)',cikis:'Çıkış cihazı'};
+/* bir ayar satırı: solda ad (+ isteğe bağlı açıklama ⓘ), sağda kontrol */
+const srow=(name,ctrl,info)=>`<div class="srow"><div class="sname">${name}${info?`<details class="sinfo"><summary aria-label="Açıklama">ⓘ</summary><div>${info}</div></details>`:''}</div><div class="sctl">${ctrl}</div></div>`;
+const sgroup=(title,body)=>`<div class="sgroup">${title?`<div class="sgt">${title}</div>`:''}<div class="sgb">${body}</div></div>`;
+const tog=(on,js)=>`<button class="tog ${on?'on':''}" role="switch" aria-checked="${on}" onclick="${js}"><i></i></button>`;
+function renderSheet(){
+  const d=S.device,p=P();
+  const bo=v=>BTNS.filter(b=>!b.stick).map(b=>`<option value="${b.id}" ${b.id===v?'selected':''}>${esc(b.name)}</option>`).join('');
+  let body='';
+  if(stab==='step'){body=stepSheet();}
+  else if(stab==='pick'){const st=curA().steps[(ui.pick||{}).i];body=pickSheet();SHEET_TITLE.pick=st?({key:'Klavye tuşu',mouse:'Fare',pad:'Gamepad tuşu',media:'Medya'}[st.t]||'Seç'):'Seç';}
+  else if(stab==='profiller'){
+    body=`<div class="card" style="padding:2px 14px">${S.profiles.map((q,i)=>`<div class="li2"><span class="pdot ${i===S.cur?'on':''}"></span><button class="otx lnk" onclick="selProfile(${i});closeSheet()"><b>${esc(q.name)}</b><small>${esc(OUT_SHORT[q.output||'all'])} · ${countBinds(q)} atama</small></button>${i===S.cur?'<span class="pchip on" style="height:30px">Etkin</span>':`<button class="pchip" style="height:30px" onclick="selProfile(${i});closeSheet()">Seç</button>`}<button class="btn ico sm" aria-label="${esc(q.name)} ayarları" onclick="selProfile(${i});openSheet('profil')">${IC_TUNE}</button></div>`).join('')}</div>
+      <div class="row" style="gap:8px;margin-top:12px"><button class="btn pri grow" onclick="newProfile()">＋ Yeni profil</button><button class="btn" onclick="dupProfile()">Kopyala</button></div>
+      <div class="row" style="gap:8px;margin-top:8px"><button class="btn grow" onclick="importProfiles()">İçe aktar</button><button class="btn grow" onclick="backupProfiles()">Dışa aktar</button></div>
+      <p class="hint" style="margin:10px 0 0">Pad'den geçiş: ${d.profSwitch?esc(BY_ID[d.profMod].t)+' basılıyken '+esc(BY_ID[d.profPrev].t)+' önceki, '+esc(BY_ID[d.profNext].t)+' sonraki profil.':'kapalı.'} Profiller kartta saklanır. Ayar simgesi o profilin ayarlarını açar.</p>`;
+  }else if(stab==='profil'){
+    const dz=(p.layers[0].sticks.LS||{}).dead??12;
+    body=`<div class="card"><p class="lbl">Kart kendini ne olarak tanıtsın?</p>
+      <div class="seg">${[['pad','Gamepad'],['kbm','Klavye+fare'],['all','Hepsi']].map(([k,t])=>`<button class="${(p.output||'all')===k?'on':''}" onclick="setOutput('${k}')">${t}</button>`).join('')}</div>
+      <p class="hint" style="margin:8px 0 0">Gamepad: oyunlar normal kol görür. Hepsi: kol + klavye + fare birlikte.</p></div>
+      <div class="card" style="margin-top:10px"><p class="lbl" style="margin:0">Çubuklar ve tetikler</p>
+        <div class="sl"><div class="row"><span style="flex:1">Çubuk ölü bölgesi</span><span class="hint" id="dzv">%${dz}</span></div><input type="range" min="0" max="50" value="${dz}" oninput="setDead(+this.value);document.getElementById('dzv').textContent='%'+this.value" onchange="render()"><small class="hint">Çubuk fareye ya da tuşlara çevrildiğinde geçerli</small></div>
+        <div class="sl"><div class="row"><span style="flex:1">Tetik basma eşiği</span><span class="hint" id="ttv">%${p.trigThr}</span></div><input type="range" min="5" max="95" value="${p.trigThr}" oninput="P().trigThr=+this.value;document.getElementById('ttv').textContent='%'+this.value" onchange="render()"></div>
+      </div>
+      <div class="card" style="margin-top:10px;padding:2px 14px">
+        <button class="li2 lnk" onclick="renameProfile()"><span class="grow">Profil adı</span><span class="hint">${esc(p.name)}</span><span class="achev">✎</span></button>
+        <div class="li2"><span class="grow">Pad'den profil değiştir</span>${tog(d.profSwitch,"S.device.profSwitch=!S.device.profSwitch;save();renderSheet()")}</div>
+        ${d.profSwitch?`<div class="li2" style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px"><label class="hint">Basılı tut<select style="width:100%" onchange="S.device.profMod=this.value;save();renderSheet()">${bo(d.profMod)}</select></label><label class="hint">Önceki<select style="width:100%" onchange="S.device.profPrev=this.value;save();renderSheet()">${bo(d.profPrev)}</select></label><label class="hint">Sonraki<select style="width:100%" onchange="S.device.profNext=this.value;save();renderSheet()">${bo(d.profNext)}</select></label></div>${new Set([d.profMod,d.profPrev,d.profNext]).size<3?'<p class="hint bad" style="margin:0 0 8px">Üç farklı tuş seç.</p>':''}`:''}
+      </div>
+      <details class="card sinfo2" style="margin-top:10px"><summary>Gelişmiş</summary>
+        <div class="row" style="margin:8px 0"><span class="grow">Arka tuşları göster (M1 / M2)</span>${tog(!!d.showM,"S.device.showM=!S.device.showM;drawPad();render();renderSheet()")}</div>
+        ${srow('Uzun basış',`<input type="number" min="100" max="3000" step="50" value="${p.longMs}" onchange="P().longMs=clamp(this.value);render()"><span class="hint">ms</span>`)}
+        ${srow('Çift basış arası',`<input type="number" min="100" max="1000" step="10" value="${p.doubleMs}" onchange="P().doubleMs=clamp(this.value);render()"><span class="hint">ms</span>`)}
+        <div class="row" style="gap:8px;margin-top:8px"><button class="btn" onclick="delProfile()" ${S.profiles.length>1?'':'disabled'}>Profili sil</button><button class="btn" onclick="resetProf()">Atamaları sıfırla</button></div>
+        <details class="sinfo2"><summary>Bu profilin metni</summary><textarea id="jsonTa" spellcheck="false">${esc(snap(p,2))}</textarea><div class="sbtns"><button class="btn" onclick="copyJson()">Kopyala</button><button class="btn" onclick="importJson()">İçe aktar</button></div></details>
+      </details>`;
+  }else if(stab==='giris'&&!PM.connected()){body=NOCONN;
+  }else if(stab==='giris'){
+    const c=PM.connected(),st=cardState;
+    const cur=cardCtl.cur;
+    body=`${cur?`<div class="card" style="border-color:var(--acc)"><div class="row" style="gap:12px"><span class="obox">${IC.pad}</span><div class="grow"><b>${esc(ctrlName(cur))}</b><div class="hint">${st&&st.pad?'<span class="ok">bağlı</span>':'bekleniyor'}</div></div><button class="pchip" onclick="forgetCtrl('${cur}')">Unut</button></div></div>`:''}
+      <button class="btn pri" style="width:100%;margin-top:10px" onclick="${scan.on?'stopScan();renderSheet()':'startScan();renderSheet()'}" ${c?'':'disabled'}>${scan.on?'<span class="spin"></span> Aranıyor… (durdur)':'＋ Pad ekle (ara)'}</button>
+      ${scan.on||scan.found.length?`<div class="row" style="margin-top:12px"><p class="lbl grow" style="margin:0">Yakındaki cihazlar</p><span class="hint">${scan.on?'aranıyor…':'arama bitti'}</span></div>
+      <div class="card" style="margin-top:6px;padding:2px 14px">${scan.found.filter(x=>x.hid).sort((a,b)=>b.rssi-a.rssi).map(x=>`<div class="li2"><span class="obox" style="color:var(--mute)">${IC.pad}</span><div class="grow"><b>${esc(x.name||'Adsız pad')}</b><div class="hint">${x.rssi>-60?'güçlü':x.rssi>-75?'orta':'zayıf'} sinyal</div></div>${cardCtl.cur===x.addr?'<span class="ok">bağlı</span>':scan.pairing===x.addr?'<span class="spin"></span>':`<button class="pchip" onclick="pair('${x.addr}')">Bağlan</button>`}</div>`).join('')||'<p class="hint" style="margin:10px 0">Henüz bir şey bulunamadı.</p>'}</div>`:''}
+      ${cardCtl.list.filter(x=>x.addr!==cur).length?`<p class="lbl" style="margin:12px 0 6px">Kayıtlı pad'ler</p><div class="card" style="padding:2px 14px">${cardCtl.list.filter(x=>x.addr!==cur).map(x=>`<div class="li2"><span class="obox" style="color:var(--mute)">${IC.pad}</span><div class="grow"><b>${esc(ctrlName(x.addr))}</b></div><button class="pchip" onclick="useCtrl('${x.addr}')">Seç</button><button class="btn ico sm" aria-label="Unut" onclick="forgetCtrl('${x.addr}')">✕</button></div>`).join('')}</div>`:''}
+      <p class="hint" style="margin:10px 0 0">Yeni pad'i eşleşme moduna al (D8 Pro'da X + Home). Listede görününce Bağlan'a dokun.</p>
+      <button class="btn" style="width:100%;margin-top:10px" onclick="closeSheet();openLearn()" ${c&&cur?'':'disabled'}>Tuşları tanıt / tanılama</button>`;
+  }else if(stab==='cikis'){
+    body=routeHtml();
+  }else{
+    const c=PM.connected(),i=PM.link.info||{},b=bundledFw(),need=cardNeedsUpdate();
+    const adv=sgroup('Kart bağlantısı',`
+      <div class="scard"><span class="dot ${!c?'':cardSynced()?'on':'warn'}"></span><div style="flex:1;min-width:0"><b>${!c?'Kart bağlı değil':cardSynced()?'Karttaki ayar güncel':'Karttaki ayar farklı'}</b><div class="hint">${c?(PM.link.via==='ble'?'📶 Bluetooth · ':PM.link.via==='usb'?'🔌 USB · ':'')+'Yazılım '+esc(i.fw||'?'):connMsg||(PM.bleOk&&PM.bleOk()?'USB ile tak ya da Bluetooth ile bağlan':'USB ile tak')}</div></div>
+        <button class="btn" onclick="cardBtn()">${c?'Kes':connMsg?'Vazgeç':'Bağlan'}</button></div>
+      ${!c&&!connMsg&&PM.bleOk&&PM.bleOk()?`<div class="sbtns"><button class="btn" onclick="cardBtn({ble:true})">📶 Bluetooth ile bağlan</button></div><p class="hint" style="margin:6px 0 0">Kart powerbank'a ya da başka bir cihaza takılıyken ayar yapmak için. Yeni bir cihaz: kartı güce tak, 1 dakika içinde Bağlan de.</p>`:''}
+      <div class="sbtns"><button class="btn" ${c?'':'disabled'} onclick="writeCard()">Karta yeniden yaz</button><button class="btn" ${c&&(i.cfg||i.jlen)?'':'disabled'} onclick="takeFromCard(false)">Karttakileri al</button></div>
+      <div class="sbtns"><button class="btn" ${c&&PM.link.via==='usb'?'':'disabled'} onclick="forgetDevices()">Kayıtlı cihazları sil</button></div>
+      <p class="hint" style="margin:6px 0 0">Kaybolan telefon gibi eski cihazların Bluetooth'tan ayar yapmasını engeller. Sadece USB'den, bu cihaz kayıtlı kalır.</p>`)+
+      (PM.native&&PMNative.notifOn?sgroup('Bildirim ve ana ekran',srow('Bildirimde kart durumu',tog(PMNative.notifOn(),"PMNative.setNotif(!PMNative.notifOn());renderSheet()"),'Kart bağlıyken bildirimde profil ve eşleme durumu, profil değiştirme ve eşleme aç/kapat düğmeleri görünür. Ana ekrana PadMapper aracını (widget) da ekleyebilirsin: ana ekranda boş yere basılı tut → Araçlar → PadMapper.')):'')+
+      (PM.native&&PMNative.accessOn?sgroup('Bu tablet',srow('🎤 Google Sesle Yazma izni',PMNative.accessOn()?'<span class="ok">Açık ✓</span>':'<button class="btn" onclick="gvoiceSetup()">Aç</button>','Pad\'deki sesli yazma tuşu klavyeyi Google Sesle Yazma\'ya çevirebilsin diye. Uygulama sadece o tuşa bakar.')):'')+
+      sgroup('Paylaş',`<div class="slist">
+        <button onclick="shareHtml()"><span>🖥</span>Ayar ekranı (profillerimle)<small>Arkadaşının bilgisayarında açılır</small></button>
+        ${PM.native?`<button onclick="shareUf2()"><span>⬆</span>Kart yazılımı (UF2)<small>Kartı başka yerde güncellemek için</small></button>
+        <button onclick="shareApk()"><span>📱</span>Uygulama<small>Başka telefona kurmak için</small></button>`:''}</div>`)+
+      sgroup('Yedek',`<div class="slist"><button onclick="backupProfiles()"><span>💾</span>Profilleri yedekle<small>Drive, WhatsApp, e-posta…</small></button>
+        <button onclick="importProfiles()"><span>📂</span>Yedekten yükle</button></div>`)+
+      sgroup('',`<div class="slist"><button onclick="openLink(SITE)"><span>🔗</span>Ayar sayfası ve indirmeler<small>pmape.github.io${PM.native?' · uygulama '+esc(PMNative.version()):''}</small></button></div>`)+
+      sgroup('Tema',`<div class="seg">${[['dark','Koyu'],['amoled','Siyah'],['light','Açık'],['auto','Sistem']].map(([k,t])=>`<button class="${themeOf().mode===k?'on':''}" onclick="setTheme({mode:'${k}'})">${t}</button>`).join('')}</div>
+      <div class="swatches">${ACCENTS.map(a=>`<button aria-label="${a.n}" title="${a.n}" onclick="setTheme({acc:'${a.k}'})" style="background:${a.c};border-color:${themeOf().acc===a.k?'var(--text)':'transparent'}"></button>`).join('')}</div>`)+
+      sgroup('Klavye düzeni',srow('Tuş adları',`<div class="seg sm"><button class="${S.device.layout!=='us'?'on':''}" onclick="S.device.layout='tr';render();renderSheet()">Türkçe Q</button><button class="${S.device.layout==='us'?'on':''}" onclick="S.device.layout='us';render();renderSheet()">US</button></div>`,'Hedef cihazın klavye ayarıyla aynı olmalı.'))+
+    sgroup('Gelişmiş: eşlemeyi pad\'den aç/kapat',
+      (PM.connected()&&PM.link.info?srow('Şu an',`<div class="seg sm"><button class="${PM.link.info.mapping!==0?'on':''}" onclick="PM.sendLine('map 1')">Açık</button><button class="${PM.link.info.mapping===0?'on':''}" onclick="PM.sendLine('map 0')">Kapalı (gamepad)</button></div>`,'Pad\'den aç/kapat tuşlarıyla değiştirdiğinde burası da değişir.'):'')+
+      srow('Açılışta',`<div class="seg sm"><button class="${d.startMode==='map'?'on':''}" onclick="S.device.startMode='map';save();renderSheet()">Açık</button><button class="${d.startMode==='pad'?'on':''}" onclick="S.device.startMode='pad';save();renderSheet()">Gamepad</button></div>`,'Eşleme kapalıyken pad tablete normal gamepad olarak gider. Işık: yeşil açık, mavi gamepad.')+
+      srow('Aç / kapat tuşları',`<select onchange="S.device.comboA=this.value;save();renderSheet()">${bo(d.comboA)}</select>+<select onchange="S.device.comboB=this.value;save();renderSheet()">${bo(d.comboB)}</select>`)+
+      srow('Basılı tutma',`<input type="number" min="300" max="5000" step="100" value="${d.holdMs}" onchange="S.device.holdMs=Math.max(300,clamp(this.value));save();renderSheet()"><span class="hint">ms</span>`)+
+      srow('Atanmamış tuşlar gamepad olsun',tog(d.passUnmapped!==false,"S.device.passUnmapped=!(S.device.passUnmapped!==false);save();renderSheet()"))+
+      (d.comboA===d.comboB?'<div class="note">İki farklı tuş seç.</div>':''))+
+      sgroup('',`<div class="slist"><button onclick="closeSheet();openLearn()" ${PM.connected()&&cardCtl.cur?'':'disabled'}><span>🎯</span>Tanılama / tuşları tanıt<small>Pad'den gelen veri, gelmeyen tuşlar</small></button></div>`);
+    body=`<div class="card" style="padding:4px 14px 14px">
+        <div class="row" style="margin-top:10px"><p class="lbl grow" style="margin:0">Güncellemeler</p></div>
+        <div class="li2">${IC.key.replace('<svg','<svg style="color:var(--acc)"')}<span class="grow"><b>Kart yazılımı</b><small class="hint" style="display:block">${c?'kartta '+esc(i.fw||'?'):'kart bağlı değil'}${b?' · yeni: '+esc(b):''}${need?' · <span style="color:var(--acc)">güncelle</span>':''}</small></span>${PM.native||'serial' in navigator?`<button class="pchip ${need?'on':''}" ${c&&PM.link.via==='usb'?'':'disabled'} onclick="updCard()">${need?'Güncelle':'Yeniden kur'}</button>`:''}</div>
+        <div class="li2">${IC.pad.replace('<svg','<svg style="color:var(--acc)"')}<span class="grow"><b>Uygulama</b><small class="hint" style="display:block">${PM.native?esc(PMNative.version()):'Android telefon için'}</small></span>${PM.native?'<button class="pchip" onclick="closeSheet();updApp()">Güncelle</button>':'<button class="pchip" onclick="openLink(APK_URL)">İndir</button>'}</div>
+        <div class="li2">${IC_DRIVE}<span class="grow"><b>Ayar sayfası</b><small class="hint" style="display:block">pmape.github.io · her bilgisayarda Chrome / Edge</small></span><button class="pchip" onclick="shareLink()">Paylaş</button></div>
+        ${c&&PM.link.via!=='usb'?'<p class="hint" style="margin:8px 0 0">Kart yazılımı kabloyla kurulur: kartı bu cihaza USB ile tak.</p>':''}
+      </div>
+      <div class="card" style="margin-top:10px">
+        <p class="lbl" style="margin:0 0 6px">Kartın Bluetooth adı</p>
+        <div class="row" style="gap:8px"><input id="btname" type="text" maxlength="29" style="flex:1;min-width:0" value="${esc(cardName||'')}" placeholder="${c?'okunuyor…':'kart bağlı değil'}" ${c?'':'disabled'}><button class="btn" ${c?'':'disabled'} onclick="saveBtName()">Kaydet</button></div>
+        <p class="hint" style="margin:6px 0 0">Bluetooth listesinde bu görünür. Varsayılan: ayar sayfasının adresi, böylece adresi hiç unutmazsın. En fazla 29 karakter, Türkçe harfler düz harfe çevrilir.</p>
+      </div>
+      <div class="card" style="margin-top:10px">
+        <div class="row" style="gap:8px">${[['dark','Gece','#14161c','#eef0f4'],['amoled','Siyah','#000','#eef0f4'],['light','Açık','#f4f5f7','#1d2129'],['auto','Sistem','linear-gradient(90deg,#14161c 50%,#f4f5f7 50%)','#a6acba']].map(([k,n,bg,fg])=>`<button class="thm ${themeOf().mode===k?'on':''}" style="background:${bg};color:${fg}" onclick="setTheme({mode:'${k}'})">${n}</button>`).join('')}</div>
+        <div class="swatches" style="margin-top:10px">${ACCENTS.map(x=>`<button aria-label="${x.n}" title="${x.n}" onclick="setTheme({acc:'${x.k}'})" style="background:${x.c};border-color:${themeOf().acc===x.k?'var(--text)':'transparent'}"></button>`).join('')}</div>
+        ${PM.native&&PMNative.notifOn?`<div class="row" style="margin-top:12px"><span class="grow">Bildirimde kart durumu</span>${tog(PMNative.notifOn(),"PMNative.setNotif(!PMNative.notifOn());renderSheet()")}</div>`:''}
+      </div>
+      <button class="card li2 lnk" style="margin-top:10px;padding:12px 14px;border:1px solid var(--line)" onclick="closeSheet();openLearn()" ${c&&cardCtl.cur?'':'disabled'}><span style="color:var(--acc)">${IC_PULSE}</span><span class="otx"><b>Tanılama</b><small>Ham pad verisi · tuş testi</small></span><span class="achev">›</span></button>
+      <details class="card sinfo2" style="margin-top:10px"><summary>Gelişmiş: kart bağlantısı, klavye düzeni, paylaşım, eşleme tuşları</summary>${adv}</details>`;
+  }
+  document.getElementById('sheetIn').innerHTML=`
+  <div class="shead">${stab==='ayarlar'?'<button class="btn ico" onclick="closeSheet()" aria-label="Geri">‹</button>':''}<h2>${SHEET_TITLE[stab]||'Ayarlar'}</h2>${stab==='ayarlar'?'':'<button class="btn ico" onclick="closeSheet()" aria-label="Kapat">✕</button>'}</div>
+  <div class="sbody">${body}</div>`;
+}
+/* ---------- Kontrolcüler: kartla ---------- */
+let cardCtl={list:[],cur:'',name:''};
+const ctrlName=a=>(S.device.names&&S.device.names[a])||'Kontrolcü';
+function rememberName(a,n){if(!a||!n)return;S.device.names=S.device.names||{};if(S.device.names[a]!==n){S.device.names[a]=n;save();}}
+const shortAddr=a=>String(a).replace(/ \(.*\)$/,'');
+function ctrlListHtml(){
+  if(!PM.connected())return '<div class="empty">Kart bağlı değil.</div>';
+  if(!cardCtl.list.length)return '<div class="empty">Kartta kayıtlı kontrolcü yok. Kart, çevrede gördüğü ilk kontrolcüye bağlanır.</div>';
+  return cardCtl.list.map((c,i)=>{const on=c.addr===cardCtl.cur;
+    return `<div class="dev ${i===0?'act':''}" onclick="useCtrl('${c.addr}')"><span class="r">${i===0?'◉':'○'}</span><div style="flex:1;min-width:0"><b>${esc(ctrlName(c.addr))}</b><div class="hint">${esc(shortAddr(c.addr))}${on?' · <span class="ok">bağlı</span>':''}${c.learned?' · tuşları tanıtıldı':''}</div></div><button class="x" title="Unut" onclick="event.stopPropagation();forgetCtrl('${c.addr}')">✕</button></div>`;}).join('');
+}
+async function useCtrl(a){if(a===cardCtl.list[0]?.addr&&a===cardCtl.cur)return;await PM.sendLine('use '+a);toast(ctrlName(a)+' seçildi, bağlanılıyor…');}
+async function forgetCtrl(a){if(!await ask(`"${ctrlName(a)}" unutulsun mu? (Öğretilen tuşları da silinir)`,null))return;await PM.sendLine('forget '+a);}
+
+let scan={on:false,found:[],onlyPad:true,pairing:null,mode:'pad'};
+function openScan(mode){if(!PM.connected()){toast('Önce karta bağlan');return;}scan.mode=mode==='hid'?'hid':'pad';scan.onlyPad=scan.mode!=='hid';document.getElementById('scan').classList.add('open');startScan();}
+
+/* ---------- Bluetooth klavye / fare (kartta) ---------- */
+let cardHid=null;
+const HTGT=[[0,'A'],[1,'B'],[3,'X'],[4,'Y'],[6,'LB'],[7,'RB'],[8,'LT'],[9,'RT'],[10,'Select'],[11,'Start'],[12,'Home'],[13,'L3'],[14,'R3'],[15,'Ekran görüntüsü'],
+  [16,'Yön ↑'],[17,'Yön ↓'],[18,'Yön ←'],[19,'Yön →'],[20,'Sol çubuk ↑'],[21,'Sol çubuk ↓'],[22,'Sol çubuk ←'],[23,'Sol çubuk →'],[24,'Sağ çubuk ↑'],[25,'Sağ çubuk ↓'],[26,'Sağ çubuk ←'],[27,'Sağ çubuk →']];
+const HSRC_M=[[0xf0,'🖱 Sol tık'],[0xf1,'🖱 Sağ tık'],[0xf2,'🖱 Orta tık'],[0xf3,'🖱 Yan geri'],[0xf4,'🖱 Yan ileri']];
+function hidSrcList(){const l=[];for(const [c] of KEYS){const v=PM.HID[c];if(v)l.push([v,'⌨ '+keyName(c)]);}return l.concat(HSRC_M);}
+const hidSrcName=v=>(hidSrcList().find(x=>x[0]===v)||[0,'0x'+v.toString(16)])[1];
+function hidMap(){const m=[],s=(cardHid&&cardHid.map)||'';for(let i=0;i+4<=s.length;i+=4)m.push([parseInt(s.slice(i,i+2),16),parseInt(s.slice(i+2,i+4),16)]);return m;}
+async function hidSend(cmd){try{await PM.sendLine(cmd);}catch(e){toast(e.message);}}
+function hidSetMap(m){hidSend('hid map '+m.map(([a,b])=>a.toString(16).padStart(2,'0')+b.toString(16).padStart(2,'0')).join(''));}
+function hidHtml(){
+  if(!PM.connected())return '<div class="empty">Kart bağlı değil.</div>';
+  if(!cardHid)return '<div class="empty">Kart yazılımı bu özelliği desteklemiyor ya da bilgi bekleniyor. Kartı güncelle.</div>';
+  const m=hidMap(),src=hidSrcList();
+  return (cardHid.list.length?cardHid.list.map(d=>`<div class="dev"><span class="ic">${d.kb&&d.ms?'⌨🖱':d.ms?'🖱':'⌨'}</span><div style="flex:1;min-width:0"><b>${esc(d.name||'Cihaz')}</b><div class="hint">${esc(shortAddr(d.addr))} · ${d.on?'<span class="ok">bağlı</span>':'bekleniyor'}</div></div><button class="x" title="Unut" onclick="hidForget('${d.addr}')">✕</button></div>`).join('')
+      :'<div class="empty">Kayıtlı klavye/fare yok. En fazla 2 tane eklenebilir (pad\'e ek olarak).</div>')+
+    (cardHid.pending?'<p class="hint"><span class="spin"></span> Seçilen cihaz bekleniyor: eşleşme modunda olsun.</p>':'')+
+    `<div class="sbtns"><button class="btn" onclick="openScan('hid')">＋ Klavye / fare ekle</button></div>`+
+    srow('Kullanım',`<div class="seg sm"><button class="${cardHid.mode?'':'on'}" onclick="hidSend('hid mode 0')">Doğrudan geçir</button><button class="${cardHid.mode?'on':''}" onclick="hidSend('hid mode 1')">🎮 Gamepad'e çevir</button></div>`,
+      'Doğrudan geçir: klavye ve fare, kartın bağlı olduğu cihaza aynen gider. Gamepad\'e çevir: tuşlar pad tuşlarına, fare sağ çubuğa çevrilir (konsol/oyun için); atanmamış tuşlar klavye olarak gider. Profildeki eşlemeler bunlara da uygulanır.')+
+    (cardHid.mode?srow('Fare hassasiyeti',`<input type="range" min="1" max="100" value="${cardHid.sens}" onchange="hidSend('hid sens '+this.value)"><span class="hint">${cardHid.sens}</span>`)+
+      `<details class="sinfo2"><summary>Tuş atamaları (${m.length})</summary>${m.map(([s,t],i)=>`<div class="row" style="gap:6px;margin:4px 0"><select onchange="hidEdit(${i},0,this.value)">${src.map(([v,n])=>`<option value="${v}" ${v===s?'selected':''}>${esc(n)}</option>`).join('')}</select><span>→</span><select onchange="hidEdit(${i},1,this.value)">${HTGT.map(([v,n])=>`<option value="${v}" ${v===t?'selected':''}>${esc(n)}</option>`).join('')}</select><button class="x" onclick="hidEdit(${i},-1)">✕</button></div>`).join('')}
+        <div class="sbtns"><button class="btn" onclick="hidEdit(-1)" ${m.length>=48?'disabled':''}>＋ Atama</button><button class="btn" onclick="hidSend('hid map')">Varsayılan (WASD)</button></div></details>`:'');
+}
+function hidEdit(i,f,v){const m=hidMap();if(i<0)m.push([0x2c,0]);else if(f<0)m.splice(i,1);else m[i][f]=parseInt(v);hidSetMap(m);}
+async function hidForget(a){if(!await ask('Bu klavye/fare unutulsun mu?',null))return;hidSend('hid forget '+a);}
+function closeScan(){stopScan();lw=null;document.getElementById('scan').classList.remove('open');}
+function startScan(){scan.on=true;scan.found=[];scan.pairing=null;PM.sendLine('scan').catch(()=>{});renderScan();}
+function stopScan(){if(scan.on)PM.sendLine('scan_stop').catch(()=>{});scan.on=false;}
+const bars=r=>{const n=r>-60?4:r>-70?3:r>-80?2:1;return `<span class="bars">${[6,9,12,14].map((hh,i)=>`<i class="${i<n?'on':''}" style="height:${hh}px"></i>`).join('')}</span>`;};
+function scanEv(ev){
+  if(ev.ev==='dev'){const f=scan.found.find(x=>x.addr===ev.addr);if(f){f.rssi=ev.rssi;if(ev.name)f.name=ev.name;if(ev.hid)f.hid=true;if(ev.app)f.app=ev.app;}else scan.found.push({addr:ev.addr,name:ev.name,rssi:ev.rssi,hid:!!ev.hid,app:ev.app||0});
+    if(ev.hid&&ev.name)rememberName(ev.addr,ev.name);}
+  if(ev.ev==='scan_end')scan.on=false;
+  if(stab==='giris'&&sheetOpen())setTimeout(()=>{if(stab==='giris'&&sheetOpen())renderSheet();},50);
+  if(ev.ev==='connected'&&scan.pairing&&ev.addr===scan.pairing){scan.pairing=null;toast((ev.name||'Kontrolcü')+' bağlandı');}
+  if(document.getElementById('scan').classList.contains('open'))renderScan();
+}
+function renderScan(){
+  const saved=new Set(cardCtl.list.map(c=>c.addr));
+  const list=scan.found.filter(d=>!scan.onlyPad||d.hid).sort((a,b)=>b.hid-a.hid||b.rssi-a.rssi);
+  document.getElementById('scanIn').innerHTML=`
+  <div class="row"><h2>${scan.mode==='hid'?'Klavye / fare ekle':'Cihaz ara'}</h2><button class="btn ico" onclick="closeScan()">✕</button></div>
+  <p class="hint" style="margin:6px 0">${scan.mode==='hid'?'Klavyeni/fareni Bluetooth eşleşme moduna al. Listede görününce üstüne dokun.':'Kontrolcünü eşleşme moduna al (D8 Pro\'da X + Home). Listede görününce üstüne dokun.'}</p>
+  <div class="row"><span>${scan.on?'<span class="spin"></span> Aranıyor…':'Arama bitti'}</span><span style="flex:1"></span>
+    <label class="hint"><input type="checkbox" ${scan.onlyPad?'checked':''} onchange="scan.onlyPad=this.checked;renderScan()"> Sadece uyumlu</label>
+    <button class="btn" onclick="${scan.on?'stopScan();renderScan()':'startScan()'}">${scan.on?'Durdur':'Yeniden ara'}</button></div>
+  ${list.map(d=>{const s=saved.has(d.addr),pr=scan.pairing===d.addr,on=cardCtl.cur===d.addr;
+    return `<div class="dev ${d.hid?'':'no'}" ${d.hid&&!on&&!pr?`onclick="pair('${d.addr}')"`:''}><span class="ic">${!d.hid?'❔':d.app===961?'⌨':d.app===962?'🖱':'🎮'}</span>
+      <div style="flex:1;min-width:0"><b>${esc(d.name||'(adsız)')}</b><div class="hint">${esc(shortAddr(d.addr))}</div>
+      <div>${d.hid?'<span class="ok">✓ Uyumlu (Bluetooth HID)</span>':'<span class="bad">Uyumsuz: giriş cihazı değil</span>'}</div></div>
+      ${bars(d.rssi)}<span style="min-width:74px;text-align:right">${pr?'<span class="spin"></span>':on?'<span class="ok">bağlı</span>':s?'<span class="hint">kayıtlı</span>':d.hid?'<span class="btn" style="display:inline-flex;align-items:center">Eşle</span>':''}</span></div>`;}).join('')||`<div class="empty">${scan.on?'Henüz bir şey bulunmadı…':'Uyumlu cihaz bulunamadı. Kontrolcü eşleşme modunda mı?'}</div>`}`;
+}
+async function pair(a){
+  if(scan.mode==='hid'){await hidSend('hid use '+a);toast('Eklendi, bağlanılıyor… (cihaz eşleşme modunda olsun)');closeScan();return;}
+  scan.pairing=a;renderScan();await PM.sendLine('use '+a);}
+
+/* ---------- Tuş tanıtma ---------- */
+function parseMap(hex){
+  const b=hex.match(/../g).map(x=>parseInt(x,16));
+  const out=[],off={};let g={page:0,lmin:0,lmax:0,size:0,count:0,id:0},loc={u:[],min:null,max:null},i=0;
+  const sgn=(v,sz)=>sz===1&&v>127?v-256:sz===2&&v>32767?v-65536:v;
+  while(i<b.length){
+    const p=b[i],sz=[0,1,2,4][p&3],tag=p&0xfc;let d=0;
+    for(let k=0;k<sz;k++)d|=b[i+1+k]<<(8*k);d>>>=0;i+=1+sz;
+    switch(tag){
+      case 0x04:g.page=d;break; case 0x14:g.lmin=sgn(d,sz);break; case 0x24:g.lmax=sgn(d,sz);break;
+      case 0x74:g.size=d;break; case 0x94:g.count=d;break; case 0x84:g.id=d;break;
+      case 0x08:loc.u.push(sz===4?[d>>>16,d&0xffff]:[g.page,d]);break;
+      case 0x18:loc.min=d;break; case 0x28:loc.max=d;break;
+      case 0xa0:loc={u:[],min:null,max:null};break;
+      case 0x80:{
+        const rid=g.id,o=off[rid]||0,isConst=d&1,isVar=!!(d&2);
+        let us=loc.u.slice();if(!us.length&&loc.min!==null)for(let u=loc.min;u<=loc.max;u++)us.push([g.page,u]);
+        if(isConst){}
+        else if(isVar){for(let k=0;k<g.count;k++){const u=us[Math.min(k,us.length-1)];if(u)out.push({rid,bit:o+k*g.size,size:g.size,page:u[0],usage:u[1],lmin:g.lmin,lmax:g.lmax,kind:'var'});}}
+        else{for(let k=0;k<g.count;k++)out.push({rid,bit:o+k*g.size,size:g.size,page:g.page,usage:loc.min||0,lmin:g.lmin,lmax:g.lmax,kind:'array'});}
+        off[rid]=o+g.count*g.size;loc={u:[],min:null,max:null};break;}
+      case 0x90:case 0xb0:loc={u:[],min:null,max:null};break;
+    }
+  }
+  out.forEach(f=>{f.key=f.rid+':'+f.bit;f.name=fName(f);f.type=f.kind==='array'?'array':(f.page===9||f.lmax===1)?'btn':(f.page===1&&f.usage===0x39)?'hat':'axis';});
+  return out;
+}
+function fName(f){
+  if(f.page===9)return 'Düğme '+f.usage;
+  if(f.page===1)return {0x30:'X',0x31:'Y',0x32:'Z',0x33:'Rx',0x34:'Ry',0x35:'Rz',0x36:'Kaydırıcı',0x39:'Yön'}[f.usage]||('Genel '+f.usage.toString(16));
+  if(f.page===2)return {0xc4:'Gaz',0xc5:'Fren'}[f.usage]||('Sim '+f.usage.toString(16));
+  if(f.page===0xc)return 'Medya';
+  return 'Sayfa '+f.page.toString(16);
+}
+function readBits(by,bit,size,signed){let v=0;for(let k=0;k<size;k++){const B=bit+k;if(by[B>>3]&(1<<(B&7)))v+=2**k;}if(signed&&v>=2**(size-1))v-=2**size;return v;}
+const LSTEPS=[
+  ['A','A tuşuna bas'],['B','B tuşuna bas'],['X','X tuşuna bas'],['Y','Y tuşuna bas'],
+  ['LB','LB (sol omuz)'],['RB','RB (sağ omuz)'],['LT','LT (sol tetik), sonuna kadar bas'],['RT','RT (sağ tetik), sonuna kadar bas'],
+  ['SELECT','Select / View'],['START','Start / Menu'],['HOME','Home'],['SHARE','Ekran görüntüsü tuşu'],
+  ['L3','Sol çubuğa bastır (L3)'],['R3','Sağ çubuğa bastır (R3)'],
+  ['UP','Yön tuşu YUKARI'],['DOWN','Yön tuşu AŞAĞI'],['LEFT','Yön tuşu SOL'],['RIGHT','Yön tuşu SAĞ'],
+  ['LS_X','Sol çubuğu SAĞA it'],['LS_Y','Sol çubuğu AŞAĞI it'],['RS_X','Sağ çubuğu SAĞA it'],['RS_Y','Sağ çubuğu AŞAĞI it'],
+  ['M1','Arka sol tuş (M1)'],['M2','Arka sağ tuş (M2)'],
+];
+let lw=null;
+function openLearn(){
+  lw={fields:[],map:'',state:{},idle:null,i:0,res:{},used:new Set(),phase:'load',raw:[],ctrl:null};
+  document.getElementById('scan').classList.add('open');renderLearn();
+  PM.sendLine('map').catch(()=>{});
+}
+function closeLearn(){lw=null;document.getElementById('scan').classList.remove('open');}
+function lActive(f){
+  const v=lw.state[f.key];if(v===undefined)return false;
+  if(f.type==='btn'||f.type==='array')return v!==0&&(!lw.idle||lw.idle[f.key]!==v);
+  if(f.type==='hat')return v>=f.lmin&&v<=f.lmax;
+  return Math.abs(v-lBase(f))>(f.lmax-f.lmin)*0.35;
+}
+/* bırakılmış hali: kartın gönderdiği son rapor; yoksa tetikler en küçük değerde, çubuklar ortada */
+const lBase=f=>lw.idle&&lw.idle[f.key]!==undefined?lw.idle[f.key]:f.page===2?f.lmin:(f.lmin+f.lmax)/2;
+function learnEv(ev){
+  if(!lw)return;
+  if(ev.ev==='ctrl'){lw.ctrl=ev;if(!ev.connected){lw.phase='nopad';renderLearn();}}
+  if(ev.ev==='map'){lw.map+=ev.d;}
+  if(ev.ev==='map_end'){lw.fields=lw.map?parseMap(lw.map):[];lw.phase=lw.fields.length?'idle':'nomap';renderLearn();
+    setTimeout(()=>{if(lw&&lw.phase==='idle'){lw.idle={...lw.state};lw.phase='wait';renderLearn();}},900);}
+  if(ev.ev==='rep'){
+    const by=(ev.d.match(/../g)||[]).map(x=>parseInt(x,16));
+    for(const f of lw.fields)if(f.rid===ev.id)lw.state[f.key]=readBits(by,f.bit,f.size,f.lmin<0);
+    if(lw.phase==='wait'||lw.phase==='release'){const r=ev.id+':'+ev.d;if(!lw.raw.includes(r)){lw.raw.push(r);if(lw.raw.length>12)lw.raw.shift();}}
+    lDetect();
+  }
+}
+function lDetect(){
+  if(lw.i>=LSTEPS.length)return;
+  if(lw.phase==='release'){if(!lw.fields.some(lActive)){lw.phase='wait';lw.raw=[];renderLearn();}return;}
+  if(lw.phase!=='wait')return;
+  const [id]=LSTEPS[lw.i];
+  for(const f of lw.fields){
+    if(!lActive(f))continue;
+    const v=lw.state[f.key],sig=f.type==='hat'||f.type==='array'?f.key+'='+v:f.key;
+    if(lw.used.has(sig))continue;
+    const base=lBase(f);
+    lw.res[id]=f.type==='hat'?{t:'hat',rid:f.rid,bit:f.bit,size:f.size,v,lmin:f.lmin,name:'Yön'}
+      :f.type==='array'?{t:'usage',rid:f.rid,bit:f.bit,size:f.size,v,name:fName(f)+' 0x'+v.toString(16)}
+      :f.type==='axis'?{t:'axis',rid:f.rid,bit:f.bit,size:f.size,min:f.lmin,max:f.lmax,dir:v>base?1:-1,name:f.name}
+      :{t:'btn',rid:f.rid,bit:f.bit,name:f.name};
+    lw.used.add(sig);lw.i++;lw.phase='release';renderLearn();return;
+  }
+}
+const sigOf=m=>m&&(m.t==='hat'||m.t==='usage'?`${m.rid}:${m.bit}=${m.v}`:`${m.rid}:${m.bit}`);
+function lSkip(kind){const [id]=LSTEPS[lw.i];lw.res[id]=kind==='miss'?{t:'missing',raw:lw.raw.slice()}:null;lw.i++;lw.raw=[];lw.phase=lw.fields.some(lActive)?'release':'wait';renderLearn();}
+function lBack(){if(lw.i>0){lw.i--;const m=lw.res[LSTEPS[lw.i][0]];if(m&&m.t!=='missing')lw.used.delete(sigOf(m));delete lw.res[LSTEPS[lw.i][0]];lw.phase='wait';lw.raw=[];renderLearn();}}
+function lDesc(m){if(m===undefined)return '';if(!m)return '<span class="hint">yok</span>';if(m.t==='missing')return '<span style="color:var(--warn)">var ama algılanmadı</span>';
+  if(m.t==='axis')return esc(m.name)+(m.dir>0?' +':' −');return esc(m.name)+(m.t==='hat'?' = '+m.v:'');}
+/* tanıtma ekranındaki pad çizimi: sıradaki tuş yanıp söner, tanınanlar yeşil */
+const LMAP={LS_X:'LS',LS_Y:'LS',RS_X:'RS',RS_Y:'RS'};
+const LARROW={LS_X:'→',LS_Y:'↓',RS_X:'→',RS_Y:'↓'};
+function learnPad(){
+  const cur=lw.i<LSTEPS.length?LSTEPS[lw.i][0]:null,tgt=cur?(LMAP[cur]||cur):null;
+  const done=new Set(LSTEPS.filter(([id])=>lw.res[id]&&lw.res[id].t!=='missing').map(([id])=>LMAP[id]||id));
+  let h=`<path class="grip" d="M92 46h156c30 0 48 18 54 46l18 78c5 24-26 40-44 20l-24-28H88l-24 28c-18 20-49 4-44-20l18-78c6-28 24-46 54-46z"/>`;
+  for(const b of BTNS){
+    if((b.id==='M1'||b.id==='M2')&&b.id!==tgt&&!done.has(b.id))continue;
+    const sh=b.sh==='c'?`<circle class="s" cx="${b.x}" cy="${b.y}" r="${b.r}"/>`:`<rect class="s" x="${b.x}" y="${b.y}" width="${b.w}" height="${b.h}" rx="6"/>`;
+    const cx=b.sh==='c'?b.x:b.x+b.w/2,cy=b.sh==='c'?b.y:b.y+b.h/2;
+    const cls=b.id===tgt?'tgt':done.has(b.id)?'ok':'';
+    const lab=b.id===tgt&&LARROW[cur]?`<text class="arr" x="${cx}" y="${cy}">${LARROW[cur]}</text>`:`<text x="${cx}" y="${cy}">${b.t}</text>`;
+    h+=`<g class="b ${cls}">${sh}${lab}</g>`;
+  }
+  return `<svg class="lpad" viewBox="0 0 340 222">${h}</svg>`;
+}
+function renderLearn(){
+  const el=document.getElementById('scanIn'),c=lw.ctrl;
+  let h=`<div class="row"><h2>Tuşları tanıt${c&&c.name?' · '+esc(c.name):''}</h2><button class="btn ico" onclick="closeLearn()">✕</button></div>`;
+  if(lw.phase==='load'){el.innerHTML=h+'<p class="hint"><span class="spin"></span> Kontrolcünün tuş haritası okunuyor…</p>';return;}
+  if(lw.phase==='nopad'){el.innerHTML=h+'<div class="note">Karta bağlı bir kontrolcü yok. Önce kontrolcüyü aç ve bağlanmasını bekle.</div>';return;}
+  if(lw.phase==='nomap'){el.innerHTML=h+'<div class="note">Kontrolcünün tuş haritası okunamadı. Kontrolcüyü kapatıp açıp tekrar dene.</div>';return;}
+  if(lw.phase==='idle'){el.innerHTML=h+'<p class="hint"><span class="spin"></span> Hiçbir tuşa dokunma, çubukları bırak…</p>';return;}
+  const n=LSTEPS.length;
+  if(lw.i<n){
+    const [,t]=LSTEPS[lw.i];
+    h+=learnPad()+`<div class="hint" style="text-align:center">${lw.i+1} / ${n} · yanıp sönen tuşa bas</div><div style="font-size:22px;font-weight:700;margin:6px 0;text-align:center">${t}</div>
+      <div class="hint">${lw.phase==='release'?'<b style="color:var(--ok,#3fb950)">Tanındı ✓</b> Şimdi bırak…':'Bekleniyor… Bu tuş kontrolcünde yoksa "Yok". Tuş var ama basınca burada bir şey olmuyorsa "Var ama algılamıyor".'}</div>
+      <div style="height:6px;background:var(--panel2);border-radius:4px;margin:10px 0"><i style="display:block;height:6px;border-radius:4px;background:var(--acc2);width:${lw.i/n*100}%"></i></div>
+      <div class="row"><button class="btn" onclick="lBack()" ${lw.i?'':'disabled'}>← Geri</button><button class="btn" onclick="lSkip('none')">Yok, atla</button><button class="btn" onclick="lSkip('miss')">Var ama algılamıyor</button></div>`;
+  }else{
+    const miss=LSTEPS.filter(([id])=>lw.res[id]&&lw.res[id].t==='missing');
+    h+=learnPad()+`<div style="font-size:20px;font-weight:700;margin:8px 0;text-align:center">Bitti ✓ Yeşiller tanındı</div>
+      <div class="row"><button class="btn pri" onclick="lSave()">Karta kaydet</button><button class="btn" onclick="lBack()">← Son adıma dön</button><button class="btn" onclick="openLearn()">Baştan</button><button class="btn" onclick="lClear()">Tanıtmayı sil</button></div>
+      ${miss.length?`<div class="note" style="margin-top:10px">${miss.length} tuş algılanmadı (${miss.map(([id])=>id).join(', ')}). "Sorun raporunu kopyala"ya basıp sohbete yapıştır; ne gönderdiğine bakıp düzeltelim.
+        <div style="margin-top:6px"><button class="btn" onclick="lCopy()">Sorun raporunu kopyala</button></div></div>`:''}`;
+  }
+  h+=`<table style="width:100%;margin-top:10px;font-size:13px">${LSTEPS.filter(([id])=>id in lw.res).map(([id,t])=>`<tr><td style="padding:3px 0">${t}</td><td style="text-align:right">${lDesc(lw.res[id])}</td></tr>`).join('')}</table>`;
+  el.innerHTML=h;
+}
+const PBI={A:0,B:1,X:3,Y:4,LB:6,RB:7,LT:8,RT:9,SELECT:10,START:11,HOME:12,L3:13,R3:14,SHARE:15,UP:16,DOWN:17,LEFT:18,RIGHT:19,M1:20,M2:21};
+function lEntries(){
+  const out=[],ent=(rid,kind,tgt,size,bit,flags,arg,mn,mx)=>out.push(rid,kind,tgt,size,bit&255,bit>>8,flags,0,arg&255,(arg>>8)&255,mn&255,(mn>>8)&255,mx&255,(mx>>8)&255);
+  let hatDone=false;
+  for(const [id] of LSTEPS){
+    const m=lw.res[id];if(!m||m.t==='missing')continue;
+    const stick={LS_X:0,LS_Y:1,RS_X:2,RS_Y:3}[id];
+    if(stick!==undefined){if(m.t==='axis')ent(m.rid,1,stick,m.size,m.bit,m.dir<0?1:0,0,m.min,m.max);continue;}
+    const pb=PBI[id];
+    if(m.t==='btn')ent(m.rid,0,pb,1,m.bit,0,0,0,1);
+    else if(m.t==='usage')ent(m.rid,5,pb,m.size,m.bit,0,m.v,0,0);
+    else if(m.t==='hat'){if(['UP','DOWN','LEFT','RIGHT'].includes(id)){if(!hatDone){ent(m.rid,3,0,m.size,m.bit,0,m.lmin&0xffff,0,0);hatDone=true;}}else ent(m.rid,5,pb,m.size,m.bit,0,m.v,0,0);}
+    else if(m.t==='axis'){
+      if(id==='LT'||id==='RT')ent(m.rid,2,id==='LT'?0:1,m.size,m.bit,m.dir<0?1:0,0,m.min,m.max);
+      else ent(m.rid,4,pb,m.size,m.bit,m.dir<0?4:0,60,m.min,m.max);
+    }
+  }
+  return out;
+}
+async function lSave(){
+  const e=lEntries();if(!e.length){toast('Kaydedilecek tuş yok');return;}
+  await PM.sendLine('lm '+lw.ctrl.addr+' '+PM.hex(e));toast('Tuşlar karta kaydedildi');PM.sendLine('ctrls');
+}
+async function lClear(){if(!await ask('Bu kontrolcünün tanıtılmış tuşları silinsin mi? Kart tuşları yine kendisi tahmin eder.',null))return;await PM.sendLine('lm '+lw.ctrl.addr+' -');toast('Tanıtma silindi');PM.sendLine('ctrls');}
+async function lCopy(){
+  const rep={kontrolcu:lw.ctrl&&lw.ctrl.name,adres:lw.ctrl&&lw.ctrl.addr,harita:lw.map,algilanan:{},algilanmayan:{}};
+  for(const [id] of LSTEPS){const m=lw.res[id];if(!m)continue;if(m.t==='missing')rep.algilanmayan[id]=m.raw;else rep.algilanan[id]=m;}
+  const t=JSON.stringify(rep);try{await navigator.clipboard.writeText(t);toast('Kopyalandı, sohbete yapıştır');}catch(e){ask('Kopyalanamadı, bunu seçip kopyala:',t);}
+}
+
+/* kartın Bluetooth adı */
+let cardName=null;
+function trAscii(t){return String(t).replace(/[ıİ]/g,m=>m==='ı'?'i':'I').replace(/[ğĞ]/g,m=>m==='ğ'?'g':'G').replace(/[üÜ]/g,m=>m==='ü'?'u':'U').replace(/[şŞ]/g,m=>m==='ş'?'s':'S').replace(/[öÖ]/g,m=>m==='ö'?'o':'O').replace(/[çÇ]/g,m=>m==='ç'?'c':'C').replace(/[^\x20-\x7e]|["\\]/g,'').slice(0,29);}
+async function saveBtName(){
+  const el=document.getElementById('btname');if(!el)return;
+  const v=trAscii(el.value.trim());
+  try{await PM.sendLine('name '+v);toast('Kaydedildi. Eşleştirdiğin cihazlarda eski ad kalabilir; yeni adı görmek için Bluetooth listesini yenile.');}catch(e){toast('Kaydedilemedi');}
+}
+async function forgetDevices(){
+  if(!await ask('Kayıtlı cihazlar silinsin mi?\n\nBluetooth ile ayar yapabilen diğer bütün telefon ve bilgisayarlar unutulur, sadece bu cihaz kalır. Yeni cihaz eklemek için kartı güce tak, 1 dakika içinde o cihazdan Bağlan de. Pad ve oyun bağlantıları etkilenmez.',null))return;
+  try{await PM.sendLine('secret clear');await PM.sendLine('secret add '+(PM.native?PMNative.secret():PM.webKey()));toast('Silindi. Bu cihaz kayıtlı kaldı.');}catch(e){toast('Silinemedi');}
+}
+function shareLink(){
+  const t='PadMapper ayar sayfası: '+SITE;
+  if(PM.native&&PMNative.shareText)PMNative.shareText('padmapper.txt',t);
+  else if(navigator.share)navigator.share({title:'PadMapper',url:SITE}).catch(()=>{});
+  else{try{navigator.clipboard.writeText(SITE);toast('Adres kopyalandı: '+SITE);}catch(e){toast(SITE);}}
+}
+/* tarayıcıda bağlantı yolu: USB kablo ya da Bluetooth */
+function chooseLink(){
+  return new Promise(res=>{
+    const d=document.createElement('div');d.className='sheet open';d.style.zIndex=25;
+    const opt=(r,ic,t,s)=>`<button class="card li2 lnk" data-r="${r}" style="width:100%;margin-top:8px;padding:12px 14px;border:1px solid var(--line);text-align:left"><span style="color:var(--acc);pointer-events:none">${ic}</span><span class="otx" style="pointer-events:none"><b>${t}</b><small>${s}</small></span><span class="achev" style="pointer-events:none">›</span></button>`;
+    d.innerHTML=`<div class="in" style="max-width:400px"><div style="font-weight:700;margin-bottom:4px">Karta bağlan</div><div style="color:var(--mute);font-size:13px">Kart bu cihaza kabloyla takılıysa USB'yi, değilse Bluetooth'u seç. Açılan listede <b>PadMapper</b>'ı seç.</div>
+      ${opt('usb',IC_USB,'USB kablo','Kart bu bilgisayara / telefona takılı')}
+      ${opt('ble',IC_BT,'Bluetooth','Kart sadece güç alıyor ya da başka cihaza takılı')}
+      <div class="row" style="justify-content:flex-end;margin-top:12px"><button class="btn" data-r="0">Vazgeç</button></div></div>`;
+    document.body.appendChild(d);
+    d.onclick=e=>{const r=e.target.dataset.r;if(r===undefined)return;d.remove();res(r==='usb'?{pick:true}:r==='ble'?{wble:true}:null);};
+  });
+}
+function ask(msg,def){
+  return new Promise(res=>{
+    const d=document.createElement('div');d.className='sheet open';d.style.zIndex=25;
+    d.innerHTML=`<div class="in" style="max-width:400px"><div style="margin-bottom:8px">${esc(msg)}</div>${def!==null?`<input type="text" style="width:100%" value="${esc(def)}">`:''}<div class="row" style="justify-content:flex-end;margin-top:12px"><button class="btn" data-r="0">Vazgeç</button><button class="btn pri" data-r="1">Tamam</button></div></div>`;
+    document.body.appendChild(d);const inp=d.querySelector('input');if(inp){inp.focus();inp.select();}
+    d.onclick=e=>{const r=e.target.dataset.r;if(r===undefined)return;d.remove();res(r==='1'?(inp?inp.value.trim():true):null);};
+  });
+}
+async function newProfile(){const n=await ask('Yeni profil adı:','Yeni profil');if(!n)return;S.profiles.push(newProf(n));S.cur=S.profiles.length-1;ui.layer=0;render();renderSheet();}
+async function renameProfile(){const n=await ask('Profil adı:',P().name);if(!n)return;P().name=n;render();renderSheet();}
+async function dupProfile(){const n=await ask('Kopyanın adı:',P().name+' (kopya)');if(!n)return;const c=JSON.parse(JSON.stringify(P()));c.name=n;S.profiles.push(c);S.cur=S.profiles.length-1;render();renderSheet();}
+async function delProfile(){if(S.profiles.length<2){toast('En az bir profil kalmalı');return;}if(!await ask(`"${P().name}" silinsin mi?`,null))return;S.profiles.splice(S.cur,1);S.cur=0;render();renderSheet();}
+async function copyJson(){const t=document.getElementById('jsonTa');try{await navigator.clipboard.writeText(t.value);toast('Kopyalandı');}catch(e){t.select();toast('Seçildi, kopyala');}}
+function importJson(){try{const p=JSON.parse(document.getElementById('jsonTa').value);if(!p.layers||p.layers.length!==4)throw 0;p._applied=P()._applied;S.profiles[S.cur]=migrate(p);render();renderSheet();toast('İçe aktarıldı');}catch(e){toast('Okunamadı');}}
+function toast(m){const t=document.getElementById('toast');t.textContent=m;t.style.opacity=1;t.style.pointerEvents='none';clearTimeout(t._h);t._h=setTimeout(()=>t.style.opacity=0,1400);}
+/* son silme/temizleme geri alınabilir */
+let undoSnap=null;
+function undoSave(){undoSnap={cur:S.cur,json:snap(P())};}
+function undoToast(m){const t=document.getElementById('toast');t.innerHTML=esc(m)+' <button class="ubtn" onclick="undoDo()">Geri al</button>';t.style.opacity=1;t.style.pointerEvents='auto';clearTimeout(t._h);t._h=setTimeout(()=>{t.style.opacity=0;t.style.pointerEvents='none';},5000);}
+function undoDo(){if(!undoSnap)return;const r=JSON.parse(undoSnap.json);r._applied=S.profiles[undoSnap.cur]._applied;S.profiles[undoSnap.cur]=r;undoSnap=null;render();toast('Geri alındı');}
+
+function render(){if(S.device.autoApply){P()._applied=snap(P());autoWrite();}renderTop();renderActs();paintPad();renderSummary();renderPanel();save();}
+/* ---------- Kart bağlantısı ---------- */
+let card={busy:false,crc:null};
+const wantCrc=()=>PM.crc32(PM.compile(S));
+let connMsg='';
+const CONN_ST={scan:'Kart aranıyor…',conn:'Bağlanıyor…',auth:'Doğrulanıyor…'};
+function cardSynced(){return PM.connected()&&PM.link.info&&parseInt(PM.link.info.crc,16)===wantCrc();}
+function cardLine(){
+  if(!PM.supported())return 'Bu tarayıcı karta bağlanamıyor. Chrome kullan.';
+  if(!PM.connected())return 'Kart bağlı değil. Kartı USB ile bu cihaza tak, "Karta bağlan"a bas.';
+  if(!PM.link.info)return PM.OLD;
+  const i=PM.link.info||{};
+  return `Bağlı · kart yazılımı ${i.fw||'?'} · ${card.busy?'yazılıyor…':cardSynced()?'karttaki ayar güncel ✓':i.cfg?'karttaki ayar farklı, "Karta yaz"a bas':'kartta henüz ayar yok'}`;
+}
+/* Android tarayıcısında: uygulamayı indir */
+function appBanner(){
+  let off='1';try{off=localStorage.getItem('pm_noapp');}catch(e){}
+  if(PM.native||!/Android/i.test(navigator.userAgent)||off==='1')return '';
+  return `<div class="updbar" style="border-color:var(--acc)"><span style="flex:1">Telefonda en rahatı uygulama: kart takılınca kendisi açılır.</span><button class="btn pri" onclick="openLink(APK_URL)">Uygulamayı indir</button><button class="btn ico" aria-label="Kapat" onclick="try{localStorage.setItem('pm_noapp','1')}catch(e){};renderCard()">✕</button></div>`;
+}
+function renderCard(){
+  const el=document.getElementById('status');if(!el)return;
+  const c=PM.connected()&&!!PM.link.info,s=c&&cardSynced(),st=cardState;
+  /* giriş: pad */
+  const padOn=c&&st?!!st.pad:false;
+  const padName=cardCtl.cur?ctrlName(cardCtl.cur):'Pad';
+  const inSub=!c?'—':st?(padOn?'bağlı':'bekleniyor'):'';
+  /* kart */
+  const cardSub=!c?(connMsg||'dokun: bağlan'):card.busy?'yazılıyor…':s?'kaydedildi ✓':'eşitleniyor';
+  /* çıkış */
+  let outT='—',outS='';
+  if(c&&st){
+    if(st.path===1){outT=cardBT&&cardBT.host?tName(cardBT.host):'Bluetooth';outS='Bluetooth';}
+    else if(st.path===2){outT='Bluetooth';outS='aranıyor…';}
+    else{outT='Kablo';outS=st.route===1?'Bluetooth bulunamadı':'otomatik · USB';}
+  }
+  const via=PM.link.via==='ble'?'Bluetooth':PM.link.via==='usb'?'USB':'';
+  const dev=PM.native?'bu telefondan':'bu bilgisayardan';
+  if(!c){
+    el.innerHTML=`<div class="row" style="gap:12px"><span class="fi0">${IC_CARD}</span><div style="flex:1;min-width:0"><b>Kart bağlı değil</b><div class="hint">${esc(connMsg||(PM.native||PM.webBleOk()?'USB ile tak ya da Bluetooth ile bağlan':'Kartı USB ile tak'))}</div></div><button class="btn pri" onclick="cardBtn()">${connMsg?'Vazgeç':'Bağlan'}</button></div>`;
+    const ub0=document.getElementById('updBar');if(ub0)ub0.innerHTML=appBanner();
+    pushStatus();return;
+  }
+  el.innerHTML=`<div class="flow">
+    <button class="fnode ${padOn?'on':c?'bad':''}" onclick="openSheet('giris')"><span class="fi" style="color:var(--acc)"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 11h4M8 9v4M15 12h.01M18 10h.01"/><path d="M17.3 5H6.7a4 4 0 0 0-3.96 3.43l-.7 5A3 3 0 0 0 5 17c1 0 1.8-.6 2.2-1.4L8 14h8l.8 1.6c.4.8 1.2 1.4 2.2 1.4a3 3 0 0 0 2.96-3.57l-.7-5A4 4 0 0 0 17.3 5z"/></svg></span><span style="min-width:0"><small>Giriş</small><b>${esc(padName)}</b><small>${inSub}</small></span></button>
+    <span class="farr">›</span>
+    <button class="fnode ${c?'on':''}" onclick="${c?"openSheet('ayarlar')":'cardBtn()'}"><span class="fi" style="color:var(--acc)"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><rect x="5" y="4" width="14" height="16" rx="2"/><path d="M9 8h6M9 12h6M9 16h3"/></svg></span><span style="min-width:0"><small>Kart</small><b>${c?'Bağlı':'Bağlı değil'}</b><small>${cardSub}</small></span></button>
+    <span class="farr">›</span>
+    <button class="fnode ${c&&st&&st.path!==2?'on':''}" onclick="openSheet('cikis')"><span class="fi" style="color:var(--acc)">${outS==='Bluetooth'?'<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 7l10 10-5 5V2l5 5L7 17"/></svg>':'<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg>'}</span><span style="min-width:0"><small>Çıkış</small><b>${esc(outT)}</b><small>${outS}</small></span></button>
+  </div>
+  <div class="fline">${c?`<span style="flex:1">Ayarlar <b>${dev}</b> gidiyor</span><span class="tag">${via}</span>${PM.link.info.mapping===0?'<span class="tag" title="Eşleme kapalı: pad olduğu gibi gamepad">eşleme kapalı</span>':''}`
+      :`<span style="flex:1" class="hint">${connMsg||'Kart bağlı değil. Ayar yapmak için bağlan.'}</span><button class="btn pri" onclick="cardBtn()">${connMsg?'Vazgeç':'Bağlan'}</button>`}</div>`;
+  /* güncelleme şeridi */
+  const ub=document.getElementById('updBar');
+  if(ub)ub.innerHTML=c&&cardNeedsUpdate()&&!updating?`<div class="updbar"><span style="flex:1">Kart için yeni yazılım hazır (${esc(bundledFw())})</span><button class="btn pri" onclick="updCard()">Güncelle</button></div>`
+    :appBanner();
+  pushStatus();
+}
+/* bildirim ve ana ekran aracı için durumu uygulamaya bildir */
+let lastStatus='';
+function pushStatus(){
+  if(!PM.native||!PMNative.status)return;
+  try{
+  const c=PM.connected()&&!!PM.link.info,i=PM.link.info||{};
+  const st=JSON.stringify({conn:c,via:PM.link.via||'',prof:c?(P()&&P().name)||'':'',pi:S.cur,np:S.profiles.length,mapping:i.mapping===0?0:1,route:cardBT&&cardBT.route||0});
+  if(st===lastStatus)return;lastStatus=st;PMNative.status(st);
+  }catch(e){}
+}
+if(window.PM_native)window.PM_native.action=cmd=>{
+  if(!PM.connected()||!PM.link.info)return;
+  const n=S.profiles.length;
+  if(cmd==='prev'||cmd==='next'){if(n>1)PM.sendLine('cs '+((S.cur+(cmd==='next'?1:n-1))%n)).catch(()=>{});}
+  else if(cmd==='map')PM.sendLine('map '+(PM.link.info.mapping===0?1:0)).catch(()=>{});
+};
+const sheetOpen=()=>document.getElementById('sheet').classList.contains('open');
+async function cardBtn(known){
+  if(updating)return;
+  /* Bluetooth'tayken kart USB'ye takıldı: USB'ye geç (daha hızlı, güncelleme de yapılabilir) */
+  if(PM.connected()&&known&&known.native&&PM.link.via==='ble'){await PM.disconnect();}
+  else if(PM.connected()&&known)return;
+  if(connMsg&&!known){await PM.disconnect();connMsg='';renderCard();if(sheetOpen())renderSheet();return;}
+  if(PM.connected()){const wasBle=PM.link.via==='ble';await PM.disconnect();if(wasBle)localStorage.setItem('pm_ble','0');renderCard();if(sheetOpen())renderSheet();toast('Kart bağlantısı kesildi');return;}
+  if(connMsg){if(known&&known.native){await PM.disconnect();connMsg='';}else return;}
+  /* tarayıcıda: kart USB'de değilse Bluetooth */
+  if(!known&&!PM.native&&PM.webBleOk()){known=await chooseLink();if(!known)return;}
+  try{
+    PM.link.onStatus=(st)=>{connMsg=CONN_ST[st]||'';renderCard();if(sheetOpen())renderSheet();};
+    PM.link.onLine=ev=>{
+      if(ev.ev==='prof'&&ev.cur<S.profiles.length&&ev.cur!==S.cur){S.cur=ev.cur;ui.layer=0;render();toast('Profil: '+P().name);}
+      if(ev.ev==='mode'){if(PM.link.info)PM.link.info.mapping=ev.mapping;toast(ev.mapping?'Eşleme açık':'Eşleme kapalı · normal gamepad');renderCard();if(document.getElementById('sheet').classList.contains('open'))renderSheet();}
+      if(ev.ev==='hello'){renderCard();setTimeout(cardProfilesCheck,300);if(!updating&&PM.link.via!=='ble'&&cardNeedsUpdate()&&!window._updAsked){window._updAsked=true;setTimeout(()=>ask('Kart için yeni yazılım var ('+ev.fw+' → '+bundledFw()+'). Şimdi kurulsun mu?',null).then(ok=>{if(ok)updCard(true);}),1500);}PM.sendLine('ctrls').catch(()=>{});setTimeout(()=>PM.sendLine('targets').catch(()=>{}),150);setTimeout(()=>PM.sendLine('hid list').catch(()=>{}),300);if(document.getElementById('sheet').classList.contains('open'))renderSheet();}
+      if(ev.ev==='state')applyState(ev);
+      if(ev.ev==='pad')livePad(ev);
+      if(ev.ev==='name'){cardName=ev.name;const el=document.getElementById('btname');if(el&&document.activeElement!==el)el.value=ev.name;}
+      if(ev.ev==='pairwin')toast('Kart 60 sn tanıtmaya açık: yeni cihazdan şimdi Bluetooth ile bağlan');
+      if(ev.ev==='hids'){cardHid=ev;if(sheetOpen())renderSheet();}
+      if(ev.ev==='hid'){if(ev.ready)toast((ev.kb?'⌨ Klavye':'')+(ev.kb&&ev.ms?' + ':'')+(ev.ms?'🖱 Fare':'')+' hazır');if(ev.connected===0||ev.ready||ev.fail!=null)PM.sendLine('hid list').catch(()=>{});}
+      if(ev.ev==='secret'&&ev.new)toast('Bu telefon karta tanıtıldı: artık Bluetooth ile de bağlanabilirsin');
+      if(ev.ev==='targets'){cardBT=ev;renderCard();if(document.getElementById('sheet').classList.contains('open'))renderSheet();}
+      if(ev.ev==='ble'){if(ev.paired)toast('Yeni cihaz eşleşti');if(ev.host&&ev.host!=='connecting')toast('Bluetooth hedefe bağlandı: '+tName(ev.host));PM.sendLine('targets').catch(()=>{});}
+      if(ev.ev==='ctrls'){cardCtl=ev;if(ev.cur&&ev.name)rememberName(ev.cur,ev.name);if(document.getElementById('sheet').classList.contains('open'))renderSheet();}
+      if(ev.ev==='connected'){rememberName(ev.addr,ev.name);PM.sendLine('ctrls').catch(()=>{});}
+      if(ev.ev==='disconnected'||ev.ev==='lm')PM.sendLine('ctrls').catch(()=>{});
+      if(['dev','scan_end','connected'].includes(ev.ev))scanEv(ev);
+      if(['ctrl','map','map_end','rep'].includes(ev.ev))learnEv(ev);
+    };
+    PM.link.onClose=()=>{const ble=lastVia==='ble';cardState=null;cardHid=null;connMsg='';renderCard();if(sheetOpen())renderSheet();
+      /* Bluetooth koptuysa sessizce birkaç kez yeniden bağlan (seçim penceresi açmadan) */
+      if(ble&&!updating){
+        toast('Bluetooth bağlantısı koptu, yeniden bağlanıyor…');
+        const dev=PM.link.wbDev;let n=0;
+        const again=()=>{if(PM.connected()||connMsg||updating)return;if(++n>4){toast('Bluetooth bağlanamadı. Bağlan\'a bas.');return;}
+          cardBtn(PM.native?{ble:true,auto:true}:{wble:true,dev,auto:true}).finally(()=>{if(!PM.connected())setTimeout(again,n*2500);});};
+        setTimeout(again,1500);
+      }else toast('Kart bağlantısı koptu');};
+    let ok;
+    try{ok=await PM.connect(known);}finally{connMsg='';}
+    lastVia=PM.link.via;
+    if(!ok){if(PM.connected())toast(PM.OLD);renderCard();return;}
+    if(PM.link.via==='ble')localStorage.setItem('pm_ble','1');
+    if(PM.native){try{PMNative.notifPerm&&PMNative.notifPerm();}catch(e){}
+      const pc=PMNative.takeCmd?PMNative.takeCmd():'';if(pc)setTimeout(()=>window.PM_native.action(pc),800);}
+    toast((PM.link.via==='ble'?'Bluetooth ile karta bağlandı':'Karta bağlandı')+' · kart yazılımı '+PM.link.info.fw);
+    if(sheetOpen())renderSheet();
+    setTimeout(()=>{renderCard();if(PM.link.info&&!cardSynced())toast('Karttaki ayar farklı. "Karta yaz"a bas');},600);
+  }catch(e){if(e&&e.name!=='NotFoundError'&&(!known||!known.auto)&&e.message!=='Vazgeçildi')toast(e.message||'Bağlanılamadı');}
+  connMsg='';renderCard();if(sheetOpen())renderSheet();
+}
+let lastVia='';
+async function writeCard(){
+  if(updating)return;
+  if(!PM.connected()){toast('Önce karta bağlan');return;}
+  if(card.busy){card.again=true;return;}
+  card.busy=true;renderCard();
+  try{const r=await PM.writeConfig(S);if(PM.link.info)PM.link.info.crc=r.crc.toString(16);
+    let j=false;try{j=await PM.writeJson(exportState());}catch(e){}
+    toast(j?'Karta yazıldı ✓':'Karta yazıldı ✓ (profillerin düzenlenebilir kopyası sığmadı)');}
+  catch(e){toast(e.message||'Yazılamadı');}
+  card.busy=false;renderCard();
+  if(document.getElementById('sheet').classList.contains('open'))renderSheet();
+  if(card.again){card.again=false;writeCard();}
+}
+let awT=null;
+function autoWrite(){if(!PM.connected()||updating)return;clearTimeout(awT);awT=setTimeout(()=>{if(!cardSynced())writeCard();},700);}
+
+/* ---------- Tema ---------- */
+const ACCENTS=[{k:'orange',n:'Turuncu',c:'#ff8a3d',t:'#1a1205'},{k:'teal',n:'Turkuaz',c:'#2ec4b6',t:'#04201d'},{k:'blue',n:'Mavi',c:'#4c8dff',t:'#ffffff'},
+  {k:'purple',n:'Mor',c:'#9b6bff',t:'#ffffff'},{k:'green',n:'Yeşil',c:'#3fbf5a',t:'#06200c'},{k:'pink',n:'Pembe',c:'#ff5fa2',t:'#2a0716'},{k:'red',n:'Kırmızı',c:'#ff4d4d',t:'#ffffff'},{k:'yellow',n:'Sarı',c:'#f5c400',t:'#241c00'}];
+const themeOf=()=>Object.assign({mode:'dark',acc:'orange'},S.theme||{});
+const darkMq=window.matchMedia?matchMedia('(prefers-color-scheme: dark)'):null;
+function applyTheme(){
+  const t=themeOf(),mode=t.mode==='auto'?(darkMq&&!darkMq.matches?'light':'dark'):t.mode,a=ACCENTS.find(x=>x.k===t.acc)||ACCENTS[0],r=document.documentElement;
+  if(mode==='dark')r.removeAttribute('data-theme');else r.setAttribute('data-theme',mode);
+  r.style.setProperty('--acc',a.c);r.style.setProperty('--acctx',a.t);
+  /* uygulamada üst/alt çubuk rengi */
+  if(PM.native&&PMNative.setBars){const cs=getComputedStyle(r);PMNative.setBars(cs.getPropertyValue('--panel').trim(),cs.getPropertyValue('--bg').trim(),mode==='light');}
+}
+function setTheme(x){S.theme=Object.assign(themeOf(),x);applyTheme();save();renderSheet();drawPad();render();}
+if(darkMq&&darkMq.addEventListener)darkMq.addEventListener('change',()=>{if(themeOf().mode==='auto')applyTheme();});
+applyTheme();
+
+/* ---------- Kartın anlık durumu: ekran hep bunu gösterir ---------- */
+let cardState=null,stT=null;
+/* canlı pad: kart basılı tuşları ve çubukları bildirir */
+const LIVE_BITS=['A','B','','X','Y','','LB','RB','LT','RT','SELECT','START','HOME','L3','R3','SHARE','UP','DOWN','LEFT','RIGHT'];
+let liveSeen=0;
+function livePad(ev){
+  liveSeen=Date.now();
+  const on=new Set();
+  if(ev.v){LIVE_BITS.forEach((id,i)=>{if(id&&(ev.b>>>i)&1)on.add(id);});if(ev.t[0]>60)on.add('LT');if(ev.t[1]>60)on.add('RT');}
+  for(const b of BTNS){
+    const g=document.getElementById('b-'+b.id);if(!g)continue;
+    g.classList.toggle('live',on.has(b.id));
+    if(b.stick){
+      const c=g.querySelector('circle:not(.s)');if(!c)continue;
+      const dx=ev.v?((b.id==='LS'?ev.s[0]:ev.s[2])-128)/128*b.r*.45:0,dy=ev.v?((b.id==='LS'?ev.s[1]:ev.s[3])-128)/128*b.r*.45:0;
+      c.setAttribute('cx',b.x+dx);c.setAttribute('cy',b.y+dy);
+    }
+  }
+}
+setInterval(()=>{try{if(PM.connected()&&!document.hidden){PM.sendLine('live 1').catch(()=>{});if(cardName===null){cardName='';PM.sendLine('name').catch(()=>{});}}if(!PM.connected())cardName=null;if(Date.now()-liveSeen>12000)livePad({v:0,b:0,s:[128,128,128,128],t:[0,0]});}catch(e){}},3000);
+function applyState(st){
+  const prev=cardState;cardState=st;
+  if(PM.link.info){PM.link.info.mapping=st.mapping;PM.link.info.prof=st.prof;}
+  if(cardBT){cardBT.route=st.route;}
+  if(st.prof<S.profiles.length&&st.prof!==S.cur&&cardSynced()){S.cur=st.prof;ui.layer=0;render();}
+  if(prev&&prev.path!==st.path){
+    if(st.path===0&&prev.path===2&&st.route===1)toast('Bluetooth hedefi bulunamadı, tuşlar kabloya döndü');
+    if(st.path===1)PM.sendLine('targets').catch(()=>{});
+  }
+  if(prev&&prev.pad!==st.pad)toast(st.pad?'Pad bağlandı':'Pad bağlantısı koptu');
+  renderCard();
+  clearTimeout(stT);stT=setTimeout(()=>{if(document.getElementById('sheet').classList.contains('open'))renderSheet();},150);
+}
+function stateText(){
+  const s=cardState;if(!s)return '';
+  const parts=[];
+  if(!s.pad)parts.push('pad yok');
+  if(s.path===1)parts.push('📶 '+(cardBT&&cardBT.host?tName(cardBT.host):'Bluetooth'));
+  else if(s.path===2)parts.push('📶 aranıyor');
+  else if(s.route===1)parts.push('🔌 kabloya döndü');
+  if(!s.mapping)parts.push('🎮 eşleme kapalı');
+  else if(s.layer>0)parts.push(LAYER_NAMES[s.layer]);
+  return parts.length?' · '+parts.join(' · '):'';
+}
+
+/* ---------- Güncelleme ---------- */
+const SITE='https://pmape.github.io';
+const APK_URL=SITE+'/padmapper-ayar.apk';
+const PAGE_URL=SITE;
+const FW_URL=SITE+'/padmapper.uf2';
+const vnum=v=>String(v||'0').split('.').map(x=>parseInt(x)||0).reduce((a,x)=>a*1000+x,0);
+/* tarayıcıda: en son sürüm internetten (uygulamada: uygulamanın içindeki) */
+let webLatest='';
+if(!PM.native){fetch(SITE+'/version.json',{cache:'no-store'}).then(r=>r.json()).then(j=>{webLatest=j.fw||'';renderCard();}).catch(()=>{});}
+const bundledFw=()=>PM.native&&PMNative.assetText?PMNative.assetText('fw_version.txt'):webLatest;
+function cardNeedsUpdate(){const i=PM.link.info,b=bundledFw();return !!(PM.connected()&&i&&i.fw&&b&&vnum(b)>vnum(i.fw));}
+function updHtml(){
+  const i=PM.link.info||{},b=bundledFw(),need=cardNeedsUpdate(),usb=PM.connected()&&PM.link.via==='usb';
+  const canWeb=!PM.native&&'serial' in navigator;
+  const app=PM.native?srow('Uygulama <span class="hint">'+esc(PMNative.version())+'</span>','<button class="btn" onclick="updApp()">Güncelle</button>','Yeni uygulama indirilir, açınca Android "Güncelle" der. Profillerin korunur.')
+    :srow('Telefon uygulaması','<button class="btn" onclick="openLink(APK_URL)">İndir</button>','Android için. Kart takılınca kendisi açılır.');
+  return app+srow('Kart yazılımı <span class="hint">'+(PM.connected()?'kartta '+esc(i.fw||'?'):'')+(b?' · yeni: '+esc(b):'')+'</span>',
+      `<button class="btn ${need?'pri':''}" ${usb&&(PM.native||canWeb)?'':'disabled'} onclick="updCard()">${need?'Güncelle':'Yeniden kur'}</button>`,
+      (!PM.connected()?'Önce kartı bu cihaza <b>USB kabloyla</b> bağla. ':PM.link.via==='ble'?'<b>Kart yazılımı kabloyla kurulur:</b> kartı bu cihaza USB ile tak ve USB ile bağlan. ':'')+
+      (!PM.native&&!canWeb?'Bu tarayıcı kabloyla yazamıyor; Chrome ya da Edge kullan. ':'')+
+      'Basınca her şeyi kendisi yapar: kart yükleme moduna geçer, yeni yazılım kabloyla yazılır, kart yeniden başlar. Dosya sürüklemek yok. Ayarların ve profillerin kartta kalır. Yarıda kesilirse kart bozulmaz, tekrar denersin.');
+}
+/* tam ekran güncelleme penceresi: bu sırada başka hiçbir şey çalışmaz */
+let updating=false;
+function updModal(steps,cur,p,msg,btns){
+  let d=document.getElementById('upd');
+  if(!d){d=document.createElement('div');d.id='upd';d.className='sheet open';d.style.zIndex=40;document.body.appendChild(d);}
+  d.innerHTML=`<div class="in" style="max-width:420px"><h2 style="margin:0 0 12px">Kart güncelleniyor</h2>
+    ${steps.map((s,k)=>`<div class="row" style="margin:6px 0;opacity:${k>cur?.45:1}"><span style="width:22px;text-align:center">${k<cur?'✓':k===cur?(btns?'⚠':'<span class="spin"></span>'):'○'}</span><span style="flex:1">${s}</span></div>`).join('')}
+    ${p!=null?`<div style="height:8px;background:var(--panel2);border-radius:4px;margin:12px 0 4px"><i style="display:block;height:8px;border-radius:4px;background:var(--acc);width:${p}%"></i></div><div class="hint">%${p}</div>`:''}
+    ${msg?`<p class="hint" style="margin:10px 0 0">${msg}</p>`:''}
+    ${btns?`<div class="sbtns">${btns}</div>`:'<p class="hint" style="margin:10px 0 0">Kartı çıkarma, sayfayı kapatma.</p>'}</div>`;
+}
+function updClose(){updating=false;const d=document.getElementById('upd');if(d)d.remove();}
+const UPD_STEPS=['Yeni yazılım hazırlanıyor','Kart yükleme moduna geçiyor','Yeni yazılım yazılıyor','Kart yeniden başlıyor','Bitti'];
+const UPD_FAIL='<br><br>Kart bozulmaz: kartı çıkarıp tak, eski yazılımla açılır; sonra tekrar dene.';
+let updBin=null;
+/* güncellendi mi: kart geri bağlanınca sürümüne bak */
+function updWaitBack(want){
+  updModal(UPD_STEPS,3,100);
+  const t0=Date.now();
+  const chk=setInterval(async()=>{
+    if(PM.connected()&&PM.link.info){clearInterval(chk);const ok=!want||vnum(PM.link.info.fw)>=vnum(want);
+      updModal(UPD_STEPS,ok?5:4,null,ok?'Kart yazılımı '+esc(PM.link.info.fw)+' kuruldu ✓':'Kart bağlandı ama sürümü '+esc(PM.link.info.fw)+'.',`<button class="btn pri" onclick="updClose()">Tamam</button>`);return;}
+    if(!PM.connected()){try{if(PM.native){if(PMNative.present())await PM.connect({native:true});}else{const k=await PM.findKnown();if(k)await PM.connect(k);}}catch(e){}}
+    if(Date.now()-t0>45000){clearInterval(chk);updModal(UPD_STEPS,4,null,'Yazılım yazıldı ama kart henüz geri bağlanmadı. Kartı çıkarıp tak, sonra Bağlan de.',`<button class="btn pri" onclick="updClose()">Tamam</button>`);}
+  },1500);
+}
+async function updCard(skip){
+  if(updating)return;
+  if(PM.link.via!=='usb'){await ask('Kart yazılımı kabloyla kurulur.\n\nKartı bu cihaza USB kabloyla tak ve USB ile bağlan, sonra tekrar Güncelle de.',null,true);return;}
+  if(!skip&&!await ask('Kart yazılımı '+(bundledFw()||'')+' kurulsun mu?\n\nHer şeyi kendisi yapar, yaklaşık 1 dakika sürer. Bu sırada kartı çıkarma. Ayarların kartta kalır.',null))return;
+  updating=true;closeSheet();
+  const want=bundledFw();
+  if(PM.native){
+    updModal(UPD_STEPS,1);
+    try{await PM.sendLine('dfu');}catch(e){}
+    await new Promise(r=>setTimeout(r,1200));
+    try{await PM.disconnect();}catch(e){}
+    window.PM_native.flash=ev=>{
+      if(ev.state==='wait')updModal(UPD_STEPS,1);
+      else if(ev.state==='perm')updModal(UPD_STEPS,1,null,'Android kartın yükleme moduna erişim izni soruyor: <b>Tamam</b> de.');
+      else if(ev.state==='write')updModal(UPD_STEPS,2,ev.p);
+      else if(ev.state==='noboot')updModal(UPD_STEPS,1,null,'Kart yükleme modunda görünmedi.'+UPD_FAIL,`<button class="btn pri" onclick="updClose()">Kapat</button>`);
+      else if(ev.state==='err')updModal(UPD_STEPS,2,null,'Yazılamadı: '+esc(ev.msg||'')+UPD_FAIL,`<button class="btn pri" onclick="updClose()">Kapat</button>`);
+      else if(ev.state==='done')updWaitBack(want);
+    };
+    PMNative.flashUf2();
+    return;
+  }
+  /* tarayıcı: yazılımı internetten al, kart yükleme moduna geçsin, kullanıcı XIAO'yu seçsin, sayfa yazsın */
+  updModal(UPD_STEPS,0);
+  updBin=null;
+  try{
+    const r=await fetch(FW_URL,{cache:'no-store'});if(!r.ok)throw new Error(r.status);
+    updBin=PM.DFU.uf2ToBin(new Uint8Array(await r.arrayBuffer()));
+  }catch(e){
+    updModal(UPD_STEPS,0,null,'Yeni yazılım internetten alınamadı. İnternet yoksa bilgisayarındaki <b>padmapper.uf2</b> dosyasını seç.',`<button class="btn pri" onclick="updPickFile()">Dosya seç</button><button class="btn" onclick="updClose()">Vazgeç</button>`);
+    return;
+  }
+  updToBoot();
+}
+function updPickFile(){
+  const inp=document.createElement('input');inp.type='file';inp.accept='.uf2';
+  inp.onchange=async()=>{try{updBin=PM.DFU.uf2ToBin(new Uint8Array(await inp.files[0].arrayBuffer()));updToBoot();}catch(e){updModal(UPD_STEPS,0,null,esc(e.message),`<button class="btn pri" onclick="updPickFile()">Başka dosya</button><button class="btn" onclick="updClose()">Vazgeç</button>`);}};
+  inp.click();
+}
+async function updToBoot(){
+  if(updBin.base!==0x27000){updModal(UPD_STEPS,0,null,'Bu dosya bu karta ait değil.',`<button class="btn" onclick="updClose()">Kapat</button>`);return;}
+  updModal(UPD_STEPS,1);
+  try{await PM.sendLine('dfu');}catch(e){}
+  await new Promise(r=>setTimeout(r,1200));
+  try{await PM.disconnect();}catch(e){}
+  await new Promise(r=>setTimeout(r,2500));
+  updModal(UPD_STEPS,1,null,'Kart yükleme modunda. Tarayıcı güvenlik için bir kez seçim istiyor: <b>Devam</b>a bas, listeden <b>XIAO</b> (ya da yeni çıkan seri cihazı) seç, <b>Bağlan</b> de.',`<button class="btn pri" onclick="updWebRun()">Devam</button><button class="btn" onclick="updClose()">Vazgeç</button>`);
+}
+async function updWebRun(){
+  let port;
+  try{port=await navigator.serial.requestPort();}catch(e){updToBootMsg('Seçim yapılmadı.');return;}
+  const fr=PM.DFU.framer();let reader,alive=true;
+  try{
+    await port.open({baudRate:115200});
+    try{await port.setSignals({dataTerminalReady:true,requestToSend:true});}catch(e){}
+    reader=port.readable.getReader();
+    (async()=>{try{while(alive){const {value,done}=await reader.read();if(done)break;if(value)fr.push(value);}}catch(e){}})();
+    const writer=port.writable.getWriter();
+    updModal(UPD_STEPS,2,0);
+    await PM.DFU.run(updBin.bin,{write:b=>writer.write(b),frame:ms=>fr.next(ms)},(st,p)=>{if(st==='write')updModal(UPD_STEPS,2,p);});
+    writer.releaseLock();
+  }catch(e){
+    alive=false;try{await reader.cancel();}catch(x){}try{await port.close();}catch(x){}
+    updModal(UPD_STEPS,2,null,'Yazılamadı: '+esc(e.message||String(e))+'. Listeden doğru cihazı seçtiğinden emin ol.'+UPD_FAIL,`<button class="btn pri" onclick="updWebRun()">Tekrar dene</button><button class="btn" onclick="updClose()">Kapat</button>`);
+    return;
+  }
+  alive=false;try{await reader.cancel();}catch(x){}try{await port.close();}catch(x){}
+  updWaitBack(webLatest&&updBin?webLatest:'');
+}
+function updToBootMsg(m){updModal(UPD_STEPS,1,null,m+' <b>Devam</b>a basıp listeden <b>XIAO</b>yu seç.'+UPD_FAIL,`<button class="btn pri" onclick="updWebRun()">Devam</button><button class="btn" onclick="updClose()">Vazgeç</button>`);}
+function updApp(){
+  updModal(['Tarayıcıda indiriliyor','İndirme bitince bildirime dokun ya da İndirilenler\'den aç','Android sorunca Güncelle de'],0,null,'İndirme tarayıcıda olur, ilerlemesini orada görürsün. Profillerin ve ayarların korunur. Yeni uygulama açılınca kart eskiyse kart güncellemesini önerir.',`<button class="btn pri" onclick="openLink(APK_URL)">Tarayıcıda indir</button><button class="btn" onclick="updClose()">Kapat</button>`);
+  document.querySelector('#upd h2').textContent='Uygulama güncellemesi';
+}
+
+/* ---------- Tuşlar nereye: kablo / Bluetooth hedefleri ---------- */
+let cardBT=null;
+const tName=a=>(S.device.tnames&&S.device.tnames[a])||('Bluetooth cihaz '+String(a).replace(/ \(.*\)$/,'').slice(-5));
+const NOCONN='<div class="card"><p style="margin:0 0 10px">Bunun için önce karta bağlanman gerekiyor.</p><button class="btn pri" style="width:100%" onclick="closeSheet();cardBtn()">Karta bağlan</button></div>';
+function routeHtml(){
+  if(!PM.connected())return NOCONN;
+  if(0)return '<p class="hint" style="margin:0">Karta bağlanınca burada seçilir. Seçim kartta saklanır; uygulama kapalıyken de geçerlidir.</p>';
+  if(!cardBT)return '<p class="hint" style="margin:0">Kart yazılımı Bluetooth çıkışı desteklemiyor. Kartı güncelle.</p>';
+  const bt=cardBT.route===1,st=cardState||{};
+  const rad=on=>`<span class="rad ${on?'on':''}"><i></i></span>`;
+  const stbox=(col,ico,t,s)=>`<div class="stbox">${ico}<div class="grow"><div style="font-size:12px;font-weight:600;color:${col}">${t}</div><div class="hint" style="font-size:11px">${s}</div></div></div>`;
+  let now='';
+  if(!bt){
+    if(st.path===0&&st.usb)now=stbox('var(--l2)',IC_USB,'Şu an: USB veri bağlantısı (OTG)','Kart bir bilgisayara ya da tablete takılı → tuşlar kablodan gidiyor');
+    else if(st.path===1)now=stbox('var(--mute)',IC_BT,'Sadece güç (veri yok) → Bluetooth: '+esc(cardBT.host?tName(cardBT.host):'hedef'),'Hata değil; kart kablodan güç alıyor, tuşlar Bluetooth\'tan gidiyor');
+    else now=stbox('var(--warn)',IC_BT,'Sadece güç → Bluetooth hedefi aranıyor…','Seçili cihazın Bluetooth\'u açık mı?');
+  }
+  let h=`<div class="card" style="padding:4px 14px 12px">
+    <button class="li2 lnk" onclick="setRoute(0)">${rad(!bt)}<span class="obox">${IC_BOLT}</span><span class="otx"><b>Otomatik</b><small>Veri kablosu varsa kablo, yoksa Bluetooth</small></span></button>
+    ${now}
+    <p class="lbl" style="margin:12px 0 0">Bluetooth cihazları</p>
+    ${(cardBT.list||[]).map(a=>{const sel=a===cardBT.target,on=a===cardBT.host;
+      return `<div class="li2"><button class="lnk row grow" style="gap:10px" onclick="pickTarget('${a}')">${rad(bt&&sel)}<span class="obox" style="color:${on?'var(--acc)':'var(--mute)'}">${IC_BT}</span><span class="otx"><b>${esc(tName(a))}</b><small>${on?'<span class="ok">bağlı</span>':sel?'seçili':'eşli'}</small></span></button><button class="btn ico sm" aria-label="Adını değiştir" onclick="renameTarget('${a}')">✎</button><button class="btn ico sm" aria-label="Unut" onclick="unpairTarget('${a}')">✕</button></div>`;}).join('')||'<p class="hint" style="margin:8px 0">Eşli Bluetooth cihazı yok.</p>'}
+    ${bt?'':`<button class="li2 lnk" onclick="setRoute(1)">${rad(false)}<span class="otx"><b>Her zaman Bluetooth</b><small>Kablo takılı olsa bile seçili Bluetooth cihazına</small></span></button>`}
+    ${bt?`<button class="li2 lnk" onclick="setRoute(1)">${rad(true)}<span class="otx"><b>Her zaman Bluetooth</b><small>Otomatiğe dönmek için yukarıdaki Otomatik'e dokun</small></span></button>`:''}
+  </div>
+  <button class="btn ${cardBT.pairing?'':'pri'}" style="width:100%;margin-top:10px" onclick="pairNew()" ${cardBT.pairing?'disabled':''}>${cardBT.pairing?'<span class="spin"></span> Kart görünür · 60 sn':'＋ Cihaz ekle (Bluetooth)'}</button>
+  <p class="hint" style="margin:8px 0 0">Cihaz ekle'ye dokununca kart 60 sn görünür olur. Yeni cihazın Bluetooth ayarlarında "PadMapper"ı seç; listeye eklenir ve çıkış ona geçer.</p>`;
+  return h;
+}
+async function setRoute(r){await PM.sendLine('route '+r);}
+async function pickTarget(a){if(a===cardBT.target)return;await PM.sendLine('target '+a);toast(tName(a)+' seçildi');}
+async function pairNew(){await PM.sendLine('pair');toast('Hedef cihazın Bluetooth ayarlarında PadMapper\'ı seç');}
+async function renameTarget(a){const n=await ask('Bu cihazın adı:',tName(a));if(n==null)return;S.device.tnames=S.device.tnames||{};S.device.tnames[a]=n||undefined;save();renderSheet();}
+async function unpairTarget(a){if(!await ask(`"${tName(a)}" unutulsun mu? Tekrar kullanmak için yeniden eşlemen gerekir.`,null))return;await PM.sendLine('unpair '+a);}
+
+/* ---------- Karttan profilleri alma ---------- */
+const isFresh=()=>S.profiles.length===1&&snap(S.profiles[0])===snap(migrate(demoProf()));
+let cardChecked=false;
+async function cardProfilesCheck(){
+  const i=PM.link.info;if(!i||cardChecked||card.busy||updating)return;cardChecked=true;
+  if(!(i.jlen||i.cfg)||cardSynced())return;
+  if(isFresh()){await takeFromCard(true);return;}
+  toast('Karttaki ayarlar buradakinden farklı. ⚙ → Kart bölümünden karttakileri alabilir ya da buradakileri yazabilirsin');
+}
+async function takeFromCard(auto){
+  try{
+    const r=await PM.readCard();if(!r){toast('Kartta kayıtlı ayar yok');return;}
+    if(!auto&&!await ask(`Kartta ${r.state.profiles.length} profil var. Buradaki profillerin yerine alınsın mı?`+(r.full?'':' (Bu kartta profil adları saklanmamış; Profil 1, 2… olarak gelir.)'),null))return;
+    loadBackupDirect(r.state);
+    if(PM.link.info&&PM.link.info.prof<S.profiles.length){S.cur=PM.link.info.prof;render();}
+    toast('Profiller karttan alındı'+(r.full?'':' (adları Profil 1, 2…)'));renderCard();
+    if(document.getElementById('sheet').classList.contains('open'))renderSheet();
+  }catch(e){toast('Karttan okunamadı: '+(e.message||e));}
+}
+
+/* ---------- Paylaş / yedek ---------- */
+const stamp=()=>new Date().toISOString().slice(0,10);
+function exportState(){const c=JSON.parse(JSON.stringify(S));c.profiles.forEach(p=>{if(p._applied){const a=JSON.parse(p._applied);a.name=p.name;Object.assign(p,a);}delete p._applied;});return c;}
+function downloadText(name,text,type){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([text],{type}));a.download=name;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},1000);}
+async function shareHtml(){
+  const st=JSON.stringify(exportState());
+  if(PM.native){if(!PMNative.shareHtml('padmapper-ayar.html',st))toast('Paylaşılamadı');return;}
+  try{
+    const r=await fetch(location.href);let src=await r.text();
+    src=src.replace(/<script>window\.PM_PRESET=[\s\S]*?<\/script>/,'');
+    const inj='<script>window.PM_PRESET='+st.replace(/<\//g,'<\\/')+';<\/script>';
+    src=src.includes('<head>')?src.replace('<head>','<head>'+inj):inj+src;
+    downloadText('padmapper-ayar.html',src,'text/html');
+  }catch(e){toast('Bu tarayıcıda dosya oluşturulamadı; uygulamadan paylaş');}
+}
+function backupProfiles(){
+  const t=JSON.stringify({padmapper:1,tarih:new Date().toISOString(),ayar:exportState()},null,1),n='padmapper-yedek-'+stamp()+'.json';
+  if(PM.native){if(!PMNative.shareText(n,t))toast('Paylaşılamadı');}else downloadText(n,t,'application/json');
+}
+function loadBackup(text){
+  let d;try{d=JSON.parse(text);}catch(e){toast('Dosya okunamadı');return;}
+  let st=d&&d.ayar?d.ayar:d;
+  if(Array.isArray(st))st={profiles:st};
+  else if(st&&st.layers)st={profiles:[st]};
+  if(st&&st.profiles)st.device=Object.assign({},JSON.parse(JSON.stringify(S.device)),st.device||{});
+  if(!st||!st.profiles||!st.profiles.length){toast('Bu dosyada PadMapper profili bulunamadı');return;}
+  st.profiles.forEach((p,i)=>{if(!p.name)p.name='Profil '+(i+1);});
+  ask(`Yedekte ${st.profiles.length} profil var (${st.profiles.map(p=>p.name).join(', ')}). Şimdiki profillerin yerine yüklensin mi?`,null).then(ok=>{
+    if(!ok)return;S=st;S.profiles.forEach(migrate);S.profiles.forEach(p=>p._applied=snap(p));S.cur=Math.min(S.cur||0,S.profiles.length-1);
+    if(!S.device.profMod){S.device.profMod='HOME';S.device.profPrev='LB';S.device.profNext='RB';}
+    ui.layer=0;save();render();if(document.getElementById('sheet').classList.contains('open'))renderSheet();toast('Yedek yüklendi'+(PM.connected()?', "Karta yaz" ile karta gönder':''));});
+}
+function importProfiles(){
+  if(PM.native){window.PM_native.picked=t=>{if(t)loadBackup(t);else toast('Dosya seçilmedi ya da okunamadı');};PMNative.pickFile();return;}
+  const i=document.createElement('input');i.type='file';i.accept='.json,application/json';i.onchange=()=>{const f=i.files[0];if(f)f.text().then(loadBackup);};i.click();
+}
+function shareUf2(){if(!PMNative.hasAsset('padmapper.uf2')){toast('Bu uygulama sürümünde kart yazılımı yok');return;}if(!PMNative.shareAsset('padmapper.uf2','padmapper.uf2'))toast('Paylaşılamadı');}
+function shareApk(){if(!PMNative.shareApk())toast('Paylaşılamadı');}
+function openLink(u){if(PM.native)PMNative.openUrl(u);else window.open(u,'_blank','noopener');}
+
+drawPad();render();
+if(presetPending)setTimeout(()=>ask(`Bu ayar ekranı ${presetPending.profiles.length} profille geldi (${presetPending.profiles.map(p=>p.name).join(', ')}). Bu bilgisayardaki profillerin yerine kullanılsın mı?`,null).then(ok=>{if(ok){loadBackupDirect(presetPending);}}),300);
+function loadBackupDirect(st){st=JSON.parse(JSON.stringify(st));st.device=Object.assign({},S.device,st.device||{});if(S.theme&&!st.theme)st.theme=S.theme;S=st;if(!S.device.profMod){S.device.profMod='HOME';S.device.profPrev='LB';S.device.profNext='RB';}S.profiles.forEach(migrate);S.profiles.forEach(p=>p._applied=snap(p));S.cur=Math.min(S.cur||0,S.profiles.length-1);ui.layer=0;save();render();toast('Profiller yüklendi');}
+/* sayfa açılınca ya da kart takılınca, daha önce izin verildiyse kendiliğinden bağlan */
+PM.findKnown().then(k=>{if(k)cardBtn(k);}).catch(()=>{});
+PM.onPlug(k=>setTimeout(()=>cardBtn(k),800));
+</script>
+</body>
+</html>

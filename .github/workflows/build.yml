@@ -2,6 +2,8 @@ name: Kart yazılımını derle
 
 on:
   push:
+    branches: [main]
+    paths-ignore: ['docs/**']
   workflow_dispatch:
 
 permissions:
@@ -115,9 +117,18 @@ jobs:
             out/padmapper-ayar.apk
             web/padmapper.html
             web/test.html
-      - name: Dosyaları 'dist' dalına da koy (git ile indirilebilsin)
+      - name: Siteye koy (docs/ -> pmape.github.io)
         run: |
-          mkdir -p /tmp/dist && cp out/padmapper.uf2 out/padmapper-bellek-yok.uf2 out/padmapper-ayar.apk web/padmapper.html /tmp/dist/
-          cd /tmp/dist && git init -q && git checkout -q -b dist && git add -A
-          git -c user.name=ci -c user.email=ci@localhost commit -q -m "derleme ${GITHUB_SHA::7}"
-          git push -q -f "https://x-access-token:${{ github.token }}@github.com/${GITHUB_REPOSITORY}.git" dist
+          git config user.name "pmape"
+          git config user.email "pmape@users.noreply.github.com"
+          git fetch -q origin main
+          git checkout -q -B main origin/main
+          mkdir -p docs
+          cp out/padmapper.uf2 out/padmapper-bellek-yok.uf2 out/padmapper-ayar.apk docs/
+          cp web/padmapper.html docs/index.html
+          touch docs/.nojekyll
+          FW=$(grep -o 'FW_VERSION "[^"]*"' firmware/src/cfg.h | cut -d'"' -f2)
+          APP=$(grep -o "versionName '[^']*'" android/app/build.gradle | cut -d"'" -f2)
+          echo "{\"fw\":\"$FW\",\"app\":\"$APP\"}" > docs/version.json
+          git add docs
+          git diff --cached --quiet || { git commit -q -m "Site: kart $FW, uygulama $APP [skip ci]"; git push -q origin main; }
