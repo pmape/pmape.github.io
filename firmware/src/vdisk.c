@@ -16,8 +16,8 @@ static const uint8_t html_raw[] = { 0,
 #include "html.inc"
 };
 
-#define PAGE_URL "https://imlegennd.github.io"
-#define APK_URL "https://imlegennd.github.io/padmapper-ayar.apk"
+#define PAGE_URL "https://pmape.github.io"
+#define APK_URL "https://pmape.github.io/padmapper-ayar.apk"
 
 static const char url_apk[] = "[InternetShortcut]\r\nURL=" APK_URL "\r\n";
 

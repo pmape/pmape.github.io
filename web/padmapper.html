@@ -1531,7 +1531,7 @@ function renderSheet(){
         <button onclick="shareApk()"><span>📱</span>Uygulama<small>Başka telefona kurmak için</small></button>`:''}</div>`)+
       sgroup('Yedek',`<div class="slist"><button onclick="backupProfiles()"><span>💾</span>Profilleri yedekle<small>Drive, WhatsApp, e-posta…</small></button>
         <button onclick="importProfiles()"><span>📂</span>Yedekten yükle</button></div>`)+
-      sgroup('',`<div class="slist"><button onclick="openLink(SITE)"><span>🔗</span>Ayar sayfası ve indirmeler<small>imlegennd.github.io${PM.native?' · uygulama '+esc(PMNative.version()):''}</small></button></div>`)+
+      sgroup('',`<div class="slist"><button onclick="openLink(SITE)"><span>🔗</span>Ayar sayfası ve indirmeler<small>pmape.github.io${PM.native?' · uygulama '+esc(PMNative.version()):''}</small></button></div>`)+
       sgroup('Tema',`<div class="seg">${[['dark','Koyu'],['amoled','Siyah'],['light','Açık'],['auto','Sistem']].map(([k,t])=>`<button class="${themeOf().mode===k?'on':''}" onclick="setTheme({mode:'${k}'})">${t}</button>`).join('')}</div>
       <div class="swatches">${ACCENTS.map(a=>`<button aria-label="${a.n}" title="${a.n}" onclick="setTheme({acc:'${a.k}'})" style="background:${a.c};border-color:${themeOf().acc===a.k?'var(--text)':'transparent'}"></button>`).join('')}</div>`)+
       sgroup('Klavye düzeni',srow('Tuş adları',`<div class="seg sm"><button class="${S.device.layout!=='us'?'on':''}" onclick="S.device.layout='tr';render();renderSheet()">Türkçe Q</button><button class="${S.device.layout==='us'?'on':''}" onclick="S.device.layout='us';render();renderSheet()">US</button></div>`,'Hedef cihazın klavye ayarıyla aynı olmalı.'))+
@@ -1547,7 +1547,7 @@ function renderSheet(){
         <div class="row" style="margin-top:10px"><p class="lbl grow" style="margin:0">Güncellemeler</p></div>
         <div class="li2">${IC.key.replace('<svg','<svg style="color:var(--acc)"')}<span class="grow"><b>Kart yazılımı</b><small class="hint" style="display:block">${c?'kartta '+esc(i.fw||'?'):'kart bağlı değil'}${b?' · yeni: '+esc(b):''}${need?' · <span style="color:var(--acc)">güncelle</span>':''}</small></span>${PM.native||'serial' in navigator?`<button class="pchip ${need?'on':''}" ${c&&PM.link.via==='usb'?'':'disabled'} onclick="updCard()">${need?'Güncelle':'Yeniden kur'}</button>`:''}</div>
         <div class="li2">${IC.pad.replace('<svg','<svg style="color:var(--acc)"')}<span class="grow"><b>Uygulama</b><small class="hint" style="display:block">${PM.native?esc(PMNative.version()):'Android telefon için'}</small></span>${PM.native?'<button class="pchip" onclick="closeSheet();updApp()">Güncelle</button>':'<button class="pchip" onclick="openLink(APK_URL)">İndir</button>'}</div>
-        <div class="li2">${IC_DRIVE}<span class="grow"><b>Ayar sayfası</b><small class="hint" style="display:block">imlegennd.github.io · her bilgisayarda Chrome / Edge</small></span><button class="pchip" onclick="shareLink()">Paylaş</button></div>
+        <div class="li2">${IC_DRIVE}<span class="grow"><b>Ayar sayfası</b><small class="hint" style="display:block">pmape.github.io · her bilgisayarda Chrome / Edge</small></span><button class="pchip" onclick="shareLink()">Paylaş</button></div>
         ${c&&PM.link.via!=='usb'?'<p class="hint" style="margin:8px 0 0">Kart yazılımı kabloyla kurulur: kartı bu cihaza USB ile tak.</p>':''}
       </div>
       <div class="card" style="margin-top:10px">
@@ -2043,7 +2043,7 @@ function stateText(){
 }
 
 /* ---------- Güncelleme ---------- */
-const SITE='https://imlegennd.github.io';
+const SITE='https://pmape.github.io';
 const APK_URL=SITE+'/padmapper-ayar.apk';
 const PAGE_URL=SITE;
 const FW_URL=SITE+'/padmapper.uf2';

@@ -73,7 +73,7 @@ extern bool pad_addr_known(const bt_addr_le_t *a);
 /* ---------- saklama ---------- */
 
 /* Bluetooth'ta görünen ad: ayar sayfasının adresini taşır, ayarlardan değiştirilebilir */
-#define NAME_DEF "PM imlegennd.github.io"
+#define NAME_DEF "pmape.github.io"
 static char devname[30] = NAME_DEF;
 
 static int h_set(const char *key, size_t len, settings_read_cb rd, void *arg)
