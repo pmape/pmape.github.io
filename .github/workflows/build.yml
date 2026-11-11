@@ -29,15 +29,24 @@ jobs:
           export ZEPHYR_BASE=/workdir/zephyr
           mkdir -p /workdir/project
           cp -r "$GITHUB_WORKSPACE/firmware/." /workdir/project/
+          mkdir -p /workdir/project/assets
+          cp "$GITHUB_WORKSPACE/web/padmapper.html" /workdir/project/assets/padmapper.html
           cd /workdir/project
-          west build -b xiao_ble --pristine -d build . || { echo '--- hogp.h ---'; grep -nE 'typedef|bt_hogp_init_params|_cb;|^(int|void|bool|uint|size|enum|struct) bt_hogp' /workdir/nrf/include/bluetooth/services/hogp.h | head -80; exit 1; }
           mkdir -p "$GITHUB_WORKSPACE/out"
+          # 1) USB bellekli (ayar sayfası + indirme bağlantıları)
+          west build -b xiao_ble --pristine -d build . -- -DEXTRA_CONF_FILE=msc.conf
           cp build/zephyr/zephyr.uf2 "$GITHUB_WORKSPACE/out/padmapper.uf2"
+          # 2) belleksiz (bellek bir cihazda sorun çıkarırsa)
+          west build -b xiao_ble --pristine -d build2 .
+          cp build2/zephyr/zephyr.uf2 "$GITHUB_WORKSPACE/out/padmapper-bellek-yok.uf2"
+          ls -l "$GITHUB_WORKSPACE/out"
 
       - uses: actions/upload-artifact@v4
         with:
           name: padmapper-uf2
-          path: out/padmapper.uf2
+          path: |
+            out/padmapper.uf2
+            out/padmapper-bellek-yok.uf2
 
   android:
     needs: build
@@ -62,6 +71,7 @@ jobs:
         run: |
           if [ -n "$PM_KEYSTORE" ]; then echo "$PM_KEYSTORE" | base64 -d > android/padmapper.keystore; fi
           mkdir -p android/app/src/main/assets
+          rm -f android/app/src/main/assets/padmapper-bellek-yok.uf2
           cp web/padmapper.html android/app/src/main/assets/padmapper.html
           grep -o 'FW_VERSION "[^"]*"' firmware/src/cfg.h | cut -d'"' -f2 > android/app/src/main/assets/fw_version.txt
           cat android/app/src/main/assets/fw_version.txt
@@ -94,12 +104,14 @@ jobs:
           prerelease: true
           make_latest: false
           body: |
-            En son derlenen kart yazılımı. **padmapper.uf2** dosyasını indir ve XIAO'ya yükle.
+            En son derlenen kart yazılımı. **padmapper.uf2** dosyasını indir ve XIAO'ya yükle (USB bellekli).
+            Bellek bir cihazda sorun çıkarırsa **padmapper-bellek-yok.uf2**.
             Tablet: **padmapper-ayar.apk** kur; kart takılınca ayar ekranı açılır.
             Ayar ekranı (bilgisayar): **padmapper.html** dosyasını Chrome'da aç, "Kart"a bas.
             Test sayfası: **test.html**.
           files: |
             out/padmapper.uf2
+            out/padmapper-bellek-yok.uf2
             out/padmapper-ayar.apk
             web/padmapper.html
             web/test.html

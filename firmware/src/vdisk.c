@@ -1,9 +1,9 @@
 /*
  * Kartın USB belleği ("PADMAPPER"), salt okunur.
  * İçindeki dosyalar kart yazılımına gömülü gelir; hafızaya yazılmaz:
- *   PADMAPPR.APK  tablet uygulaması
- *   AYAR.HTM      bilgisayar için ayar ekranı (Chrome)
- *   KART.UF2      karttaki yazılımın kendisi (çalışan yazılımdan anında üretilir)
+ *   AYAR.HTM      ayar ekranı (Chrome / Edge; USB ya da Bluetooth ile bağlanır)
+ *   SAYFA.URL     ayar ekranının internetteki adresi (telefonda bunu aç)
+ *   UYGULAMA.URL  Android uygulamasını indir
  *   BENIOKU.TXT   kısa not
  * Disk anında üretilir (FAT12, 4 MB görünür, 2 KB küme).
  */
@@ -13,29 +13,34 @@
 #include <zephyr/storage/disk_access.h>
 #include "cfg.h"
 
-static const uint8_t apk_raw[] = { 0,
-#include "apk.inc"
-};
 static const uint8_t html_raw[] = { 0,
 #include "html.inc"
 };
 
+#define PAGE_URL "https://imlegennd.github.io/padmapper-indir/"
+#define APK_URL "https://github.com/ImLegennD/padmapper-indir/releases/latest/download/padmapper-ayar.apk"
+
+static const char url_page[] = "[InternetShortcut]\r\nURL=" PAGE_URL "\r\n";
+static const char url_apk[] = "[InternetShortcut]\r\nURL=" APK_URL "\r\n";
+
 static const char readme[] =
 	"PadMapper " FW_VERSION "\r\n"
 	"\r\n"
-	"PADMAPPR.APK : Tablet uygulamasi. Dosyaya dokun ve kur\r\n"
-	"               (bilinmeyen kaynaktan yukleme izni ister).\r\n"
-	"               Kart takilinca ayar ekrani kendiliginden acilir.\r\n"
-	"AYAR.HTM     : Bilgisayarda Chrome ile ac, \"Kart\" dugmesine bas.\r\n"
-	"KART.UF2     : Kartin yazilimi. Yeniden yuklemek icin karttaki\r\n"
-	"               RST dugmesine iki kez hizlica bas, acilan surucuye\r\n"
-	"               bu dosyayi kopyala.\r\n"
+	"BILGISAYAR : AYAR.HTM dosyasini cift tikla (Chrome ya da Edge).\r\n"
+	"             \"Baglan\" de, USB'yi sec, listeden PadMapper'i sec.\r\n"
+	"             Bir kez izin verince sonraki seferlerde kendisi baglanir.\r\n"
+	"\r\n"
+	"TELEFON    : Ayar sayfasi (Chrome ile ac):\r\n"
+	"             " PAGE_URL "\r\n"
+	"             Android uygulamasi:\r\n"
+	"             " APK_URL "\r\n"
+	"             Uygulama kuruluysa kart takilinca kendisi acilir.\r\n"
+	"\r\n"
+	"BLUETOOTH  : Kart USB'den ayarlanmiyorsa Bluetooth'ta ayar icin gorunur.\r\n"
+	"             Yeni bir cihazi tanitmak icin pad'de Select + Start'a\r\n"
+	"             3 sn bas: kart 60 sn tanitmaya acilir.\r\n"
 	"\r\n"
 	"Bu bellek salt okunurdur; dosyalar kart yazilimiyla birlikte gelir.\r\n";
-
-/* çalışan yazılımın flaştaki yeri (bağlayıcı sembolleri) */
-extern char __rom_region_start[];
-extern char _flash_used[];
 
 #define SEC 512
 #define SPC 4                 /* küme başına kesim */
@@ -48,13 +53,12 @@ extern char _flash_used[];
 #define DATA (ROOT + (ROOTENT * 32) / SEC)
 #define CLUSTERS ((TOTAL - DATA) / SPC)
 
-enum { F_APK, F_HTML, F_UF2, F_TXT, NF };
-static const char *names[NF] = { "PADMAPPRAPK", "AYAR    HTM", "KART    UF2", "BENIOKU TXT" };
+enum { F_HTML, F_PAGE, F_APK, F_TXT, NF };
+static const char *names[NF] = { "AYAR    HTM", "SAYFA   URL", "UYGULAMAURL", "BENIOKU TXT" };
+static const uint8_t *fdata[NF];
 static uint32_t fsize[NF], fstart[NF], fclus[NF];
 static uint8_t fat[FATSZ * SEC];
 static uint8_t root[(ROOTENT * 32)];
-static uintptr_t uf2_base;
-static uint32_t uf2_blocks;
 
 static void fat_set(uint32_t k, uint16_t v)
 {
@@ -75,12 +79,10 @@ static void put32(uint8_t *p, uint32_t v) { p[0] = v; p[1] = v >> 8; p[2] = v >>
 
 static void build(void)
 {
-	uf2_base = (uintptr_t)__rom_region_start;
-	uf2_blocks = ((uint32_t)(uintptr_t)_flash_used + 255) / 256;
-	fsize[F_APK] = sizeof(apk_raw) - 1;
-	fsize[F_HTML] = sizeof(html_raw) - 1;
-	fsize[F_UF2] = uf2_blocks * 512;
-	fsize[F_TXT] = sizeof(readme) - 1;
+	fdata[F_HTML] = html_raw + 1; fsize[F_HTML] = sizeof(html_raw) - 1;
+	fdata[F_PAGE] = (const uint8_t *)url_page; fsize[F_PAGE] = sizeof(url_page) - 1;
+	fdata[F_APK] = (const uint8_t *)url_apk; fsize[F_APK] = sizeof(url_apk) - 1;
+	fdata[F_TXT] = (const uint8_t *)readme; fsize[F_TXT] = sizeof(readme) - 1;
 
 	memset(fat, 0, sizeof(fat));
 	fat_set(0, 0xff8);
@@ -140,22 +142,6 @@ static void boot_sector(uint8_t *b)
 	b[511] = 0xaa;
 }
 
-static void uf2_block(uint8_t *b, uint32_t i)
-{
-	put32(b + 0, 0x0A324655);
-	put32(b + 4, 0x9E5D5157);
-	put32(b + 8, 0x00002000);          /* aile kimliği var */
-	put32(b + 12, (uint32_t)(uf2_base + i * 256));
-	put32(b + 16, 256);
-	put32(b + 20, i);
-	put32(b + 24, uf2_blocks);
-	put32(b + 28, 0xADA52840);         /* nRF52840 */
-	uint32_t len = MIN(256, (uint32_t)(uintptr_t)_flash_used - i * 256);
-
-	memcpy(b + 32, (const void *)(uf2_base + i * 256), len);
-	put32(b + 508, 0x0AB16F30);
-}
-
 static void data_sector(uint8_t *b, uint32_t s)
 {
 	uint32_t c = (s - DATA) / SPC + 2;
@@ -167,12 +153,7 @@ static void data_sector(uint8_t *b, uint32_t s)
 		if (off >= fsize[i]) return;
 		uint32_t n = MIN(SEC, fsize[i] - off);
 
-		switch (i) {
-		case F_APK: memcpy(b, apk_raw + 1 + off, n); break;
-		case F_HTML: memcpy(b, html_raw + 1 + off, n); break;
-		case F_TXT: memcpy(b, readme + off, n); break;
-		case F_UF2: uf2_block(b, off / 512); break;
-		}
+		memcpy(b, fdata[i] + off, n);
 		return;
 	}
 }

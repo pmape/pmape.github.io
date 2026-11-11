@@ -245,7 +245,7 @@ const PM = (() => {
     await port.open({ baudRate: 115200 });
     try { await port.setSignals({ dataTerminalReady: true }); } catch (e) {}
     writer = port.writable.getWriter();
-    link.kind = 'serial'; link.port = port;
+    link.kind = 'serial'; link.via = 'usb'; link.port = port;
     (async () => {
       const r = port.readable.getReader(); link.reader = r;
       try { for (;;) { const { value, done } = await r.read(); if (done) break; feed(dec.decode(value)); } }
@@ -273,7 +273,7 @@ const PM = (() => {
     try { await ctl(0x20, 0, new Uint8Array([0x00, 0xc2, 0x01, 0x00, 0, 0, 8])); } catch (e) {}
     try { await ctl(0x22, 1); } catch (e) {}
     usb = { dev, epIn, epOut };
-    link.kind = 'usb';
+    link.kind = 'usb'; link.via = 'usb';
     (async () => {
       try { for (;;) { const r = await dev.transferIn(epIn, 64); if (r.data && r.data.byteLength) feed(dec.decode(r.data)); } }
       catch (e) {} finally { if (!closing) link.onClose(); }
@@ -285,8 +285,8 @@ const PM = (() => {
   let permWait = null, plugCb = null, blePerm = null, bleWait = null;
   const BLE_ERR = {
     notfound: 'Kart Bluetooth\'ta bulunamadı. Kart açık mı (güç var mı)? Kart USB ile bir uygulamaya bağlıysa Bluetooth ayarı kapalıdır.',
-    key: 'Bu telefon karta tanıtılmamış. Kartı bir kez USB ile bu telefona tak, uygulama kendini tanıtır.',
-    nokey: 'Bu telefon karta tanıtılmamış. Kartı bir kez USB ile bu telefona tak.',
+    key: 'Bu cihaz karta tanıtılmamış. Pad\'de Select + Start\'a 3 sn bas (kart 60 sn tanıtmaya açılır), sonra tekrar Bağlan. Ya da kartı bir kez USB ile tak.',
+    nokey: 'Bu cihaz karta tanıtılmamış. Pad\'de Select + Start\'a 3 sn bas, sonra tekrar Bağlan.',
     nosvc: 'Karttaki yazılım eski: kablosuz ayar için kartı USB ile tak ve güncelle.',
     timeout: 'Karta Bluetooth ile bağlanılamadı (süre doldu). Tekrar dene.',
   };
@@ -343,6 +343,77 @@ const PM = (() => {
     throw new Error(r === 'none' ? 'Kart takılı değil' : 'Karta bağlanılamadı (' + r + ')');
   }
 
+
+  /* Tarayıcıda Bluetooth (Chrome/Edge): telefonla aynı güvenli ayar kanalı */
+  const CFG_SVC = '7a1e0001-3c4b-4a8e-9c1d-50ad2840f00d', CFG_RX = '7a1e0002-3c4b-4a8e-9c1d-50ad2840f00d', CFG_TX = '7a1e0003-3c4b-4a8e-9c1d-50ad2840f00d';
+  const webBleOk = () => !native && typeof navigator !== 'undefined' && 'bluetooth' in navigator && !!(window.crypto && crypto.subtle);
+  function webKey() {
+    let k = null;
+    try { k = localStorage.getItem('pm_key'); } catch (e) {}
+    if (!k || !/^[0-9a-f]{64}$/.test(k)) {
+      const b = new Uint8Array(32); crypto.getRandomValues(b);
+      k = [...b].map(x => x.toString(16).padStart(2, '0')).join('');
+      try { localStorage.setItem('pm_key', k); } catch (e) {}
+    }
+    return k;
+  }
+  async function hmacHex(keyHex, msg) {
+    const kb = new Uint8Array(keyHex.match(/../g).map(h => parseInt(h, 16)));
+    const ck = await crypto.subtle.importKey('raw', kb, { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+    const sig = new Uint8Array(await crypto.subtle.sign('HMAC', ck, enc.encode(msg)));
+    return [...sig].map(x => x.toString(16).padStart(2, '0')).join('');
+  }
+  let wb = null;
+  async function openWebBle() {
+    const dev = await navigator.bluetooth.requestDevice({ filters: [{ services: [CFG_SVC] }], optionalServices: [CFG_SVC] });
+    const server = await dev.gatt.connect();
+    const svc = await server.getPrimaryService(CFG_SVC);
+    const rx = await svc.getCharacteristic(CFG_RX), tx = await svc.getCharacteristic(CFG_TX);
+    const key = webKey();
+    wb = { dev, rx, q: Promise.resolve(), authed: false, acc: '' };
+    let done, fail;
+    const authP = new Promise((res, rej) => { done = res; fail = rej; });
+    let pairTried = false;
+    tx.addEventListener('characteristicvaluechanged', async e => {
+      const t = dec.decode(e.target.value);
+      if (wb.authed) { feed(t); return; }
+      wb.acc += t;
+      let i;
+      while ((i = wb.acc.indexOf('\n')) >= 0) {
+        const l = wb.acc.slice(0, i); wb.acc = wb.acc.slice(i + 1);
+        if (wb.authed) { feed(l + '\n'); continue; }
+        let ev; try { ev = JSON.parse(l); } catch (x) { continue; }
+        if (ev.ev !== 'auth') continue;
+        if (ev.paired !== undefined) { wbWrite('nonce\n'); continue; }
+        if (ev.n) {
+          if (ev.open && !pairTried) { pairTried = true; wbWrite('pair ' + key + '\n'); continue; }
+          wbWrite('auth ' + await hmacHex(key, ev.n) + '\n');
+        } else if (ev.ok === 1) { wb.authed = true; done(); }
+        else if (ev.ok === 0) fail(new Error(BLE_ERR.key));
+      }
+    });
+    await tx.startNotifications();
+    dev.addEventListener('gattserverdisconnected', () => {
+      const was = link.kind === 'wble'; fail(new Error(BLE_ERR.timeout));
+      if (was) { link.kind = null; link.via = ''; link.info = null; wb = null; if (!closing) link.onClose(); }
+    });
+    link.kind = 'wble'; link.via = 'ble';
+    await wbWrite('nonce\n');
+    await Promise.race([authP, new Promise((_, rej) => setTimeout(() => rej(new Error(BLE_ERR.timeout)), 15000))])
+      .catch(async e => { try { dev.gatt.disconnect(); } catch (x) {} link.kind = null; link.via = ''; throw e; });
+  }
+  function wbWrite(str) {
+    const w = wb; if (!w) return Promise.reject(new Error('Kart bağlı değil'));
+    const d = enc.encode(str);
+    w.q = w.q.then(async () => {
+      for (let i = 0; i < d.length; i += 120) {
+        const part = d.slice(i, i + 120);
+        if (w.rx.writeValueWithResponse) await w.rx.writeValueWithResponse(part); else await w.rx.writeValue(part);
+      }
+    });
+    return w.q;
+  }
+
   const isCard = d => d && (d.vendorId === 0x2fe3 || d.productName === 'PadMapper');
   const android = /Android/i.test(navigator.userAgent);
 
@@ -365,6 +436,7 @@ const PM = (() => {
     if (native) await openNative(known);
     else if (known && known.usb) await openUsb(known.usb);
     else if (known && known.serial) await openSerial(known.serial);
+    else if (known && known.wble) await openWebBle();
     else
     /* Android Chrome'daki seri bağlantı yalnızca Bluetooth'u görür; orada USB yolunu kullan */
     if (android && 'usb' in navigator) await openUsb();
@@ -375,9 +447,9 @@ const PM = (() => {
       await sendLine('hello');
       await new Promise(r => setTimeout(r, link.via === 'ble' ? 1200 : 700));
     }
-    /* USB'den bağlıyken bu telefonu karta tanıt: sonra kablosuz da bağlanabilsin */
-    if (link.info && link.via === 'usb' && PMNative.secret) {
-      try { await sendLine('secret add ' + PMNative.secret()); } catch (e) {}
+    /* USB'den bağlıyken bu cihazı karta tanıt: sonra kablosuz da bağlanabilsin */
+    if (link.info && link.via === 'usb') {
+      try { await sendLine('secret add ' + (native ? PMNative.secret() : webKey())); } catch (e) {}
     }
     return !!link.info;
   }
@@ -387,6 +459,7 @@ const PM = (() => {
     if (link.kind === 'native') { if (!PMNative.write(l + '\n')) throw new Error('Karta yazılamadı'); if (link.via === 'ble') await new Promise(r => setTimeout(r, 4)); }
     else if (link.kind === 'serial') await writer.write(d);
     else if (link.kind === 'usb') for (let i = 0; i < d.length; i += 64) await usb.dev.transferOut(usb.epOut, d.slice(i, i + 64));
+    else if (link.kind === 'wble') await wbWrite(l + '\n');
     else throw new Error('Kart bağlı değil');
   }
 
@@ -397,6 +470,7 @@ const PM = (() => {
       if (link.kind === 'native') PMNative.close();
       else if (link.kind === 'serial') { try { await link.reader.cancel(); } catch (e) {} writer.releaseLock(); await link.port.close(); }
       else if (link.kind === 'usb') await usb.dev.close();
+      else if (link.kind === 'wble' && wb) { const d = wb.dev; wb = null; d.gatt.disconnect(); }
     } catch (e) {}
     link.kind = null; link.via = ''; link.info = null;
   }
@@ -434,6 +508,6 @@ const PM = (() => {
   }
 
   return { HID, expandCount: (st, lay) => expand(st, lay).length, decompile, readCard, writeJson, findKnown, onPlug, compile, crc32, hex, link, connect, disconnect, sendLine, writeConfig,
-    connected: () => !!link.kind, OLD, bleOk, supported: () => native || 'serial' in navigator || 'usb' in navigator, native };
+    connected: () => !!link.kind, OLD, bleOk, webBleOk, supported: () => native || 'serial' in navigator || 'usb' in navigator, native };
 })();
 if (typeof module !== 'undefined') module.exports = PM;

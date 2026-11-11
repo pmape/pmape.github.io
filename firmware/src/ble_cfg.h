@@ -23,3 +23,5 @@ void ble_cfg_vout(const char *fmt, va_list ap);
 bool ble_cfg_line(char *buf, size_t n);
 /* USB'den: secret add <64 hex> | secret clear | secret count */
 bool ble_cfg_cmd(char *l);
+/* 60 sn tanıtma penceresi (yeni telefon kablosuz tanıtılabilir) */
+void ble_cfg_open_window(void);

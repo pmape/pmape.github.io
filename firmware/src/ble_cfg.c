@@ -33,6 +33,16 @@ static volatile bool authed;
 static char nonce[33];
 static int64_t last_usb;        /* USB'den en son dinlenen an */
 static bool want;
+static int64_t open_until;      /* tanıtma penceresi (yeni telefon anahtarını kablosuz bırakabilir) */
+
+/* kayıtlı telefon yoksa kapı hep açık; varsa sadece Select+Start 3 sn ile 60 sn açılır */
+static bool open_now(void) { return nkey == 0 || k_uptime_get() < open_until; }
+void ble_cfg_open_window(void)
+{
+	open_until = k_uptime_get() + 60000;
+	OUT("{\"ev\":\"pairwin\",\"s\":60}\n");
+	ble_out_adv_kick();
+}
 
 extern bool usb_listening(void);
 
@@ -131,6 +141,8 @@ K_MSGQ_DEFINE(lines, 520, 4, 4);
 static char lb[520];
 static size_t ln;
 
+static bool add_key(const char *hex);
+
 static void kill_fn(struct k_work *w)
 {
 	if (cc && !authed) bt_conn_disconnect(cc, BT_HCI_ERR_AUTH_FAIL);
@@ -153,11 +165,22 @@ static void on_line(struct bt_conn *conn, char *l)
 		authed = false;
 		bt_rand(r, sizeof(r));
 		for (int i = 0; i < 16; i++) sprintf(nonce + 2 * i, "%02x", r[i]);
-		snprintf(m, sizeof(m), "{\"ev\":\"auth\",\"n\":\"%s\",\"keys\":%u}\n", nonce, nkey);
+		snprintf(m, sizeof(m), "{\"ev\":\"auth\",\"n\":\"%s\",\"keys\":%u,\"open\":%d}\n", nonce, nkey, open_now());
 		reply(m);
 		return;
 	}
 	if (conn != cc) return;
+	if (!strncmp(l, "pair ", 5)) {
+		/* tanıtma penceresi açıkken telefon kendi anahtarını bırakır, sonra normal doğrulama yapar */
+		if (!open_now() || !add_key(l + 5)) {
+			reply("{\"ev\":\"auth\",\"paired\":0}\n");
+			return;
+		}
+		open_until = 0;
+		reply("{\"ev\":\"auth\",\"paired\":1}\n");
+		OUT("{\"ev\":\"secret\",\"ok\":1,\"n\":%u,\"new\":1}\n", nkey);
+		return;
+	}
 	if (!strncmp(l, "auth ", 5)) {
 		uint8_t mac[32];
 		char hx[65];
@@ -289,7 +312,8 @@ static void tick_fn(struct k_work *w)
 	int64_t now = k_uptime_get();
 
 	if (usb_listening()) last_usb = now;
-	bool w2 = nkey && !ble_cfg_authed() && now - last_usb >= 5000;
+	/* USB'de dinleyen uygulama yoksa kart ayar için Bluetooth'ta görünür */
+	bool w2 = !ble_cfg_authed() && now - last_usb >= 5000;
 
 	if (w2 != want) {
 		want = w2;
@@ -319,30 +343,35 @@ static int hv(char c)
 	return -1;
 }
 
+static bool add_key(const char *p)
+{
+	uint8_t k[32];
+
+	if (strlen(p) != 64) return false;
+	for (int i = 0; i < 32; i++) {
+		int h = hv(p[2 * i]), lo = hv(p[2 * i + 1]);
+
+		if (h < 0 || lo < 0) return false;
+		k[i] = h << 4 | lo;
+	}
+	for (int i = 0; i < nkey; i++) {
+		if (!memcmp(keys[i], k, 32)) { OUT("{\"ev\":\"secret\",\"ok\":1,\"n\":%u}\n", nkey); return true; }
+	}
+	if (nkey == NKEY) { /* en eskiyi at */
+		memmove(keys[0], keys[1], 32 * (NKEY - 1));
+		nkey--;
+	}
+	memcpy(keys[nkey++], k, 32);
+	keys_save();
+	OUT("{\"ev\":\"secret\",\"ok\":1,\"n\":%u,\"new\":1}\n", nkey);
+	return true;
+}
+
 bool ble_cfg_cmd(char *l)
 {
 	if (strncmp(l, "secret", 6)) return false;
 	if (!strncmp(l, "secret add ", 11)) {
-		uint8_t k[32];
-		const char *p = l + 11;
-
-		if (strlen(p) != 64) goto bad;
-		for (int i = 0; i < 32; i++) {
-			int h = hv(p[2 * i]), lo = hv(p[2 * i + 1]);
-
-			if (h < 0 || lo < 0) goto bad;
-			k[i] = h << 4 | lo;
-		}
-		for (int i = 0; i < nkey; i++) {
-			if (!memcmp(keys[i], k, 32)) { OUT("{\"ev\":\"secret\",\"ok\":1,\"n\":%u}\n", nkey); return true; }
-		}
-		if (nkey == NKEY) { /* en eskiyi at */
-			memmove(keys[0], keys[1], 32 * (NKEY - 1));
-			nkey--;
-		}
-		memcpy(keys[nkey++], k, 32);
-		keys_save();
-		OUT("{\"ev\":\"secret\",\"ok\":1,\"n\":%u,\"new\":1}\n", nkey);
+		if (!add_key(l + 11)) goto bad;
 		return true;
 	}
 	if (!strcmp(l, "secret clear")) {
@@ -350,6 +379,10 @@ bool ble_cfg_cmd(char *l)
 		keys_save();
 		if (cc) bt_conn_disconnect(cc, BT_HCI_ERR_REMOTE_USER_TERM_CONN);
 		OUT("{\"ev\":\"secret\",\"ok\":1,\"n\":0}\n");
+		return true;
+	}
+	if (!strcmp(l, "secret open")) {
+		ble_cfg_open_window();
 		return true;
 	}
 	if (!strcmp(l, "secret count")) {

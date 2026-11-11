@@ -54,7 +54,7 @@ class BleLink {
     private BluetoothLeScanner scanner;
     private BluetoothGatt gatt;
     private BluetoothGattCharacteristic rx;
-    private volatile boolean authed, active;
+    private volatile boolean authed, active, pairTried;
     private int chunk = 20;
     private final ArrayDeque<byte[]> q = new ArrayDeque<>();
     private boolean busy;
@@ -173,6 +173,7 @@ class BleLink {
         @Override public void onDescriptorWrite(BluetoothGatt g, BluetoothGattDescriptor d, int status) {
             g.requestConnectionPriority(BluetoothGatt.CONNECTION_PRIORITY_HIGH);
             stage = "auth";
+            pairTried = false;
             cb.state("auth", null);
             send("nonce\n");
         }
@@ -210,9 +211,20 @@ class BleLink {
             if (authed) { rest.append(l).append('\n'); continue; }
             if (!l.contains("\"ev\":\"auth\"")) continue;
             int i = l.indexOf("\"n\":\"");
-            if (i >= 0) {
+            if (l.contains("\"paired\":")) {
+                /* tanıtma bitti (ya da reddedildi): yeni sayı iste, normal doğrula */
+                send("nonce\n");
+            } else if (i >= 0) {
                 String n = l.substring(i + 5, l.indexOf('"', i + 5));
                 if (key == null) { h.post(() -> { close(false); cb.state("fail", "nokey"); }); return; }
+                /* kartın tanıtma penceresi açık: önce bu telefonun anahtarını bırak */
+                if (l.contains("\"open\":1") && !pairTried) {
+                    pairTried = true;
+                    StringBuilder hx = new StringBuilder();
+                    for (byte b : key) hx.append(String.format("%02x", b & 255));
+                    send("pair " + hx + "\n");
+                    continue;
+                }
                 send("auth " + hmac(n) + "\n");
             } else if (l.contains("\"ok\":1")) {
                 authed = true;
