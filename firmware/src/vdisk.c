@@ -159,11 +159,36 @@ static void data_sector(uint8_t *b, uint32_t s)
 }
 
 static int vd_init(struct disk_info *d) { return 0; }
-static int vd_status(struct disk_info *d) { return DISK_STATUS_WR_PROTECT; }
+/*
+ * Zephyr'in USB bellek sınıfı bilgisayara "yazmaya kapalı" diyemiyor; yazma reddedilince
+ * Windows cevap bekleyip takılıyordu (Dosya Gezgini yanıt vermiyor). Bu yüzden yazmalar
+ * kabul edilir ve RAM'de küçük bir alanda tutulur: Windows yazdığını geri okuyabilir,
+ * karta hiçbir şey kaydedilmez, kart çıkarılınca hepsi silinir.
+ */
+#define OVN 24
+static uint32_t ov_sec[OVN];
+static uint8_t ov_used;
+static uint8_t ov_buf[OVN][SEC];
+
+static int ov_find(uint32_t sector)
+{
+	for (int i = 0; i < ov_used; i++) {
+		if (ov_sec[i] == sector) return i;
+	}
+	return -1;
+}
+
+static int vd_status(struct disk_info *d) { return DISK_STATUS_OK; }
 
 static int vd_read(struct disk_info *d, uint8_t *buf, uint32_t sector, uint32_t count)
 {
 	for (uint32_t k = 0; k < count; k++, sector++, buf += SEC) {
+		int o = ov_find(sector);
+
+		if (o >= 0) {
+			memcpy(buf, ov_buf[o], SEC);
+			continue;
+		}
 		memset(buf, 0, SEC);
 		if (sector == 0) boot_sector(buf);
 		else if (sector < ROOT) {
@@ -178,7 +203,16 @@ static int vd_read(struct disk_info *d, uint8_t *buf, uint32_t sector, uint32_t 
 
 static int vd_write(struct disk_info *d, const uint8_t *buf, uint32_t sector, uint32_t count)
 {
-	return -EROFS;
+	for (uint32_t k = 0; k < count; k++, sector++, buf += SEC) {
+		int o = ov_find(sector);
+
+		if (o < 0 && ov_used < OVN) {
+			o = ov_used++;
+			ov_sec[o] = sector;
+		}
+		if (o >= 0) memcpy(ov_buf[o], buf, SEC);
+	}
+	return 0;
 }
 
 static int vd_ioctl(struct disk_info *d, uint8_t cmd, void *buf)
