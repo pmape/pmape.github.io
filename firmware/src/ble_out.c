@@ -16,6 +16,7 @@
  *   target <adr>   seçili hedef
  *   unpair <adr>   hedefi unut
  */
+#include <stdio.h>
 #include <string.h>
 #include <zephyr/kernel.h>
 #include <zephyr/bluetooth/bluetooth.h>
@@ -98,7 +99,6 @@ static const struct bt_data ad[] = {
 	BT_DATA_BYTES(BT_DATA_GAP_APPEARANCE, 0xc4, 0x03), /* gamepad */
 	BT_DATA_BYTES(BT_DATA_FLAGS, (BT_LE_AD_GENERAL | BT_LE_AD_NO_BREDR)),
 	BT_DATA_BYTES(BT_DATA_UUID16_ALL, BT_UUID_16_ENCODE(BT_UUID_HIDS_VAL)),
-	BT_DATA_BYTES(BT_DATA_UUID128_ALL, PM_CFG_UUID_BYTES),
 };
 static struct bt_data sd[] = {
 	BT_DATA(BT_DATA_NAME_COMPLETE, devname, 0),
@@ -108,52 +108,70 @@ static const struct bt_data cfg_ad[] = {
 	BT_DATA_BYTES(BT_DATA_FLAGS, (BT_LE_AD_GENERAL | BT_LE_AD_NO_BREDR)),
 	BT_DATA_BYTES(BT_DATA_UUID128_ALL, PM_CFG_UUID_BYTES),
 };
+/* ayar yayınının adı: "Ayar " + kartın adı (Bluetooth listesinde oyun bağlantısıyla karışmasın) */
+static char cfgname[30];
 static struct bt_data cfg_sd[] = {
-	BT_DATA(BT_DATA_NAME_COMPLETE, devname, 0),
+	BT_DATA(BT_DATA_NAME_COMPLETE, cfgname, 0),
 };
 
 static void name_apply(void)
 {
 	sd[0].data_len = strlen(devname);
-	cfg_sd[0].data_len = strlen(devname);
+	snprintf(cfgname, sizeof(cfgname), "Ayar %s", devname);
+	cfg_sd[0].data_len = strlen(cfgname);
 	bt_set_name(devname);
 }
-static uint8_t adv_id;
+/* İki ayrı yayın aynı anda: oyun bağlantısı (gamepad, varsayılan kimlik) ve ayar (ikinci kimlik, HID yok).
+ * Böylece bilgisayar/telefon ayar için bağlanınca kendini gamepad'e bağlanıyor sanıp eşleşmeye
+ * kalkmaz, kopma olmaz; oyun bağlantısı da ayar bağlantısından bağımsız görünür kalır. */
+static struct bt_le_ext_adv *set_host, *set_cfg;
+static bool on_host, on_cfg;
+
+static void adv_connected(struct bt_le_ext_adv *a, struct bt_le_ext_adv_connected_info *info)
+{
+	if (a == set_host) on_host = false;
+	if (a == set_cfg) on_cfg = false;
+	adv_on = on_host;
+}
+static const struct bt_le_ext_adv_cb adv_cb = { .connected = adv_connected };
+
+static void adv_sync(struct bt_le_ext_adv **set, bool *on, bool want, uint8_t id, uint32_t imin, uint32_t imax,
+		     const struct bt_data *a, size_t na, const struct bt_data *d, size_t nd)
+{
+	int err;
+
+	if (*on && !want) {
+		bt_le_ext_adv_stop(*set);
+		*on = false;
+	}
+	if (!want || *on) return;
+	if (!*set) {
+		struct bt_le_adv_param p = BT_LE_ADV_PARAM_INIT(BT_LE_ADV_OPT_CONNECTABLE, imin, imax, NULL);
+
+		p.id = id;
+		err = bt_le_ext_adv_create(&p, &adv_cb, set);
+		if (err) { OUT("{\"ev\":\"ble\",\"adv_err\":%d,\"id\":%u}\n", err, id); *set = NULL; return; }
+	}
+	err = bt_le_ext_adv_set_data(*set, a, na, d, nd);
+	if (!err) err = bt_le_ext_adv_start(*set, BT_LE_EXT_ADV_START_DEFAULT);
+	*on = (err == 0 || err == -EALREADY);
+	if (err && err != -EALREADY) OUT("{\"ev\":\"ble\",\"adv_err\":%d,\"id\":%u}\n", err, id);
+}
 
 static void adv_update(struct k_work *w)
 {
-	/* hedef cihaz için (bağlı hedef yoksa) ya da telefondan kablosuz ayar için */
+	/* oyun: bağlı hedef yoksa (eşleme modu, Bluetooth çıkışı ya da USB'de veri yok) */
 	bool for_host = !host && (pairing || route == 1 || !usb_present);
+	/* ayar: USB'de dinleyen uygulama yoksa */
 	bool for_cfg = ble_cfg_want_adv();
-	bool want = for_host || for_cfg;
-	uint8_t id = for_host ? BT_ID_DEFAULT : PM_CFG_ID;
 
-	if (adv_on && (!want || id != adv_id)) {
-		bt_le_adv_stop();
-		adv_on = false;
-	}
-	if (want && !adv_on) {
-		struct bt_le_adv_param p;
-		int err;
-
-		if (for_host) {
-			/* hızlı yayın (20–30 ms): hedef cihaz kartı hemen görsün, çabuk geri bağlansın.
-			 * Tarama yanıtında ayar servisi de var: telefon bu yayından da bağlanabilir. */
-			p = (struct bt_le_adv_param)BT_LE_ADV_PARAM_INIT(BT_LE_ADV_OPT_CONNECTABLE,
-				BT_GAP_ADV_FAST_INT_MIN_1 * 2 / 3, BT_GAP_ADV_FAST_INT_MIN_1, NULL);
-			p.id = BT_ID_DEFAULT;
-			err = bt_le_adv_start(&p, ad, ARRAY_SIZE(ad), sd, ARRAY_SIZE(sd));
-		} else {
-			/* ayar için yavaş yayın (100–150 ms): pad bağlantısının süresinden çalmasın */
-			p = (struct bt_le_adv_param)BT_LE_ADV_PARAM_INIT(BT_LE_ADV_OPT_CONNECTABLE,
-				BT_GAP_ADV_FAST_INT_MIN_2, BT_GAP_ADV_FAST_INT_MAX_2, NULL);
-			p.id = PM_CFG_ID;
-			err = bt_le_adv_start(&p, cfg_ad, ARRAY_SIZE(cfg_ad), cfg_sd, ARRAY_SIZE(cfg_sd));
-		}
-		adv_on = (err == 0 || err == -EALREADY);
-		adv_id = id;
-		if (err && err != -EALREADY) OUT("{\"ev\":\"ble\",\"adv_err\":%d}\n", err);
-	}
+	/* oyun yayını hızlı (20–30 ms): hedef kartı hemen görsün, çabuk geri bağlansın */
+	adv_sync(&set_host, &on_host, for_host, BT_ID_DEFAULT, BT_GAP_ADV_FAST_INT_MIN_1 * 2 / 3, BT_GAP_ADV_FAST_INT_MIN_1,
+		 ad, ARRAY_SIZE(ad), sd, ARRAY_SIZE(sd));
+	/* ayar yayını yavaş (100–150 ms): pad bağlantısının süresinden çalmasın */
+	adv_sync(&set_cfg, &on_cfg, for_cfg, PM_CFG_ID, BT_GAP_ADV_FAST_INT_MIN_2, BT_GAP_ADV_FAST_INT_MAX_2,
+		 cfg_ad, ARRAY_SIZE(cfg_ad), cfg_sd, ARRAY_SIZE(cfg_sd));
+	adv_on = on_host;
 }
 static K_WORK_DEFINE(adv_work, adv_update);
 static void adv_kick(void) { k_work_submit(&adv_work); }
@@ -262,7 +280,6 @@ static void vet_fn(struct k_work *w)
 static void connected(struct bt_conn *conn, uint8_t err)
 {
 	if (!is_host_role(conn)) return;
-	adv_on = false; /* bağlanınca yayın kendiliğinden durur; gerekiyorsa yeniden başlar */
 	if (err) { adv_kick(); return; }
 	bt_hids_connected(&hids_obj, conn);
 	/* eşleşmiş bir hedef: şifrelemeyi kart hemen başlatsın (hızlı geri bağlanma) */
@@ -301,9 +318,8 @@ static void security_changed(struct bt_conn *conn, bt_security_t level, enum bt_
 	if (host && host != conn) return; /* zaten bir hedef var */
 	const bt_addr_le_t *a = bt_conn_get_dst(conn);
 
-	/* seçili hedef varsa ve bu o değilse (ve eşleme modunda değilsek) hedef yapma */
-	if (target_set && !pairing && bt_addr_le_cmp(a, &target)) return;
-	if (pairing || !target_set) {
+	/* şu an bağlı hedef yok: şifreli bağlanan (eşleşmiş) cihaz hedef olur; en son bağlanan hatırlanır */
+	if (!target_set || bt_addr_le_cmp(a, &target)) {
 		target = *a;
 		target_set = true;
 		settings_save_one("pmb/target", &target, sizeof(target));
@@ -333,7 +349,9 @@ BT_CONN_CB_DEFINE(ble_out_cb) = {
 static enum bt_security_err pairing_accept(struct bt_conn *conn, const struct bt_conn_pairing_feat *const feat)
 {
 	if (!is_host_role(conn)) return BT_SECURITY_ERR_SUCCESS;
-	if (pairing && conn_id(conn) == BT_ID_DEFAULT && !ble_cfg_is(conn)) return BT_SECURITY_ERR_SUCCESS;
+	/* oyun bağlantısı: eşleme modunda ya da kart şu an hiçbir cihaza bağlı değilken yeni cihaz eşleşebilir
+	 * (kartı güce tak, bilgisayarda Bluetooth'tan ekle: başka bir şeye basmak gerekmez) */
+	if (conn_id(conn) == BT_ID_DEFAULT && !ble_cfg_is(conn) && (pairing || !host)) return BT_SECURITY_ERR_SUCCESS;
 	return BT_SECURITY_ERR_PAIR_NOT_ALLOWED;
 }
 
@@ -464,7 +482,9 @@ bool ble_cmd(char *l)
 		strcpy(devname, k ? b : NAME_DEF);
 		settings_save_one("pmb/name", devname, strlen(devname));
 		name_apply();
-		if (adv_on) { bt_le_adv_stop(); adv_on = false; }
+		/* yayınların içeriği değişti: durdurup yeniden başlat */
+		if (on_host) { bt_le_ext_adv_stop(set_host); on_host = false; }
+		if (on_cfg) { bt_le_ext_adv_stop(set_cfg); on_cfg = false; }
 		adv_kick();
 		OUT("{\"ev\":\"name\",\"name\":\"%s\",\"def\":\"" NAME_DEF "\"}\n", devname);
 		return true;

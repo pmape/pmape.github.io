@@ -364,8 +364,10 @@ const PM = (() => {
     return [...sig].map(x => x.toString(16).padStart(2, '0')).join('');
   }
   let wb = null;
-  async function openWebBle() {
-    const dev = await navigator.bluetooth.requestDevice({ filters: [{ services: [CFG_SVC] }], optionalServices: [CFG_SVC] });
+  async function openWebBle(prev) {
+    /* aynı kart kopunca seçim penceresi açmadan yeniden bağlan */
+    const dev = prev || await navigator.bluetooth.requestDevice({ filters: [{ services: [CFG_SVC] }], optionalServices: [CFG_SVC] });
+    link.wbDev = dev;
     const server = await dev.gatt.connect();
     const svc = await server.getPrimaryService(CFG_SVC);
     const rx = await svc.getCharacteristic(CFG_RX), tx = await svc.getCharacteristic(CFG_TX);
@@ -393,10 +395,12 @@ const PM = (() => {
       }
     });
     await tx.startNotifications();
-    dev.addEventListener('gattserverdisconnected', () => {
+    if (dev._pmHooked) dev.removeEventListener('gattserverdisconnected', dev._pmHooked);
+    dev._pmHooked = () => {
       const was = link.kind === 'wble'; fail(new Error(BLE_ERR.timeout));
       if (was) { link.kind = null; link.via = ''; link.info = null; wb = null; if (!closing) link.onClose(); }
-    });
+    };
+    dev.addEventListener('gattserverdisconnected', dev._pmHooked);
     link.kind = 'wble'; link.via = 'ble';
     await wbWrite('nonce\n');
     await Promise.race([authP, new Promise((_, rej) => setTimeout(() => rej(new Error(BLE_ERR.timeout)), 15000))])
@@ -539,7 +543,7 @@ const PM = (() => {
     if (native) await openNative(known);
     else if (known && known.usb) await openUsb(known.usb);
     else if (known && known.serial) await openSerial(known.serial);
-    else if (known && known.wble) await openWebBle();
+    else if (known && known.wble) await openWebBle(known.dev);
     else
     /* Android Chrome'daki seri bağlantı yalnızca Bluetooth'u görür; orada USB yolunu kullan */
     if (android && 'usb' in navigator) await openUsb();

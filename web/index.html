@@ -92,6 +92,13 @@ svg:not([width]){width:100%;height:auto;display:block;max-height:46vh}
 .b.inh .s{fill:var(--inhf);stroke:var(--inhl);stroke-dasharray:4 3}
 .b.sel .s{stroke:var(--sel);stroke-width:2}
 .b.live .s{fill:var(--acc);stroke:var(--acc)}
+.lpad{max-width:360px;margin:6px auto 4px;display:block}
+.lpad .b .s{fill:var(--key);stroke:var(--keyl)}
+.lpad .b.ok .s{fill:color-mix(in srgb,var(--ok,#3fb950) 30%,var(--key));stroke:var(--ok,#3fb950)}
+.lpad .b.tgt .s{fill:var(--acc);stroke:var(--acc);animation:lpulse 1s ease-in-out infinite}
+.lpad .b.tgt text{fill:#fff}
+@keyframes lpulse{50%{opacity:.45}}
+.lpad .arr{fill:#fff;font-size:16px;font-weight:800;text-anchor:middle;dominant-baseline:central;pointer-events:none}
 .b.live text{fill:#fff}
 .lb{font-size:7px;font-weight:600;fill:var(--acc2);pointer-events:none;dominant-baseline:central}
 .lb.inh{fill:var(--inht)}
@@ -658,8 +665,10 @@ const PM = (() => {
     return [...sig].map(x => x.toString(16).padStart(2, '0')).join('');
   }
   let wb = null;
-  async function openWebBle() {
-    const dev = await navigator.bluetooth.requestDevice({ filters: [{ services: [CFG_SVC] }], optionalServices: [CFG_SVC] });
+  async function openWebBle(prev) {
+    /* aynı kart kopunca seçim penceresi açmadan yeniden bağlan */
+    const dev = prev || await navigator.bluetooth.requestDevice({ filters: [{ services: [CFG_SVC] }], optionalServices: [CFG_SVC] });
+    link.wbDev = dev;
     const server = await dev.gatt.connect();
     const svc = await server.getPrimaryService(CFG_SVC);
     const rx = await svc.getCharacteristic(CFG_RX), tx = await svc.getCharacteristic(CFG_TX);
@@ -687,10 +696,12 @@ const PM = (() => {
       }
     });
     await tx.startNotifications();
-    dev.addEventListener('gattserverdisconnected', () => {
+    if (dev._pmHooked) dev.removeEventListener('gattserverdisconnected', dev._pmHooked);
+    dev._pmHooked = () => {
       const was = link.kind === 'wble'; fail(new Error(BLE_ERR.timeout));
       if (was) { link.kind = null; link.via = ''; link.info = null; wb = null; if (!closing) link.onClose(); }
-    });
+    };
+    dev.addEventListener('gattserverdisconnected', dev._pmHooked);
     link.kind = 'wble'; link.via = 'ble';
     await wbWrite('nonce\n');
     await Promise.race([authP, new Promise((_, rej) => setTimeout(() => rej(new Error(BLE_ERR.timeout)), 15000))])
@@ -833,7 +844,7 @@ const PM = (() => {
     if (native) await openNative(known);
     else if (known && known.usb) await openUsb(known.usb);
     else if (known && known.serial) await openSerial(known.serial);
-    else if (known && known.wble) await openWebBle();
+    else if (known && known.wble) await openWebBle(known.dev);
     else
     /* Android Chrome'daki seri bağlantı yalnızca Bluetooth'u görür; orada USB yolunu kullan */
     if (android && 'usb' in navigator) await openUsb();
@@ -1735,6 +1746,23 @@ function lSkip(kind){const [id]=LSTEPS[lw.i];lw.res[id]=kind==='miss'?{t:'missin
 function lBack(){if(lw.i>0){lw.i--;const m=lw.res[LSTEPS[lw.i][0]];if(m&&m.t!=='missing')lw.used.delete(sigOf(m));delete lw.res[LSTEPS[lw.i][0]];lw.phase='wait';lw.raw=[];renderLearn();}}
 function lDesc(m){if(m===undefined)return '';if(!m)return '<span class="hint">yok</span>';if(m.t==='missing')return '<span style="color:var(--warn)">var ama algılanmadı</span>';
   if(m.t==='axis')return esc(m.name)+(m.dir>0?' +':' −');return esc(m.name)+(m.t==='hat'?' = '+m.v:'');}
+/* tanıtma ekranındaki pad çizimi: sıradaki tuş yanıp söner, tanınanlar yeşil */
+const LMAP={LS_X:'LS',LS_Y:'LS',RS_X:'RS',RS_Y:'RS'};
+const LARROW={LS_X:'→',LS_Y:'↓',RS_X:'→',RS_Y:'↓'};
+function learnPad(){
+  const cur=lw.i<LSTEPS.length?LSTEPS[lw.i][0]:null,tgt=cur?(LMAP[cur]||cur):null;
+  const done=new Set(LSTEPS.filter(([id])=>lw.res[id]&&lw.res[id].t!=='missing').map(([id])=>LMAP[id]||id));
+  let h=`<path class="grip" d="M92 46h156c30 0 48 18 54 46l18 78c5 24-26 40-44 20l-24-28H88l-24 28c-18 20-49 4-44-20l18-78c6-28 24-46 54-46z"/>`;
+  for(const b of BTNS){
+    if((b.id==='M1'||b.id==='M2')&&b.id!==tgt&&!done.has(b.id))continue;
+    const sh=b.sh==='c'?`<circle class="s" cx="${b.x}" cy="${b.y}" r="${b.r}"/>`:`<rect class="s" x="${b.x}" y="${b.y}" width="${b.w}" height="${b.h}" rx="6"/>`;
+    const cx=b.sh==='c'?b.x:b.x+b.w/2,cy=b.sh==='c'?b.y:b.y+b.h/2;
+    const cls=b.id===tgt?'tgt':done.has(b.id)?'ok':'';
+    const lab=b.id===tgt&&LARROW[cur]?`<text class="arr" x="${cx}" y="${cy}">${LARROW[cur]}</text>`:`<text x="${cx}" y="${cy}">${b.t}</text>`;
+    h+=`<g class="b ${cls}">${sh}${lab}</g>`;
+  }
+  return `<svg class="lpad" viewBox="0 0 340 222">${h}</svg>`;
+}
 function renderLearn(){
   const el=document.getElementById('scanIn'),c=lw.ctrl;
   let h=`<div class="row"><h2>Tuşları tanıt${c&&c.name?' · '+esc(c.name):''}</h2><button class="btn ico" onclick="closeLearn()">✕</button></div>`;
@@ -1745,13 +1773,13 @@ function renderLearn(){
   const n=LSTEPS.length;
   if(lw.i<n){
     const [,t]=LSTEPS[lw.i];
-    h+=`<div class="hint">${lw.i+1} / ${n}</div><div style="font-size:22px;font-weight:700;margin:8px 0">${t}</div>
-      <div class="hint">${lw.phase==='release'?'Bırak…':'Bekleniyor… Bu tuş kontrolcünde yoksa "Yok". Tuş var ama basınca burada bir şey olmuyorsa "Var ama algılamıyor".'}</div>
+    h+=learnPad()+`<div class="hint" style="text-align:center">${lw.i+1} / ${n} · yanıp sönen tuşa bas</div><div style="font-size:22px;font-weight:700;margin:6px 0;text-align:center">${t}</div>
+      <div class="hint">${lw.phase==='release'?'<b style="color:var(--ok,#3fb950)">Tanındı ✓</b> Şimdi bırak…':'Bekleniyor… Bu tuş kontrolcünde yoksa "Yok". Tuş var ama basınca burada bir şey olmuyorsa "Var ama algılamıyor".'}</div>
       <div style="height:6px;background:var(--panel2);border-radius:4px;margin:10px 0"><i style="display:block;height:6px;border-radius:4px;background:var(--acc2);width:${lw.i/n*100}%"></i></div>
       <div class="row"><button class="btn" onclick="lBack()" ${lw.i?'':'disabled'}>← Geri</button><button class="btn" onclick="lSkip('none')">Yok, atla</button><button class="btn" onclick="lSkip('miss')">Var ama algılamıyor</button></div>`;
   }else{
     const miss=LSTEPS.filter(([id])=>lw.res[id]&&lw.res[id].t==='missing');
-    h+=`<div style="font-size:20px;font-weight:700;margin:8px 0">Bitti</div>
+    h+=learnPad()+`<div style="font-size:20px;font-weight:700;margin:8px 0;text-align:center">Bitti ✓ Yeşiller tanındı</div>
       <div class="row"><button class="btn pri" onclick="lSave()">Karta kaydet</button><button class="btn" onclick="lBack()">← Son adıma dön</button><button class="btn" onclick="openLearn()">Baştan</button><button class="btn" onclick="lClear()">Tanıtmayı sil</button></div>
       ${miss.length?`<div class="note" style="margin-top:10px">${miss.length} tuş algılanmadı (${miss.map(([id])=>id).join(', ')}). "Sorun raporunu kopyala"ya basıp sohbete yapıştır; ne gönderdiğine bakıp düzeltelim.
         <div style="margin-top:6px"><button class="btn" onclick="lCopy()">Sorun raporunu kopyala</button></div></div>`:''}`;
@@ -1948,9 +1976,14 @@ async function cardBtn(known){
       if(['ctrl','map','map_end','rep'].includes(ev.ev))learnEv(ev);
     };
     PM.link.onClose=()=>{const ble=lastVia==='ble';cardState=null;cardHid=null;connMsg='';renderCard();if(sheetOpen())renderSheet();
-      toast(ble?'Bluetooth bağlantısı koptu':'Kart bağlantısı koptu');
-      /* Bluetooth koptuysa bir kez sessizce yeniden dene */
-      if(ble&&!updating)setTimeout(()=>{if(!PM.connected()&&!connMsg)cardBtn({ble:true,auto:true});},2500);};
+      /* Bluetooth koptuysa sessizce birkaç kez yeniden bağlan (seçim penceresi açmadan) */
+      if(ble&&!updating){
+        toast('Bluetooth bağlantısı koptu, yeniden bağlanıyor…');
+        const dev=PM.link.wbDev;let n=0;
+        const again=()=>{if(PM.connected()||connMsg||updating)return;if(++n>4){toast('Bluetooth bağlanamadı. Bağlan\'a bas.');return;}
+          cardBtn(PM.native?{ble:true,auto:true}:{wble:true,dev,auto:true}).finally(()=>{if(!PM.connected())setTimeout(again,n*2500);});};
+        setTimeout(again,1500);
+      }else toast('Kart bağlantısı koptu');};
     let ok;
     try{ok=await PM.connect(known);}finally{connMsg='';}
     lastVia=PM.link.via;
