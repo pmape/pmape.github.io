@@ -91,6 +91,8 @@ svg:not([width]){width:100%;height:auto;display:block;max-height:46vh}
 .b.map .s{fill:color-mix(in srgb,var(--acc) 32%,var(--key));stroke:var(--acc)}
 .b.inh .s{fill:var(--inhf);stroke:var(--inhl);stroke-dasharray:4 3}
 .b.sel .s{stroke:var(--sel);stroke-width:2}
+.b.live .s{fill:var(--acc);stroke:var(--acc)}
+.b.live text{fill:#fff}
 .lb{font-size:7px;font-weight:600;fill:var(--acc2);pointer-events:none;dominant-baseline:central}
 .lb.inh{fill:var(--inht)}
 .b text{fill:var(--text);font-size:9px;font-weight:700;text-anchor:middle;dominant-baseline:central;pointer-events:none}
@@ -729,6 +731,7 @@ const PM = (() => {
     connected: () => !!link.kind, OLD, bleOk, supported: () => native || 'serial' in navigator || 'usb' in navigator, native };
 })();
 if (typeof module !== 'undefined') module.exports = PM;
+
 </script>
 <script>
 /* ---------- Sabitler ---------- */
@@ -1706,6 +1709,7 @@ async function cardBtn(known){
       if(ev.ev==='mode'){if(PM.link.info)PM.link.info.mapping=ev.mapping;toast(ev.mapping?'Eşleme açık':'Eşleme kapalı · normal gamepad');renderCard();if(document.getElementById('sheet').classList.contains('open'))renderSheet();}
       if(ev.ev==='hello'){renderCard();setTimeout(cardProfilesCheck,300);if(!updating&&PM.link.via!=='ble'&&cardNeedsUpdate()&&!window._updAsked){window._updAsked=true;setTimeout(()=>ask('Kart için yeni yazılım var ('+ev.fw+' → '+bundledFw()+'). Şimdi kurulsun mu?',null).then(ok=>{if(ok)updCard(true);}),1500);}PM.sendLine('ctrls').catch(()=>{});setTimeout(()=>PM.sendLine('targets').catch(()=>{}),150);setTimeout(()=>PM.sendLine('hid list').catch(()=>{}),300);if(document.getElementById('sheet').classList.contains('open'))renderSheet();}
       if(ev.ev==='state')applyState(ev);
+      if(ev.ev==='pad')livePad(ev);
       if(ev.ev==='hids'){cardHid=ev;if(sheetOpen())renderSheet();}
       if(ev.ev==='hid'){if(ev.ready)toast((ev.kb?'⌨ Klavye':'')+(ev.kb&&ev.ms?' + ':'')+(ev.ms?'🖱 Fare':'')+' hazır');if(ev.connected===0||ev.ready||ev.fail!=null)PM.sendLine('hid list').catch(()=>{});}
       if(ev.ev==='secret'&&ev.new)toast('Bu telefon karta tanıtıldı: artık Bluetooth ile de bağlanabilirsin');
@@ -1769,6 +1773,24 @@ applyTheme();
 
 /* ---------- Kartın anlık durumu: ekran hep bunu gösterir ---------- */
 let cardState=null,stT=null;
+/* canlı pad: kart basılı tuşları ve çubukları bildirir */
+const LIVE_BITS=['A','B','','X','Y','','LB','RB','LT','RT','SELECT','START','HOME','L3','R3','SHARE','UP','DOWN','LEFT','RIGHT'];
+let liveSeen=0;
+function livePad(ev){
+  liveSeen=Date.now();
+  const on=new Set();
+  if(ev.v){LIVE_BITS.forEach((id,i)=>{if(id&&(ev.b>>>i)&1)on.add(id);});if(ev.t[0]>60)on.add('LT');if(ev.t[1]>60)on.add('RT');}
+  for(const b of BTNS){
+    const g=document.getElementById('b-'+b.id);if(!g)continue;
+    g.classList.toggle('live',on.has(b.id));
+    if(b.stick){
+      const c=g.querySelector('circle:not(.s)');if(!c)continue;
+      const dx=ev.v?((b.id==='LS'?ev.s[0]:ev.s[2])-128)/128*b.r*.45:0,dy=ev.v?((b.id==='LS'?ev.s[1]:ev.s[3])-128)/128*b.r*.45:0;
+      c.setAttribute('cx',b.x+dx);c.setAttribute('cy',b.y+dy);
+    }
+  }
+}
+setInterval(()=>{try{if(PM.connected()&&!document.hidden)PM.sendLine('live 1').catch(()=>{});if(Date.now()-liveSeen>12000)livePad({v:0,b:0,s:[128,128,128,128],t:[0,0]});}catch(e){}},3000);
 function applyState(st){
   const prev=cardState;cardState=st;
   if(PM.link.info){PM.link.info.mapping=st.mapping;PM.link.info.prof=st.prof;}

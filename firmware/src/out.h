@@ -16,3 +16,4 @@ void out_print_stats(void);
 void out_kick(void);
 /* durum mesajını hemen gönder */
 void out_state_request(void);
+void out_live(int on);

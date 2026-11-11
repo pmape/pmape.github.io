@@ -300,9 +300,10 @@ static void tick_fn(struct k_work *w)
 
 void ble_cfg_init(void)
 {
-	size_t cnt = 0;
+	bt_addr_le_t ids[2];
+	size_t cnt = 2;
 
-	bt_id_get(NULL, &cnt);
+	bt_id_get(ids, &cnt);
 	if (cnt < 2) bt_id_create(NULL, NULL);
 	last_usb = k_uptime_get();
 	k_work_reschedule(&tick, K_SECONDS(1));

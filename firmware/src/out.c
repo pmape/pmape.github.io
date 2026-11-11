@@ -203,6 +203,26 @@ static void send(int i, const uint8_t *buf, uint8_t len, bool force)
 	last_len[i] = len;
 }
 
+/* canlı pad görüntüsü: ayar uygulaması açıkken pad durumunu yayınlar (8 sn sonra kendiliğinden susar) */
+static volatile int64_t live_until;
+void out_live(int on) { live_until = on ? k_uptime_get() + 8000 : 0; }
+
+static void live_tick(const struct pad_state *p)
+{
+	static struct pad_state lastp;
+	static int64_t last_ms;
+	int64_t n = k_uptime_get();
+
+	if (n > live_until) return;
+	if (n - last_ms < 40) return;
+	if (p->valid == lastp.valid && p->btn == lastp.btn && p->lx == lastp.lx && p->ly == lastp.ly &&
+	    p->rx == lastp.rx && p->ry == lastp.ry && p->lt == lastp.lt && p->rt == lastp.rt && n - last_ms < 1000) return;
+	lastp = *p;
+	last_ms = n;
+	OUT("{\"ev\":\"pad\",\"v\":%d,\"b\":%u,\"s\":[%u,%u,%u,%u],\"t\":[%u,%u]}\n",
+	    p->valid, (unsigned)p->btn, p->lx, p->ly, p->rx, p->ry, p->lt, p->rt);
+}
+
 void out_print_stats(void)
 {
 	OUT("{\"ev\":\"stats\",\"usb\":%d,\"pad\":%d,\"mapping\":%d,\"rx\":%u,\"tx_ok\":%u,\"tx_err\":%u,\"tx_busy\":%u,\"unstuck\":%u,\"wake\":%u}\n",
@@ -412,6 +432,8 @@ static void out_thread(void *a, void *b, void *c)
 		}
 		led_update(tick);
 		pad_get(&p);
+		if (!pad_connected) p.valid = false;
+		live_tick(&p);
 
 		/* Bluetooth klavye/fare */
 		struct hid_in hi;

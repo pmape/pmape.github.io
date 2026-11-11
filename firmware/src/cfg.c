@@ -242,6 +242,8 @@ static void cmd(char *l)
 			engine_profile_changed(engine_profile());
 			OUT("{\"ev\":\"prof\",\"cur\":%d}\n", engine_profile());
 		}
+	} else if (!strncmp(l, "live ", 5)) {
+		out_live(atoi(l + 5));
 	} else if (!strncmp(l, "map ", 4)) {
 		engine_set_mapping(l[4] == '1');
 		OUT("{\"ev\":\"mode\",\"mapping\":%d}\n", engine_mapping());
