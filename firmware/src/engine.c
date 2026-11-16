@@ -61,10 +61,11 @@ static uint8_t p_out, p_thr;
 static uint16_t p_long, p_double;
 
 /* cihaz ayarları */
-static uint8_t d_comboA = PB_HOME, d_comboB = PB_SELECT, d_flags = 3;
+static uint8_t d_comboA = PB_LB, d_comboB = PB_RB, d_flags = 3;
 static uint8_t d_pmod = PB_HOME, d_pprev = PB_LB, d_pnext = PB_RB;
-static uint16_t d_hold = 1500;
-static bool mapping = true;
+static uint16_t d_hold = 1000;
+/* kart her açılışta düz gamepad: eşleme kapalı */
+static bool mapping = false;
 
 static int walk_profile(const uint8_t *p, const uint8_t *end, const uint8_t **next)
 {
@@ -141,15 +142,21 @@ int engine_set_config(const uint8_t *b, size_t len)
 		prof_at[i] = p;
 		walk_profile(p, b + len, &p);
 	}
-	d_comboA = b[4] < NBTN ? b[4] : PB_HOME;
-	d_comboB = b[5] < NBTN ? b[5] : PB_SELECT;
+	d_comboA = b[4] < NBTN ? b[4] : PB_LB;
+	d_comboB = b[5] < NBTN ? b[5] : PB_RB;
 	d_hold = rd16(b + 6);
+	/* eski varsayılan (Home + Select 1,5 sn) → yeni: LB + RB 1 sn */
+	if ((d_comboA == PB_HOME && d_comboB == PB_SELECT) || (d_comboA == PB_SELECT && d_comboB == PB_HOME)) {
+		d_comboA = PB_LB; d_comboB = PB_RB; d_hold = 1000;
+	}
+	if (d_hold < 300 || d_hold > 5000) d_hold = 1000;
+	if (d_comboA == d_comboB) { d_comboA = PB_LB; d_comboB = PB_RB; }
 	d_flags = b[8];
 	d_pmod = b[11] < NBTN ? b[11] : PB_HOME;
 	d_pprev = b[12] < NBTN ? b[12] : PB_LB;
 	d_pnext = b[13] < NBTN ? b[13] : PB_RB;
 	cur = b[10] < nprof ? b[10] : 0;
-	mapping = b[3] == 0;
+	/* açılış modu artık hep düz gamepad; ayar yüklemek modu değiştirmez */
 	load_profile(cur);
 	reset_state();
 	UNLOCK();
@@ -596,6 +603,7 @@ static void passthrough(const struct pad_state *p, uint8_t g[9])
 
 static int64_t combo_since;
 static bool combo_done;
+static uint32_t combo_mask; /* geçiş yapıldıysa bırakılana kadar bu tuşlar hiçbir yere gitmez */
 
 enum eng_mode engine_tick(const struct pad_state *p, int64_t now, struct out_rep *r)
 {
@@ -614,18 +622,21 @@ enum eng_mode engine_tick(const struct pad_state *p, int64_t now, struct out_rep
 			prev_btn = p->btn; /* bırakılınca tuş tetiklenmesin */
 			bs[d_comboA].consumed = bs[d_comboB].consumed = 1;
 			bs[d_comboA].down = bs[d_comboB].down = 1;
+			combo_mask = cm;
 			OUT("{\"ev\":\"mode\",\"mapping\":%d}\n", mapping);
 		}
 	} else {
 		combo_since = 0;
 		combo_done = false;
 	}
+	combo_mask &= p->btn; /* bırakılan tuş serbest */
 
 	memset(r, 0, sizeof(*r));
 	if (!mapping) {
 		passthrough(p, r->g);
-		/* aç/kapat kombinasyonu tutulurken tablete Home/Select gitmesin */
-		if ((p->btn & cm) == cm) { r->g[0] &= ~(cm & 0xff); r->g[1] &= ~((cm >> 8) & 0xff); }
+		/* LB + RB 1 sn dolmadan oyuna normal gider (oyunda birlikte basılabilir);
+		 * geçiş olduktan sonra bırakılana kadar gitmez */
+		if (combo_mask) { r->g[0] &= ~(combo_mask & 0xff); r->g[1] &= ~((combo_mask >> 8) & 0xff); }
 		UNLOCK();
 		return E_PAD;
 	}
@@ -723,7 +734,7 @@ enum eng_mode engine_tick(const struct pad_state *p, int64_t now, struct out_rep
 		int l = active_layer();
 
 		for (int b = 0; b < 20; b++) {
-			if (!(btn & BIT(b)) || bs[b].consumed || b == d_comboA || b == d_pmod || (b == d_comboB && (btn & BIT(d_comboA)))) continue;
+			if (!(btn & BIT(b)) || bs[b].consumed || (combo_mask & BIT(b)) || ((d_flags & 1) && b == d_pmod)) continue;
 			if (!has_any(l, b) && !has_any(0, b)) gb |= BIT(b);
 		}
 		if (!has_any(l, PB_LT) && !has_any(0, PB_LT)) r->g[7] = p->lt;

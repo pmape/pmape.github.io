@@ -30,6 +30,7 @@ void pad_get(struct pad_state *out);
 void pad_reset(void);
 /* Kaç rapor işlendi (teşhis) */
 uint32_t pad_rx_count(void);
+bool pad_rx_take(uint32_t *cyc);
 /* Tuş tanıtmayla öğrenilmiş harita (14 baytlık girişler), n=0 kapatır */
 void pad_set_learned(const uint8_t *e, int n);
 bool pad_learned(void);

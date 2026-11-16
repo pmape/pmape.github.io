@@ -518,7 +518,67 @@ const PM = (() => {
         }
       };
     }
-    return { crc16, uf2ToBin, run, framer };
+    /* Kablosuz güncelleme: önyükleyicinin Bluetooth DFU'su (Nordic eski/legacy). Kart önce "dfu ble" almış olmalı.
+     * dev: navigator.bluetooth.requestDevice ile seçilmiş önyükleyici (Web Bluetooth). */
+    const BSVC = '00001530-1212-efde-1523-785feabcd123', BCP = '00001531-1212-efde-1523-785feabcd123', BPK = '00001532-1212-efde-1523-785feabcd123';
+    async function pickBle() {
+      return navigator.bluetooth.requestDevice({ filters: [{ services: [BSVC] }, { namePrefix: 'AdaDFU' }, { namePrefix: 'XIAO' }], optionalServices: [BSVC] });
+    }
+    async function runBle(dev, bin, prog) {
+      const notes = [], waiters = [];
+      const push = v => { const w = waiters.shift(); if (w) w(v); else notes.push(v); };
+      const next = ms => notes.length ? Promise.resolve(notes.shift()) : new Promise((res, rej) => {
+        const t = setTimeout(() => { const i = waiters.indexOf(f); if (i >= 0) waiters.splice(i, 1); rej(new Error('Kart cevap vermedi')); }, ms);
+        const f = v => { clearTimeout(t); res(v); }; waiters.push(f);
+      });
+      const gone = () => push(null);
+      dev.addEventListener('gattserverdisconnected', gone);
+      try {
+        let srv, e;
+        for (let t = 0; t < 3 && !srv; t++) { try { srv = await (await dev.gatt.connect()).getPrimaryService(BSVC); } catch (x) { e = x; await new Promise(r => setTimeout(r, 700)); } }
+        if (!srv) throw new Error('Önyükleyiciye bağlanılamadı' + (e ? ': ' + e.message : ''));
+        const cp = await srv.getCharacteristic(BCP), pk = await srv.getCharacteristic(BPK);
+        cp.addEventListener('characteristicvaluechanged', ev => push(new Uint8Array(ev.target.value.buffer.slice(0))));
+        await cp.startNotifications();
+        const expect = async (req, ms, what) => {
+          const end = Date.now() + ms;
+          for (;;) {
+            const n = await next(Math.max(1, end - Date.now())).catch(() => { throw new Error('Kart cevap vermedi (' + what + ')'); });
+            if (!n) throw new Error('Bağlantı koptu (' + what + ')');
+            if (n[0] === 0x10 && n[1] === req) { if (n[2] !== 1) throw new Error('Kart reddetti (' + what + ', kod ' + n[2] + ')'); return; }
+          }
+        };
+        const len = bin.length, PRN = 10;
+        prog('write', 0);
+        await cp.writeValueWithResponse(new Uint8Array([1, 4]));
+        const sz = new Uint8Array(12); new DataView(sz.buffer).setUint32(8, len, true);
+        await pk.writeValueWithoutResponse(sz);
+        await expect(1, 30000, 'başlat');
+        await cp.writeValueWithResponse(new Uint8Array([2, 0]));
+        const c = crc16(bin);
+        await pk.writeValueWithoutResponse(new Uint8Array([0x52, 0, 255, 255, 255, 255, 255, 255, 1, 0, 0xFE, 0xFF, c & 255, c >> 8]));
+        await cp.writeValueWithResponse(new Uint8Array([2, 1]));
+        await expect(2, 10000, 'tanıtım');
+        await cp.writeValueWithResponse(new Uint8Array([8, PRN, 0]));
+        await cp.writeValueWithResponse(new Uint8Array([3]));
+        let n = 0, last = -1;
+        for (let o = 0; o < len; o += 20) {
+          const k = Math.min(20, len - o);
+          await pk.writeValueWithoutResponse(bin.slice(o, o + k));
+          if (++n % PRN === 0 && o + k < len) { const r = await next(10000).catch(() => { throw new Error('Kart cevap vermedi (veri)'); }); if (!r) throw new Error('Bağlantı koptu (veri)'); }
+          const pc = Math.min(99, Math.floor((o + k) * 100 / len)); if (pc !== last) { last = pc; prog('write', pc); }
+        }
+        await expect(3, 20000, 'veri');
+        await cp.writeValueWithResponse(new Uint8Array([4]));
+        await expect(4, 10000, 'doğrula');
+        try { await cp.writeValueWithResponse(new Uint8Array([5])); } catch (x) { /* kart hemen kapanır */ }
+        prog('done', 100);
+      } finally {
+        dev.removeEventListener('gattserverdisconnected', gone);
+        try { dev.gatt.disconnect(); } catch (x) { }
+      }
+    }
+    return { crc16, uf2ToBin, run, framer, pickBle, runBle };
   })();
 
   const isCard = d => d && (d.vendorId === 0x2fe3 || d.productName === 'PadMapper');

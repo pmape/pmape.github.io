@@ -274,7 +274,7 @@ bool hid_in_try(const bt_addr_le_t *a, const char *name)
 		}
 	}
 	bt_scan_stop();
-	struct bt_le_conn_param *p = BT_LE_CONN_PARAM(6, 12, 0, 400);
+	struct bt_le_conn_param *p = BT_LE_CONN_PARAM(6, 6, 0, 400);
 	int err = bt_conn_le_create(a, BT_CONN_LE_CREATE_CONN, p, &s->conn);
 
 	if (err) {

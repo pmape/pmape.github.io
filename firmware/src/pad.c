@@ -29,6 +29,17 @@ static uint32_t rx_count;
 
 uint32_t pad_rx_count(void) { return rx_count; }
 
+/* gecikme ölçümü: son pad raporunun geliş anı */
+static volatile uint32_t rx_cyc;
+static volatile bool rx_new;
+bool pad_rx_take(uint32_t *cyc)
+{
+	if (!rx_new) return false;
+	rx_new = false;
+	*cyc = rx_cyc;
+	return true;
+}
+
 /* ---------- öğrenilmiş harita (tuş tanıtma ile) ----------
  * Her giriş 14 bayt: rapor_no tür hedef bit_sayısı bit(u16) bayrak boş arg(u16) min(i16) max(i16)
  * tür: 0 düğme (değer≠0), 1 çubuk ekseni (hedef 0 lx,1 ly,2 rx,3 ry), 2 tetik (0 lt,1 rt),
@@ -276,6 +287,8 @@ void pad_input(uint8_t rid, const uint8_t *data, size_t len)
 	k_spinlock_key_t key = k_spin_lock(&lock);
 
 	rx_count++;
+	rx_cyc = k_cycle_get_32();
+	rx_new = true;
 	if (ln) {
 		learned_input(rid, data, len);
 		k_spin_unlock(&lock, key);

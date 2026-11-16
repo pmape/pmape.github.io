@@ -427,6 +427,28 @@ public class Main extends Activity {
         }
     }
 
+    /* Kablosuz kart güncelleme: kart "dfu ble" ile önyükleyiciye geçti; yazılımı Bluetooth'tan yolla */
+    private void doBleDfu() {
+        byte[] bin;
+        try {
+            long[] base = new long[1];
+            bin = Dfu.uf2ToBin(readAll(getAssets().open("padmapper.uf2")), base);
+            if (base[0] != 0x27000) throw new Exception("beklenmeyen adres " + Long.toHexString(base[0]));
+        } catch (Exception e) { flashEv("err", 0, "Uygulamadaki kart yazılımı okunamadı: " + e.getMessage()); return; }
+        if (ble != null) {
+            final BleLink b = ble;
+            java.util.concurrent.CountDownLatch l = new java.util.concurrent.CountDownLatch(1);
+            runOnUiThread(() -> { try { b.close(false); } finally { l.countDown(); } });
+            try { l.await(2, java.util.concurrent.TimeUnit.SECONDS); } catch (InterruptedException e) { return; }
+        }
+        try { Thread.sleep(1500); } catch (InterruptedException e) { return; }
+        try {
+            new BleDfu(this).run(bin, (st, pp) -> flashEv(st, pp, null));
+        } catch (Exception e) {
+            flashEv("err", 0, e.getMessage());
+        }
+    }
+
     private void closeLink() {
         boolean was = reading;
         reading = false;
@@ -626,6 +648,15 @@ public class Main extends Activity {
             new Thread(() -> {
                 try { doDfu(); } finally { flashing = false; }
             }, "pm-flash").start();
+        }
+
+        /* Kablosuz kart güncelleme (kart önce "dfu ble" almış olmalı) */
+        @JavascriptInterface public void flashBle() {
+            if (flashing) return;
+            flashing = true;
+            new Thread(() -> {
+                try { doBleDfu(); } finally { flashing = false; }
+            }, "pm-flash-ble").start();
         }
 
         /* Sesli yazma için erişilebilirlik izni açık mı */

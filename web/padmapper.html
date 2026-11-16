@@ -44,6 +44,11 @@ select,input[type=number],input[type=text],textarea{background:var(--bg);border:
 .hchip>span:first-child{overflow:hidden;text-overflow:ellipsis}
 .hchip.grow{flex:1;justify-content:space-between}
 .hchip.acc{border-color:var(--acc);color:var(--acc)}
+.mode{display:inline-flex;align-items:center;gap:6px;min-height:38px;padding:0 10px;border-radius:19px;border:1px solid var(--line);background:var(--panel2);cursor:pointer;font-weight:600;white-space:nowrap;color:var(--mut,#8a93a0)}
+.mode i{width:8px;height:8px;border-radius:50%;background:currentColor;display:inline-block}
+.mode.pad{color:#4aa3ff;border-color:#4aa3ff}
+.mode.map{color:#3ecf6e;border-color:#3ecf6e}
+.mode small{font-size:12px}
 #status{padding:10px 12px}
 .flow{display:flex;align-items:center;gap:4px}
 .fnode{flex:1;min-width:0;display:flex;align-items:center;gap:8px;background:none;border:0;padding:4px;border-radius:10px;cursor:pointer;text-align:left}
@@ -275,7 +280,7 @@ textarea{width:100%;min-height:140px;font-family:ui-monospace,Consolas,monospace
 </head>
 <body>
 <header>
-  <span class="logo" aria-hidden="true" style="color:var(--acctx)"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 11h4M8 9v4M15 12h.01M18 10h.01"/><path d="M17.3 5H6.7a4 4 0 0 0-3.96 3.43l-.7 5A3 3 0 0 0 5 17c1 0 1.8-.6 2.2-1.4L8 14h8l.8 1.6c.4.8 1.2 1.4 2.2 1.4a3 3 0 0 0 2.96-3.57l-.7-5A4 4 0 0 0 17.3 5z"/></svg></span>
+  <button class="mode" id="modeBtn" onclick="toggleMode()" title="Pad nasıl çalışıyor: dokun, değiştir"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 11h4M8 9v4M15 12h.01M18 10h.01"/><path d="M17.3 5H6.7a4 4 0 0 0-3.96 3.43l-.7 5A3 3 0 0 0 5 17c1 0 1.8-.6 2.2-1.4L8 14h8l.8 1.6c.4.8 1.2 1.4 2.2 1.4a3 3 0 0 0 2.96-3.57l-.7-5A4 4 0 0 0 17.3 5z"/></svg><small id="modeTx"></small></button>
   <button class="hchip grow" id="profBtn" onclick="openSheet('profiller')" title="Profiller"><span id="profName"></span><span aria-hidden="true">▾</span></button>
   <button class="hchip acc" id="outBtn" onclick="openSheet('profil')" title="Bu profilin ayarları"><span id="outName"></span><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/></svg></button>
   <button class="btn ico" title="Ayarlar" aria-label="Ayarlar" onclick="openSheet('ayarlar')"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg></button>
@@ -819,7 +824,67 @@ const PM = (() => {
         }
       };
     }
-    return { crc16, uf2ToBin, run, framer };
+    /* Kablosuz güncelleme: önyükleyicinin Bluetooth DFU'su (Nordic eski/legacy). Kart önce "dfu ble" almış olmalı.
+     * dev: navigator.bluetooth.requestDevice ile seçilmiş önyükleyici (Web Bluetooth). */
+    const BSVC = '00001530-1212-efde-1523-785feabcd123', BCP = '00001531-1212-efde-1523-785feabcd123', BPK = '00001532-1212-efde-1523-785feabcd123';
+    async function pickBle() {
+      return navigator.bluetooth.requestDevice({ filters: [{ services: [BSVC] }, { namePrefix: 'AdaDFU' }, { namePrefix: 'XIAO' }], optionalServices: [BSVC] });
+    }
+    async function runBle(dev, bin, prog) {
+      const notes = [], waiters = [];
+      const push = v => { const w = waiters.shift(); if (w) w(v); else notes.push(v); };
+      const next = ms => notes.length ? Promise.resolve(notes.shift()) : new Promise((res, rej) => {
+        const t = setTimeout(() => { const i = waiters.indexOf(f); if (i >= 0) waiters.splice(i, 1); rej(new Error('Kart cevap vermedi')); }, ms);
+        const f = v => { clearTimeout(t); res(v); }; waiters.push(f);
+      });
+      const gone = () => push(null);
+      dev.addEventListener('gattserverdisconnected', gone);
+      try {
+        let srv, e;
+        for (let t = 0; t < 3 && !srv; t++) { try { srv = await (await dev.gatt.connect()).getPrimaryService(BSVC); } catch (x) { e = x; await new Promise(r => setTimeout(r, 700)); } }
+        if (!srv) throw new Error('Önyükleyiciye bağlanılamadı' + (e ? ': ' + e.message : ''));
+        const cp = await srv.getCharacteristic(BCP), pk = await srv.getCharacteristic(BPK);
+        cp.addEventListener('characteristicvaluechanged', ev => push(new Uint8Array(ev.target.value.buffer.slice(0))));
+        await cp.startNotifications();
+        const expect = async (req, ms, what) => {
+          const end = Date.now() + ms;
+          for (;;) {
+            const n = await next(Math.max(1, end - Date.now())).catch(() => { throw new Error('Kart cevap vermedi (' + what + ')'); });
+            if (!n) throw new Error('Bağlantı koptu (' + what + ')');
+            if (n[0] === 0x10 && n[1] === req) { if (n[2] !== 1) throw new Error('Kart reddetti (' + what + ', kod ' + n[2] + ')'); return; }
+          }
+        };
+        const len = bin.length, PRN = 10;
+        prog('write', 0);
+        await cp.writeValueWithResponse(new Uint8Array([1, 4]));
+        const sz = new Uint8Array(12); new DataView(sz.buffer).setUint32(8, len, true);
+        await pk.writeValueWithoutResponse(sz);
+        await expect(1, 30000, 'başlat');
+        await cp.writeValueWithResponse(new Uint8Array([2, 0]));
+        const c = crc16(bin);
+        await pk.writeValueWithoutResponse(new Uint8Array([0x52, 0, 255, 255, 255, 255, 255, 255, 1, 0, 0xFE, 0xFF, c & 255, c >> 8]));
+        await cp.writeValueWithResponse(new Uint8Array([2, 1]));
+        await expect(2, 10000, 'tanıtım');
+        await cp.writeValueWithResponse(new Uint8Array([8, PRN, 0]));
+        await cp.writeValueWithResponse(new Uint8Array([3]));
+        let n = 0, last = -1;
+        for (let o = 0; o < len; o += 20) {
+          const k = Math.min(20, len - o);
+          await pk.writeValueWithoutResponse(bin.slice(o, o + k));
+          if (++n % PRN === 0 && o + k < len) { const r = await next(10000).catch(() => { throw new Error('Kart cevap vermedi (veri)'); }); if (!r) throw new Error('Bağlantı koptu (veri)'); }
+          const pc = Math.min(99, Math.floor((o + k) * 100 / len)); if (pc !== last) { last = pc; prog('write', pc); }
+        }
+        await expect(3, 20000, 'veri');
+        await cp.writeValueWithResponse(new Uint8Array([4]));
+        await expect(4, 10000, 'doğrula');
+        try { await cp.writeValueWithResponse(new Uint8Array([5])); } catch (x) { /* kart hemen kapanır */ }
+        prog('done', 100);
+      } finally {
+        dev.removeEventListener('gattserverdisconnected', gone);
+        try { dev.gatt.disconnect(); } catch (x) { }
+      }
+    }
+    return { crc16, uf2ToBin, run, framer, pickBle, runBle };
   })();
 
   const isCard = d => d && (d.vendorId === 0x2fe3 || d.productName === 'PadMapper');
@@ -1021,11 +1086,13 @@ let presetPending=null;
 if(window.PM_PRESET&&window.PM_PRESET.profiles){if(!S||!S.profiles)S=JSON.parse(JSON.stringify(window.PM_PRESET));else presetPending=window.PM_PRESET;}
 if(!S||!S.profiles||!S.profiles.length)S={cur:0,profiles:[demoProf()]};
 S.profiles.forEach(migrate);
-if(!S.device)S.device={startMode:'map',comboA:'HOME',comboB:'SELECT',holdMs:1500,profSwitch:true};
+if(!S.device)S.device={startMode:'pad',comboA:'LB',comboB:'RB',holdMs:1000,profSwitch:true};
+/* yeni geçiş kombinasyonu: LB + RB 1 sn, açılış hep düz gamepad */
+if(!S.device.lbrb){S.device.lbrb=true;if(S.device.comboA==='HOME'&&S.device.comboB==='SELECT'){S.device.comboA='LB';S.device.comboB='RB';S.device.holdMs=1000;}S.device.startMode='pad';}
 if(S.device.passUnmapped===undefined)S.device.passUnmapped=true;
 /* katmanlar kapalı: eski "katman değiştir" atamalarını bir kez temizle */
 if(!S.device.noLayers){S.device.noLayers=true;for(const q of S.profiles)for(const bd of Object.values(q.layers[0].btn))for(const k of Object.keys(bd))if(bd[k]&&bd[k].kind==='layer')delete bd[k];}
-if(!S.device.profMod){S.device.profMod=S.device.comboA||'HOME';S.device.profPrev='LB';S.device.profNext='RB';}
+if(!S.device.profMod){S.device.profMod='HOME';S.device.profPrev='LB';S.device.profNext='RB';}
 if(!S.device.ctrls)S.device.ctrls=[{name:'BSP-D8Pro',addr:'03:24:00:D8:06:04',active:true}];
 let ui={sel:'A',layer:0,act:'single'};
 let rec=null;
@@ -1134,6 +1201,27 @@ function renderTop(){
   ui.layer=0;
   document.getElementById('profName').textContent=P().name;
   document.getElementById('outName').textContent='Tür: '+(OUT_SHORT[P().output||'all']||'Hepsi');
+  renderMode();
+}
+/* üstteki durum simgesi: mavi = düz gamepad, yeşil = profil (kartın ışığıyla aynı) */
+function cardMapping(){return PM.connected()&&PM.link.info?(PM.link.info.mapping===0?0:1):-1;}
+function renderMode(){
+  const b=document.getElementById('modeBtn');if(!b)return;
+  const m=cardMapping(),cp=PM.link.info&&PM.link.info.prof;
+  const pn=m===1?((S.profiles[typeof cp==='number'&&cp<S.profiles.length?cp:S.cur]||{}).name||'Profil'):'';
+  b.className='mode '+(m===0?'pad':m===1?'map':'');
+  document.getElementById('modeTx').textContent=m===0?'Düz gamepad':m===1?'Profil açık':'';
+  b.title=m<0?'Kart bağlı değil':m===0?'Düz gamepad: pad olduğu gibi gidiyor. Dokun: profile geç (pad\'de LB+RB 1 sn).':'Profil açık: '+pn+'. Dokun: düz gamepad (pad\'de LB+RB 1 sn).';
+}
+function setMode(on){
+  if(!PM.connected()||!PM.link.info){toast('Kart bağlı değil');return;}
+  PM.sendLine('map '+(on?1:0)).catch(()=>{});
+}
+function toggleMode(){setMode(cardMapping()===0);}
+/* listeden profil seç: profili değiştirir ve kartta açar */
+function useProfile(i){
+  selProfile(i);
+  if(PM.connected()&&PM.link.info){if(cardSynced())PM.sendLine('cs '+i).catch(()=>{});setMode(true);}
 }
 function selProfile(i){
   if(i===S.cur)return;
@@ -1487,10 +1575,11 @@ function renderSheet(){
   if(stab==='step'){body=stepSheet();}
   else if(stab==='pick'){const st=curA().steps[(ui.pick||{}).i];body=pickSheet();SHEET_TITLE.pick=st?({key:'Klavye tuşu',mouse:'Fare',pad:'Gamepad tuşu',media:'Medya'}[st.t]||'Seç'):'Seç';}
   else if(stab==='profiller'){
-    body=`<div class="card" style="padding:2px 14px">${S.profiles.map((q,i)=>`<div class="li2"><span class="pdot ${i===S.cur?'on':''}"></span><button class="otx lnk" onclick="selProfile(${i});closeSheet()"><b>${esc(q.name)}</b><small>${esc(OUT_SHORT[q.output||'all'])} · ${countBinds(q)} atama</small></button>${i===S.cur?'<span class="pchip on" style="height:30px">Etkin</span>':`<button class="pchip" style="height:30px" onclick="selProfile(${i});closeSheet()">Seç</button>`}<button class="btn ico sm" aria-label="${esc(q.name)} ayarları" onclick="selProfile(${i});openSheet('profil')">${IC_TUNE}</button></div>`).join('')}</div>
+    const mm=cardMapping();
+    body=`<div class="card" style="padding:2px 14px"><div class="li2"><span class="pdot ${mm===0?'on':''}" style="${mm===0?'background:#4aa3ff':''}"></span><button class="otx lnk" onclick="setMode(false);closeSheet()"><b>🎮 Düz gamepad</b><small>Pad olduğu gibi gider, atama yok · pad'de LB+RB 1 sn</small></button>${mm===0?'<span class="pchip on" style="height:30px">Etkin</span>':`<button class="pchip" style="height:30px" onclick="setMode(false);closeSheet()">Seç</button>`}</div>${S.profiles.map((q,i)=>`<div class="li2"><span class="pdot ${i===S.cur&&mm!==0?'on':''}"></span><button class="otx lnk" onclick="useProfile(${i});closeSheet()"><b>${esc(q.name)}</b><small>${esc(OUT_SHORT[q.output||'all'])} · ${countBinds(q)} atama</small></button>${i===S.cur&&mm===1?'<span class="pchip on" style="height:30px">Etkin</span>':`<button class="pchip" style="height:30px" onclick="useProfile(${i});closeSheet()">Seç</button>`}<button class="btn ico sm" aria-label="${esc(q.name)} ayarları" onclick="selProfile(${i});openSheet('profil')">${IC_TUNE}</button></div>`).join('')}</div>
       <div class="row" style="gap:8px;margin-top:12px"><button class="btn pri grow" onclick="newProfile()">＋ Yeni profil</button><button class="btn" onclick="dupProfile()">Kopyala</button></div>
       <div class="row" style="gap:8px;margin-top:8px"><button class="btn grow" onclick="importProfiles()">İçe aktar</button><button class="btn grow" onclick="backupProfiles()">Dışa aktar</button></div>
-      <p class="hint" style="margin:10px 0 0">Pad'den geçiş: ${d.profSwitch?esc(BY_ID[d.profMod].t)+' basılıyken '+esc(BY_ID[d.profPrev].t)+' önceki, '+esc(BY_ID[d.profNext].t)+' sonraki profil.':'kapalı.'} Profiller kartta saklanır. Ayar simgesi o profilin ayarlarını açar.</p>`;
+      <p class="hint" style="margin:10px 0 0">Kart her açılışta <b>düz gamepad</b> başlar. Pad'de <b>LB + RB</b>'ye 1 saniye basınca seçili profil ile düz gamepad arasında geçer. Profil değiştirme: ${d.profSwitch?esc(BY_ID[d.profMod].t)+' basılıyken '+esc(BY_ID[d.profPrev].t)+' önceki, '+esc(BY_ID[d.profNext].t)+' sonraki profil.':'kapalı.'} Profiller kartta saklanır. Ayar simgesi o profilin ayarlarını açar.</p>`;
   }else if(stab==='profil'){
     const dz=(p.layers[0].sticks.LS||{}).dead??12;
     body=`<div class="card"><p class="lbl">Kart kendini ne olarak tanıtsın?</p>
@@ -1524,7 +1613,7 @@ function renderSheet(){
       <p class="hint" style="margin:10px 0 0">Yeni pad'i eşleşme moduna al (D8 Pro'da X + Home). Listede görününce Bağlan'a dokun.</p>
       <button class="btn" style="width:100%;margin-top:10px" onclick="closeSheet();openLearn()" ${c&&cur?'':'disabled'}>Tuşları tanıt / tanılama</button>`;
   }else if(stab==='cikis'){
-    body=routeHtml();
+    body=routeHtml()+latHtml();
   }else{
     const c=PM.connected(),i=PM.link.info||{},b=bundledFw(),need=cardNeedsUpdate();
     const adv=sgroup('Kart bağlantısı',`
@@ -1546,17 +1635,17 @@ function renderSheet(){
       sgroup('Tema',`<div class="seg">${[['dark','Koyu'],['amoled','Siyah'],['light','Açık'],['auto','Sistem']].map(([k,t])=>`<button class="${themeOf().mode===k?'on':''}" onclick="setTheme({mode:'${k}'})">${t}</button>`).join('')}</div>
       <div class="swatches">${ACCENTS.map(a=>`<button aria-label="${a.n}" title="${a.n}" onclick="setTheme({acc:'${a.k}'})" style="background:${a.c};border-color:${themeOf().acc===a.k?'var(--text)':'transparent'}"></button>`).join('')}</div>`)+
       sgroup('Klavye düzeni',srow('Tuş adları',`<div class="seg sm"><button class="${S.device.layout!=='us'?'on':''}" onclick="S.device.layout='tr';render();renderSheet()">Türkçe Q</button><button class="${S.device.layout==='us'?'on':''}" onclick="S.device.layout='us';render();renderSheet()">US</button></div>`,'Hedef cihazın klavye ayarıyla aynı olmalı.'))+
-    sgroup('Gelişmiş: eşlemeyi pad\'den aç/kapat',
-      (PM.connected()&&PM.link.info?srow('Şu an',`<div class="seg sm"><button class="${PM.link.info.mapping!==0?'on':''}" onclick="PM.sendLine('map 1')">Açık</button><button class="${PM.link.info.mapping===0?'on':''}" onclick="PM.sendLine('map 0')">Kapalı (gamepad)</button></div>`,'Pad\'den aç/kapat tuşlarıyla değiştirdiğinde burası da değişir.'):'')+
-      srow('Açılışta',`<div class="seg sm"><button class="${d.startMode==='map'?'on':''}" onclick="S.device.startMode='map';save();renderSheet()">Açık</button><button class="${d.startMode==='pad'?'on':''}" onclick="S.device.startMode='pad';save();renderSheet()">Gamepad</button></div>`,'Eşleme kapalıyken pad tablete normal gamepad olarak gider. Işık: yeşil açık, mavi gamepad.')+
-      srow('Aç / kapat tuşları',`<select onchange="S.device.comboA=this.value;save();renderSheet()">${bo(d.comboA)}</select>+<select onchange="S.device.comboB=this.value;save();renderSheet()">${bo(d.comboB)}</select>`)+
+    sgroup('Düz gamepad ↔ profil geçişi',
+      (PM.connected()&&PM.link.info?srow('Şu an',`<div class="seg sm"><button class="${PM.link.info.mapping!==0?'on':''}" onclick="setMode(true)">Profil</button><button class="${PM.link.info.mapping===0?'on':''}" onclick="setMode(false)">Düz gamepad</button></div>`,'Pad\'den aç/kapat tuşlarıyla değiştirdiğinde burası da değişir.'):'')+
+      '<p class="hint" style="margin:6px 0">Kart her açılışta düz gamepad başlar. Işık: yeşil profil açık, mavi düz gamepad.</p>'+
+      srow('Geçiş tuşları',`<select onchange="S.device.comboA=this.value;save();renderSheet()">${bo(d.comboA)}</select>+<select onchange="S.device.comboB=this.value;save();renderSheet()">${bo(d.comboB)}</select>`)+
       srow('Basılı tutma',`<input type="number" min="300" max="5000" step="100" value="${d.holdMs}" onchange="S.device.holdMs=Math.max(300,clamp(this.value));save();renderSheet()"><span class="hint">ms</span>`)+
       srow('Atanmamış tuşlar gamepad olsun',tog(d.passUnmapped!==false,"S.device.passUnmapped=!(S.device.passUnmapped!==false);save();renderSheet()"))+
       (d.comboA===d.comboB?'<div class="note">İki farklı tuş seç.</div>':''))+
       sgroup('',`<div class="slist"><button onclick="closeSheet();openLearn()" ${PM.connected()&&cardCtl.cur?'':'disabled'}><span>🎯</span>Tanılama / tuşları tanıt<small>Pad'den gelen veri, gelmeyen tuşlar</small></button></div>`);
     body=`<div class="card" style="padding:4px 14px 14px">
         <div class="row" style="margin-top:10px"><p class="lbl grow" style="margin:0">Güncellemeler</p></div>
-        <div class="li2">${IC.key.replace('<svg','<svg style="color:var(--acc)"')}<span class="grow"><b>Kart yazılımı</b><small class="hint" style="display:block">${c?'kartta '+esc(i.fw||'?'):'kart bağlı değil'}${b?' · yeni: '+esc(b):''}${need?' · <span style="color:var(--acc)">güncelle</span>':''}</small></span>${PM.native||'serial' in navigator?`<button class="pchip ${need?'on':''}" ${c&&PM.link.via==='usb'?'':'disabled'} onclick="updCard()">${need?'Güncelle':'Yeniden kur'}</button>`:''}</div>
+        <div class="li2">${IC.key.replace('<svg','<svg style="color:var(--acc)"')}<span class="grow"><b>Kart yazılımı</b><small class="hint" style="display:block">${c?'kartta '+esc(i.fw||'?'):'kart bağlı değil'}${b?' · yeni: '+esc(b):''}${need?' · <span style="color:var(--acc)">güncelle</span>':''}</small></span>${PM.native||'serial' in navigator||PM.webBleOk()?`<button class="pchip ${need?'on':''}" ${c&&(PM.link.via==='usb'||PM.link.via==='ble')?'':'disabled'} onclick="updCard()">${need?'Güncelle':'Yeniden kur'}</button>`:''}</div>
         <div class="li2">${IC.pad.replace('<svg','<svg style="color:var(--acc)"')}<span class="grow"><b>Uygulama</b><small class="hint" style="display:block">${PM.native?esc(PMNative.version()):'Android telefon için'}</small></span>${PM.native?'<button class="pchip" onclick="closeSheet();updApp()">Güncelle</button>':'<button class="pchip" onclick="openLink(APK_URL)">İndir</button>'}</div>
         <div class="li2">${IC_DRIVE}<span class="grow"><b>Ayar sayfası</b><small class="hint" style="display:block">pmape.github.io · her bilgisayarda Chrome / Edge</small></span><button class="pchip" onclick="shareLink()">Paylaş</button></div>
         ${c&&PM.link.via!=='usb'?'<p class="hint" style="margin:8px 0 0">Kart yazılımı kabloyla kurulur: kartı bu cihaza USB ile tak.</p>':''}
@@ -1889,7 +1978,24 @@ function appBanner(){
   if(PM.native||!/Android/i.test(navigator.userAgent)||off==='1')return '';
   return `<div class="updbar" style="border-color:var(--acc)"><span style="flex:1">Telefonda en rahatı uygulama: kart takılınca kendisi açılır.</span><button class="btn pri" onclick="openLink(APK_URL)">Uygulamayı indir</button><button class="btn ico" aria-label="Kapat" onclick="try{localStorage.setItem('pm_noapp','1')}catch(e){};renderCard()">✕</button></div>`;
 }
+/* gecikme göstergesi: kart her 3 sn'de ölçümü gönderir */
+let cardLat=null;
+function latHtml(){
+  const l=cardLat;
+  if(!PM.connected()||!l)return '<div id="latBox"></div>';
+  const ms=us=>(us/1000).toFixed(us<10000?1:0).replace('.',',')+' ms';
+  const padT=l.pad_us?ms(l.pad_us):'—';
+  const outT=l.bt?(l.host_us?ms(l.host_us):'—'):(l.usb?'1 ms (USB)':'—');
+  const est=(l.pad_us||0)/2+(l.lat||0)+(l.bt?(l.host_us||0)/2:500);
+  const good=(!l.pad_us||l.pad_us<=7500)&&(!l.bt||!l.host_us||l.host_us<=7500);
+  return `<div id="latBox">`+sgroup('Gecikme',
+    srow('Pad → kart',`<b>${padT}</b>`,'Bluetooth bağlantı aralığı. En kısası 7,5 ms.')+
+    srow('Kartın içi',`<b>${l.lat_max||l.lat?ms(l.lat)+' (en çok '+ms(l.lat_max)+')':'—'}</b>`,'Tuşun gelişi ile gönderilişi arası.')+
+    srow('Kart → cihaz',`<b>${outT}</b>`,l.bt?'Bu aralığı hedef cihaz seçer; kart en kısasını (7,5 ms) ister.':'USB her 1 ms\'de bir gönderir.')+
+    `<p class="hint" style="margin:8px 0 0">Ortalama toplam ek gecikme: <b>~${ms(est)}</b>. ${good?'En iyi ayarda çalışıyor ✓':'Bağlantılardan biri daha uzun aralıkta; cihaz izin vermemiş olabilir.'}</p>`)+`</div>`;
+}
 function renderCard(){
+  renderMode();
   const el=document.getElementById('status');if(!el)return;
   const c=PM.connected()&&!!PM.link.info,s=c&&cardSynced(),st=cardState;
   /* giriş: pad */
@@ -1919,7 +2025,7 @@ function renderCard(){
     <span class="farr">›</span>
     <button class="fnode ${c&&st&&st.path!==2?'on':''}" onclick="openSheet('cikis')"><span class="fi" style="color:var(--acc)">${outS==='Bluetooth'?'<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 7l10 10-5 5V2l5 5L7 17"/></svg>':'<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg>'}</span><span style="min-width:0"><small>Çıkış</small><b>${esc(outT)}</b><small>${outS}</small></span></button>
   </div>
-  <div class="fline">${c?`<span style="flex:1">Ayarlar <b>${dev}</b> gidiyor</span><span class="tag">${via}</span>${PM.link.info.mapping===0?'<span class="tag" title="Eşleme kapalı: pad olduğu gibi gamepad">eşleme kapalı</span>':''}`
+  <div class="fline">${c?`<span style="flex:1">Ayarlar <b>${dev}</b> gidiyor</span><span class="tag">${via}</span>${PM.link.info.mapping===0?'<span class="tag" title="Pad olduğu gibi gamepad">düz gamepad</span>':''}`
       :`<span style="flex:1" class="hint">${connMsg||'Kart bağlı değil. Ayar yapmak için bağlan.'}</span><button class="btn pri" onclick="cardBtn()">${connMsg?'Vazgeç':'Bağlan'}</button>`}</div>`;
   /* güncelleme şeridi */
   const ub=document.getElementById('updBar');
@@ -1957,10 +2063,12 @@ async function cardBtn(known){
   try{
     PM.link.onStatus=(st)=>{connMsg=CONN_ST[st]||'';renderCard();if(sheetOpen())renderSheet();};
     PM.link.onLine=ev=>{
+      if(ev.ev==='prof'&&PM.link.info){PM.link.info.prof=ev.cur;renderMode();}
       if(ev.ev==='prof'&&ev.cur<S.profiles.length&&ev.cur!==S.cur){S.cur=ev.cur;ui.layer=0;render();toast('Profil: '+P().name);}
-      if(ev.ev==='mode'){if(PM.link.info)PM.link.info.mapping=ev.mapping;toast(ev.mapping?'Eşleme açık':'Eşleme kapalı · normal gamepad');renderCard();if(document.getElementById('sheet').classList.contains('open'))renderSheet();}
-      if(ev.ev==='hello'){renderCard();setTimeout(cardProfilesCheck,300);if(!updating&&PM.link.via!=='ble'&&cardNeedsUpdate()&&!window._updAsked){window._updAsked=true;setTimeout(()=>ask('Kart için yeni yazılım var ('+ev.fw+' → '+bundledFw()+'). Şimdi kurulsun mu?',null).then(ok=>{if(ok)updCard(true);}),1500);}PM.sendLine('ctrls').catch(()=>{});setTimeout(()=>PM.sendLine('targets').catch(()=>{}),150);setTimeout(()=>PM.sendLine('hid list').catch(()=>{}),300);if(document.getElementById('sheet').classList.contains('open'))renderSheet();}
+      if(ev.ev==='mode'){if(PM.link.info)PM.link.info.mapping=ev.mapping;toast(ev.mapping?'Profil açık: '+((S.profiles[PM.link.info.prof]||P()).name):'Düz gamepad');renderCard();renderMode();if(document.getElementById('sheet').classList.contains('open'))renderSheet();}
+      if(ev.ev==='hello'){renderCard();setTimeout(cardProfilesCheck,300);if(!updating&&(PM.link.via!=='ble'||vnum(ev.fw)>=vnum('0.9.11'))&&cardNeedsUpdate()&&!window._updAsked){window._updAsked=true;setTimeout(()=>ask('Kart için yeni yazılım var ('+ev.fw+' → '+bundledFw()+'). Şimdi kurulsun mu?',null).then(ok=>{if(ok)updCard(true);}),1500);}PM.sendLine('ctrls').catch(()=>{});setTimeout(()=>PM.sendLine('targets').catch(()=>{}),150);setTimeout(()=>PM.sendLine('hid list').catch(()=>{}),300);if(document.getElementById('sheet').classList.contains('open'))renderSheet();}
       if(ev.ev==='state')applyState(ev);
+      if(ev.ev==='stats'&&ev.lat!==undefined){cardLat=ev;if(sheetOpen()&&stab==='cikis'){const el=document.getElementById('latBox');if(el)el.outerHTML=latHtml();}}
       if(ev.ev==='pad')livePad(ev);
       if(ev.ev==='name'){cardName=ev.name;const el=document.getElementById('btname');if(el&&document.activeElement!==el)el.value=ev.name;}
       if(ev.ev==='pairwin')toast('Kart 60 sn tanıtmaya açık: yeni cihazdan şimdi Bluetooth ile bağlan');
@@ -2070,7 +2178,7 @@ function stateText(){
   if(s.path===1)parts.push('📶 '+(cardBT&&cardBT.host?tName(cardBT.host):'Bluetooth'));
   else if(s.path===2)parts.push('📶 aranıyor');
   else if(s.route===1)parts.push('🔌 kabloya döndü');
-  if(!s.mapping)parts.push('🎮 eşleme kapalı');
+  if(!s.mapping)parts.push('🎮 düz gamepad');
   else if(s.layer>0)parts.push(LAYER_NAMES[s.layer]);
   return parts.length?' · '+parts.join(' · '):'';
 }
@@ -2088,14 +2196,14 @@ const bundledFw=()=>PM.native&&PMNative.assetText?PMNative.assetText('fw_version
 function cardNeedsUpdate(){const i=PM.link.info,b=bundledFw();return !!(PM.connected()&&i&&i.fw&&b&&vnum(b)>vnum(i.fw));}
 function updHtml(){
   const i=PM.link.info||{},b=bundledFw(),need=cardNeedsUpdate(),usb=PM.connected()&&PM.link.via==='usb';
-  const canWeb=!PM.native&&'serial' in navigator;
+  const canWeb=!PM.native&&'serial' in navigator,ble=PM.connected()&&PM.link.via==='ble',bleOk=ble&&(PM.native||PM.webBleOk());
   const app=PM.native?srow('Uygulama <span class="hint">'+esc(PMNative.version())+'</span>','<button class="btn" onclick="updApp()">Güncelle</button>','Yeni uygulama indirilir, açınca Android "Güncelle" der. Profillerin korunur.')
     :srow('Telefon uygulaması','<button class="btn" onclick="openLink(APK_URL)">İndir</button>','Android için. Kart takılınca kendisi açılır.');
   return app+srow('Kart yazılımı <span class="hint">'+(PM.connected()?'kartta '+esc(i.fw||'?'):'')+(b?' · yeni: '+esc(b):'')+'</span>',
-      `<button class="btn ${need?'pri':''}" ${usb&&(PM.native||canWeb)?'':'disabled'} onclick="updCard()">${need?'Güncelle':'Yeniden kur'}</button>`,
-      (!PM.connected()?'Önce kartı bu cihaza <b>USB kabloyla</b> bağla. ':PM.link.via==='ble'?'<b>Kart yazılımı kabloyla kurulur:</b> kartı bu cihaza USB ile tak ve USB ile bağlan. ':'')+
-      (!PM.native&&!canWeb?'Bu tarayıcı kabloyla yazamıyor; Chrome ya da Edge kullan. ':'')+
-      'Basınca her şeyi kendisi yapar: kart yükleme moduna geçer, yeni yazılım kabloyla yazılır, kart yeniden başlar. Dosya sürüklemek yok. Ayarların ve profillerin kartta kalır. Yarıda kesilirse kart bozulmaz, tekrar denersin.');
+      `<button class="btn ${need?'pri':''}" ${(usb&&(PM.native||canWeb))||bleOk?'':'disabled'} onclick="updCard()">${need?'Güncelle':'Yeniden kur'}</button>`,
+      (!PM.connected()?'Önce karta bağlan (USB kablo ya da Bluetooth). ':ble?'<b>Bluetooth\'tan kurulur</b> (kart 0.9.11 ve sonrası). Telefonu karta yakın tut. ':'')+
+      (!PM.native&&!canWeb&&!ble?'Bu tarayıcı kabloyla yazamıyor; Chrome ya da Edge kullan. ':'')+
+      'Basınca her şeyi kendisi yapar: kart yükleme moduna geçer, yeni yazılım yazılır, kart yeniden başlar. Dosya sürüklemek yok. Ayarların ve profillerin kartta kalır. Yarıda kesilirse kart bozulmaz, tekrar denersin.');
 }
 /* tam ekran güncelleme penceresi: bu sırada başka hiçbir şey çalışmaz */
 let updating=false;
@@ -2113,35 +2221,75 @@ const UPD_STEPS=['Yeni yazılım hazırlanıyor','Kart yükleme moduna geçiyor'
 const UPD_FAIL='<br><br>Kart bozulmaz: kartı çıkarıp tak, eski yazılımla açılır; sonra tekrar dene.';
 let updBin=null;
 /* güncellendi mi: kart geri bağlanınca sürümüne bak */
+let updBle=null; /* kablosuz güncellemede karta geri bağlanma bilgisi */
 function updWaitBack(want){
   updModal(UPD_STEPS,3,100);
   const t0=Date.now();
   const chk=setInterval(async()=>{
-    if(PM.connected()&&PM.link.info){clearInterval(chk);const ok=!want||vnum(PM.link.info.fw)>=vnum(want);
+    if(updBle&&!PM.connected()){try{await cardBtn(updBle);}catch(e){}}
+    if(PM.connected()&&PM.link.info){updBle=null;clearInterval(chk);const ok=!want||vnum(PM.link.info.fw)>=vnum(want);
       updModal(UPD_STEPS,ok?5:4,null,ok?'Kart yazılımı '+esc(PM.link.info.fw)+' kuruldu ✓':'Kart bağlandı ama sürümü '+esc(PM.link.info.fw)+'.',`<button class="btn pri" onclick="updClose()">Tamam</button>`);return;}
     if(!PM.connected()){try{if(PM.native){if(PMNative.present())await PM.connect({native:true});}else{const k=await PM.findKnown();if(k)await PM.connect(k);}}catch(e){}}
-    if(Date.now()-t0>45000){clearInterval(chk);updModal(UPD_STEPS,4,null,'Yazılım yazıldı ama kart henüz geri bağlanmadı. Kartı çıkarıp tak, sonra Bağlan de.',`<button class="btn pri" onclick="updClose()">Tamam</button>`);}
+    if(Date.now()-t0>(updBle?70000:45000)){clearInterval(chk);updBle=null;updModal(UPD_STEPS,4,null,'Yazılım yazıldı ama kart henüz geri bağlanmadı. Kartı çıkarıp tak, sonra Bağlan de.',`<button class="btn pri" onclick="updClose()">Tamam</button>`);}
   },1500);
+}
+/* uygulamanın güncelleme ilerlemesi (kablo ya da Bluetooth) */
+function updNativeEv(want){
+  const fail=()=>updBle?'<br><br>Kart bozulmaz: kartı güçten çekip tak, eski yazılımla açılır; sonra tekrar dene. Olmazsa bir kere USB kabloyla güncelle.':UPD_FAIL;
+  return ev=>{
+    if(ev.state==='wait')updModal(UPD_STEPS,1);
+    else if(ev.state==='perm')updModal(UPD_STEPS,1,null,'Android kartın yükleme moduna erişim izni soruyor: <b>Tamam</b> de.');
+    else if(ev.state==='write')updModal(UPD_STEPS,2,ev.p);
+    else if(ev.state==='noboot'){updModal(UPD_STEPS,1,null,'Kart yükleme modunda görünmedi.'+fail(),`<button class="btn pri" onclick="updBle=null;updClose()">Kapat</button>`);}
+    else if(ev.state==='err'){updModal(UPD_STEPS,2,null,'Yazılamadı: '+esc(ev.msg||'')+fail(),`<button class="btn pri" onclick="updBle=null;updClose()">Kapat</button>`);}
+    else if(ev.state==='done')updWaitBack(want);
+  };
+}
+/* tarayıcıda kablosuz güncelleme: önyükleyiciyi seç ve yaz (kullanıcı dokunuşuyla başlamalı) */
+async function updBleRun(){
+  const want=webLatest||'';
+  let dev;
+  try{dev=await PM.DFU.pickBle();}catch(e){updModal(UPD_STEPS,1,null,'Seçilmedi. Kart 2 dakika yükleme modunda bekler; tekrar <b>Devam</b> de.',`<button class="btn pri" onclick="updBleRun()">Devam</button><button class="btn" onclick="updBle=null;updClose()">Vazgeç</button>`);return;}
+  try{
+    await PM.DFU.runBle(dev,updBin.bin,(st,p)=>updModal(UPD_STEPS,2,p));
+    updWaitBack(want);
+  }catch(e){updModal(UPD_STEPS,2,null,'Yazılamadı: '+esc(e.message)+'<br><br>Kart bozulmaz: kartı güçten çekip tak, eski yazılımla açılır; sonra tekrar dene.',`<button class="btn pri" onclick="updBle=null;updClose()">Kapat</button>`);}
 }
 async function updCard(skip){
   if(updating)return;
-  if(PM.link.via!=='usb'){await ask('Kart yazılımı kabloyla kurulur.\n\nKartı bu cihaza USB kabloyla tak ve USB ile bağlan, sonra tekrar Güncelle de.',null,true);return;}
-  if(!skip&&!await ask('Kart yazılımı '+(bundledFw()||'')+' kurulsun mu?\n\nHer şeyi kendisi yapar, yaklaşık 1 dakika sürer. Bu sırada kartı çıkarma. Ayarların kartta kalır.',null))return;
+  const viaBle=PM.link.via==='ble';
+  if(viaBle&&vnum(PM.link.info&&PM.link.info.fw)<vnum('0.9.11')){await ask('Kart yazılımı '+esc(PM.link.info.fw)+' kablosuz güncellemeyi bilmiyor.\n\nBu seferlik kartı USB kabloyla tak ve USB ile bağlan. Bundan sonraki güncellemeler Bluetooth\'tan da yapılır.',null,true);return;}
+  if(!skip&&!await ask('Kart yazılımı '+(bundledFw()||'')+' kurulsun mu?\n\n'+(viaBle?'Bluetooth\'tan kurulur, yaklaşık 1–2 dakika sürer. Kartı güçten çekme, telefonu karta yakın tut.':'Her şeyi kendisi yapar, yaklaşık 1 dakika sürer. Bu sırada kartı çıkarma.')+' Ayarların kartta kalır.',null))return;
   updating=true;closeSheet();
   const want=bundledFw();
+  if(viaBle){
+    updBle=PM.native?{ble:true,auto:true}:{wble:true,dev:PM.link.wbDev,auto:true};
+    if(!PM.native){
+      /* tarayıcı: yazılımı internetten al */
+      updModal(UPD_STEPS,0);
+      try{const r=await fetch(FW_URL,{cache:'no-store'});if(!r.ok)throw new Error(r.status);updBin=PM.DFU.uf2ToBin(new Uint8Array(await r.arrayBuffer()));}
+      catch(e){updBle=null;updModal(UPD_STEPS,0,null,'Yeni yazılım internetten alınamadı.',`<button class="btn" onclick="updClose()">Kapat</button>`);return;}
+      if(updBin.base!==0x27000){updBle=null;updModal(UPD_STEPS,0,null,'Bu dosya bu karta ait değil.',`<button class="btn" onclick="updClose()">Kapat</button>`);return;}
+    }
+    updModal(UPD_STEPS,1);
+    try{await PM.sendLine('dfu ble');}catch(e){}
+    await new Promise(r=>setTimeout(r,1200));
+    try{await PM.disconnect();}catch(e){}
+    if(PM.native){
+      window.PM_native.flash=updNativeEv(want);
+      PMNative.flashBle();
+      return;
+    }
+    await new Promise(r=>setTimeout(r,2500));
+    updModal(UPD_STEPS,1,null,'Kart kablosuz yükleme modunda. Tarayıcı bir kez seçim istiyor: <b>Devam</b>a bas, listeden <b>AdaDFU</b> (ya da adında DFU geçen cihazı) seç, <b>Eşleştir</b> de.',`<button class="btn pri" onclick="updBleRun()">Devam</button><button class="btn" onclick="updBle=null;updClose()">Vazgeç</button>`);
+    return;
+  }
   if(PM.native){
     updModal(UPD_STEPS,1);
     try{await PM.sendLine('dfu');}catch(e){}
     await new Promise(r=>setTimeout(r,1200));
     try{await PM.disconnect();}catch(e){}
-    window.PM_native.flash=ev=>{
-      if(ev.state==='wait')updModal(UPD_STEPS,1);
-      else if(ev.state==='perm')updModal(UPD_STEPS,1,null,'Android kartın yükleme moduna erişim izni soruyor: <b>Tamam</b> de.');
-      else if(ev.state==='write')updModal(UPD_STEPS,2,ev.p);
-      else if(ev.state==='noboot')updModal(UPD_STEPS,1,null,'Kart yükleme modunda görünmedi.'+UPD_FAIL,`<button class="btn pri" onclick="updClose()">Kapat</button>`);
-      else if(ev.state==='err')updModal(UPD_STEPS,2,null,'Yazılamadı: '+esc(ev.msg||'')+UPD_FAIL,`<button class="btn pri" onclick="updClose()">Kapat</button>`);
-      else if(ev.state==='done')updWaitBack(want);
-    };
+    window.PM_native.flash=updNativeEv(want);
     PMNative.flashUf2();
     return;
   }

@@ -18,3 +18,5 @@ void ble_out_usb(bool present);
 bool ble_cmd(char *l);
 /* yayını yeniden değerlendir (ayar telefonu bağlanınca/ayrılınca) */
 void ble_out_adv_kick(void);
+/* hedef bağlantı aralığı (µs), bağlı değilse 0 */
+uint32_t ble_out_host_us(void);

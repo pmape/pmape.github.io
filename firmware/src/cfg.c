@@ -170,6 +170,12 @@ static void cmd(char *l)
 		out_state_request();
 	} else if (!strcmp(l, "state")) {
 		out_state_request();
+	} else if (!strcmp(l, "dfu ble")) {
+		/* Kablosuz güncelleme: önyükleyici Bluetooth DFU modunda açılır, uygulama yeni yazılımı yollar */
+		OUT("{\"ev\":\"dfu\",\"ok\":1,\"ble\":1}\n");
+		k_sleep(K_MSEC(400));
+		NRF_POWER->GPREGRET = 0xA8; /* Adafruit önyükleyicisi: kablosuz (OTA) DFU */
+		sys_reboot(SYS_REBOOT_COLD);
 	} else if (!strcmp(l, "dfu")) {
 		/* Yükleme moduna geç: kart USB sürücü olarak açılır, yeni UF2 oraya yazılır */
 		OUT("{\"ev\":\"dfu\",\"ok\":1}\n");

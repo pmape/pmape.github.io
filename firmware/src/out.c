@@ -224,6 +224,32 @@ static void live_tick(const struct pad_state *p)
 	    p->valid, (unsigned)p->btn, p->lx, p->ly, p->rx, p->ry, p->lt, p->rt);
 }
 
+static volatile bool bt_side, use_bt;
+
+/* gecikme: pad raporu gelişi → çıkışa verilişi (kartın kendi payı) */
+static uint32_t lat_sum, lat_n, lat_max;
+
+static void lat_mark(void)
+{
+	uint32_t c;
+
+	if (!pad_rx_take(&c)) return;
+	uint32_t us = k_cyc_to_us_floor32(k_cycle_get_32() - c);
+
+	lat_sum += us; lat_n++;
+	if (us > lat_max) lat_max = us;
+}
+
+void out_print_stats_lat(uint32_t pad_us, uint32_t host_us)
+{
+	uint32_t avg = lat_n ? lat_sum / lat_n : 0, mx = lat_max;
+
+	lat_sum = lat_n = lat_max = 0;
+	OUT("{\"ev\":\"stats\",\"usb\":%d,\"pad\":%d,\"mapping\":%d,\"rx\":%u,\"tx_ok\":%u,\"tx_err\":%u,\"tx_busy\":%u,\"unstuck\":%u,\"wake\":%u,\"lat\":%u,\"lat_max\":%u,\"pad_us\":%u,\"host_us\":%u,\"bt\":%d}\n",
+	    usb_cfg, pad_connected, mapping_on, pad_rx_count(), tx_ok, tx_err, tx_busy, tx_unstuck, tx_wake,
+	    avg, mx, pad_us, host_us, bt_side && use_bt);
+}
+
 void out_print_stats(void)
 {
 	OUT("{\"ev\":\"stats\",\"usb\":%d,\"pad\":%d,\"mapping\":%d,\"rx\":%u,\"tx_ok\":%u,\"tx_err\":%u,\"tx_busy\":%u,\"unstuck\":%u,\"wake\":%u}\n",
@@ -243,7 +269,6 @@ static const struct gpio_dt_spec led_r = GPIO_DT_SPEC_GET(DT_ALIAS(led0), gpios)
 
 
 /* Tuşlar nereye: bt_side = Bluetooth tarafı seçili (ya da kablo yok); use_bt = şu an Bluetooth'tan gidiyor */
-static volatile bool bt_side, use_bt;
 static int64_t bt_wait_since;
 
 static void route_tick(int64_t now)
@@ -499,6 +524,7 @@ static void out_thread(void *a, void *b, void *c)
 		}
 		if (hid_on) hid_merge_out(hkb, hmb, hc->mode == 1 ? 0 : hi.dx, hc->mode == 1 ? 0 : hi.dy, hi.wh, &r);
 		out_emit(&r);
+		lat_mark();
 	}
 }
 

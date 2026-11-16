@@ -125,6 +125,7 @@ static void name_apply(void)
  * Böylece bilgisayar/telefon ayar için bağlanınca kendini gamepad'e bağlanıyor sanıp eşleşmeye
  * kalkmaz, kopma olmaz; oyun bağlantısı da ayar bağlantısından bağımsız görünür kalır. */
 static struct bt_le_ext_adv *set_host, *set_cfg;
+static bool cfg_slow;
 static bool on_host, on_cfg;
 
 static void adv_connected(struct bt_le_ext_adv *a, struct bt_le_ext_adv_connected_info *info)
@@ -169,7 +170,17 @@ static void adv_update(struct k_work *w)
 	adv_sync(&set_host, &on_host, for_host, BT_ID_DEFAULT, BT_GAP_ADV_FAST_INT_MIN_1 * 2 / 3, BT_GAP_ADV_FAST_INT_MIN_1,
 		 ad, ARRAY_SIZE(ad), sd, ARRAY_SIZE(sd));
 	/* ayar yayını yavaş (100–150 ms): pad bağlantısının süresinden çalmasın */
-	adv_sync(&set_cfg, &on_cfg, for_cfg, PM_CFG_ID, BT_GAP_ADV_FAST_INT_MIN_2, BT_GAP_ADV_FAST_INT_MAX_2,
+	/* oyun sürerken (hedef bağlı) ayar yayını daha da seyrek: 0,5–0,6 sn */
+	if (set_cfg && cfg_slow != !!host) {
+		struct bt_le_adv_param cp = BT_LE_ADV_PARAM_INIT(BT_LE_ADV_OPT_CONNECTABLE,
+			host ? 800 : BT_GAP_ADV_FAST_INT_MIN_2, host ? 960 : BT_GAP_ADV_FAST_INT_MAX_2, NULL);
+
+		cp.id = PM_CFG_ID;
+		if (on_cfg) { bt_le_ext_adv_stop(set_cfg); on_cfg = false; }
+		bt_le_ext_adv_update_param(set_cfg, &cp);
+	}
+	cfg_slow = !!host;
+	adv_sync(&set_cfg, &on_cfg, for_cfg, PM_CFG_ID, host ? 800 : BT_GAP_ADV_FAST_INT_MIN_2, host ? 960 : BT_GAP_ADV_FAST_INT_MAX_2,
 		 cfg_ad, ARRAY_SIZE(cfg_ad), cfg_sd, ARRAY_SIZE(cfg_sd));
 	adv_on = on_host;
 }
@@ -329,8 +340,8 @@ static void security_changed(struct bt_conn *conn, bt_security_t level, enum bt_
 	host_ready = true;
 	addr_str(a, s, sizeof(s));
 	OUT("{\"ev\":\"ble\",\"host\":\"%s\"}\n", s);
-	/* en kısa aralık (7,5–11 ms) ve 2M PHY: daha az gecikme */
-	struct bt_le_conn_param p = BT_LE_CONN_PARAM_INIT(6, 9, 0, 400);
+	/* en kısa aralık (7,5 ms) ve 2M PHY: daha az gecikme; son kararı hedef verir */
+	struct bt_le_conn_param p = BT_LE_CONN_PARAM_INIT(6, 6, 0, 400);
 
 	bt_conn_le_param_update(conn, &p);
 	bt_conn_le_phy_update(conn, BT_CONN_LE_PHY_PARAM_2M);
@@ -338,6 +349,14 @@ static void security_changed(struct bt_conn *conn, bt_security_t level, enum bt_
 }
 
 void ble_out_adv_kick(void) { adv_kick(); }
+
+uint32_t ble_out_host_us(void)
+{
+	struct bt_conn_info i;
+
+	if (!host || bt_conn_get_info(host, &i)) return 0;
+	return i.le.interval * 1250;
+}
 
 BT_CONN_CB_DEFINE(ble_out_cb) = {
 	.connected = connected,

@@ -117,7 +117,7 @@ static void start_scan(void)
 }
 
 /* Pad bağlantısı: 7,5–15 ms aralık, gecikmesiz (varsayılan 30–50 ms gecikme ekliyordu) */
-#define PAD_CONN_PARAM BT_LE_CONN_PARAM(6, 12, 0, 400)
+#define PAD_CONN_PARAM BT_LE_CONN_PARAM(6, 6, 0, 400)
 
 /* Tuş raporlarını ayar ekranına yazmak sadece tuş tanıtma sırasında (her raporu yazmak kartı yavaşlatıyordu) */
 static int64_t replog_until;
@@ -572,12 +572,13 @@ static void security_changed(struct bt_conn *conn, bt_security_t level, enum bt_
 	start_discovery(conn);
 }
 
-/* Pad daha uzun bağlantı aralığı isterse en fazla 15 ms'ye izin ver */
+/* Pad aralık değiştirmek isterse: en fazla 15 ms, ve onun izin verdiği en kısası */
 static bool le_param_req(struct bt_conn *conn, struct bt_le_conn_param *param)
 {
 	if (!is_pad_conn(conn)) return true;
 	if (param->interval_min > 12) return false;
-	if (param->interval_max > 12) param->interval_max = 12;
+	/* pad'in kabul ettiği en kısa aralığı seç */
+	param->interval_max = param->interval_min < 6 ? 6 : param->interval_min;
 	param->latency = 0;
 	return true;
 }
@@ -940,7 +941,13 @@ int main(void)
 	while (1) {
 		k_sleep(K_SECONDS(3));
 		OUT("{\"ev\":\"alive\",\"connected\":%d}\n", cur_conn != NULL);
-		out_print_stats();
+		{
+			struct bt_conn_info ci;
+			uint32_t pad_us = 0;
+
+			if (cur_conn && !bt_conn_get_info(cur_conn, &ci)) pad_us = ci.le.interval * 1250;
+			out_print_stats_lat(pad_us, ble_out_host_us());
+		}
 	}
 	return 0;
 }
