@@ -50,6 +50,10 @@ select,input[type=number],input[type=text],textarea{background:var(--bg);border:
 .mode.map{color:#3ecf6e;border-color:#3ecf6e}
 .mode small{font-size:12px}
 .mode.off{opacity:.55}
+#plainInfo{display:none;text-align:center;margin:4px 0 6px;font-size:13px}
+body.plain #plainInfo{display:block}
+body.plain #padHint,body.plain #sumCard,body.plain #panel,body.plain #outBtn{display:none!important}
+body.plain #pad .b{cursor:default}
 .mnote{display:flex;gap:8px;align-items:center;padding:8px 12px;margin:0 0 8px;border:1px solid #4aa3ff;border-radius:12px;font-size:13px}
 .mnote span{flex:1;min-width:0}
 #status{padding:10px 12px}
@@ -291,14 +295,14 @@ textarea{width:100%;min-height:140px;font-family:ui-monospace,Consolas,monospace
 
 <main>
   <div id="updBar"></div>
-  <div id="modeNote"></div>
   <section class="card" id="status"></section>
   <div class="col">
     <section class="card" style="padding:10px 10px 6px">
       <svg viewBox="0 0 340 222" id="pad"></svg>
-      <p class="hint" style="text-align:center;margin:2px 0 4px;font-size:12px">Turuncu = atanmış · düzenlemek için tuşa dokun</p>
+      <p class="hint" id="padHint" style="text-align:center;margin:2px 0 4px;font-size:12px">Turuncu = atanmış · düzenlemek için tuşa dokun</p>
+      <p id="plainInfo"><b style="color:#4aa3ff">Düz gamepad</b> · pad doğrudan bağlıymış gibi çalışır, bütün tuşlar olduğu gibi gider</p>
     </section>
-    <section class="card" style="padding:4px 14px"><div class="alist" id="summary"></div></section>
+    <section class="card" id="sumCard" style="padding:4px 14px"><div class="alist" id="summary"></div></section>
   </div>
   <section class="card" id="panel"></section>
 </main>
@@ -1099,7 +1103,7 @@ if(S.device.passUnmapped===undefined)S.device.passUnmapped=true;
 if(!S.device.noLayers){S.device.noLayers=true;for(const q of S.profiles)for(const bd of Object.values(q.layers[0].btn))for(const k of Object.keys(bd))if(bd[k]&&bd[k].kind==='layer')delete bd[k];}
 if(!S.device.profMod){S.device.profMod='HOME';S.device.profPrev='LB';S.device.profNext='RB';}
 if(!S.device.ctrls)S.device.ctrls=[{name:'BSP-D8Pro',addr:'03:24:00:D8:06:04',active:true}];
-let ui={sel:'A',layer:0,act:'single'};
+let ui={sel:'A',layer:0,act:'single',plain:true};
 let rec=null;
 
 const P=()=>S.profiles[S.cur];
@@ -1198,7 +1202,8 @@ function paintPad(){
     const lb=document.getElementById('l-'+b.id);
     const src=b.stick?(mapped?L().sticks[b.id]:inh?P().layers[0].sticks[b.id]:null):(mapped?L().btn[b.id]:inh?P().layers[0].btn[b.id]:null);
     lb.textContent='';lb.classList.toggle('inh',!mapped&&inh);
-    g.classList.toggle('map',!!mapped);g.classList.toggle('inh',!mapped&&inh);g.classList.toggle('sel',ui.sel===b.id);
+    const pl=isPlain();
+    g.classList.toggle('map',!!mapped&&!pl);g.classList.toggle('inh',!mapped&&inh&&!pl);g.classList.toggle('sel',ui.sel===b.id&&!pl);
   }
 }
 function renderTop(){
@@ -1217,31 +1222,35 @@ function comboTx(){
   const t=x=>(BY_ID[x]&&BY_ID[x].t)||x||'?';
   return t(a)+' + '+t(b)+' ('+(ms/1000).toString().replace('.',',')+' sn)';
 }
+/* ekranda düz gamepad mi gösteriliyor: kart bağlıysa kartın modu, değilse son seçim (açılışta düz) */
+function isPlain(){const m=cardMapping();return m<0?ui.plain!==false:m===0;}
 function renderMode(){
   const b=document.getElementById('modeBtn');if(!b)return;
-  const m=cardMapping(),cp=PM.link.info&&PM.link.info.prof;
+  const m=cardMapping(),pl=isPlain(),cp=PM.link.info&&PM.link.info.prof;
   const pn=(S.profiles[m===1&&typeof cp==='number'&&cp<S.profiles.length?cp:S.cur]||{}).name||'Profil';
-  /* kart her zaman düz gamepad açıldığı için bağlanana kadar da öyle göster */
-  b.className='mode '+(m===1?'map':'pad')+(m<0?' off':'');
+  if(m>=0)ui.plain=pl;
+  if(pl)document.body.classList.remove('editing');
+  if(document.body.classList.contains('plain')!==pl){document.body.classList.toggle('plain',pl);paintPad();}
+  b.className='mode '+(pl?'pad':'map')+(m<0?' off':'');
   document.getElementById('modeTx').textContent='';
-  document.getElementById('profName').textContent=m===1?pn:'Düz gamepad';
-  b.title=m<0?'Kart bağlı değil (kart düz gamepad olarak açılır)':m===0?'Şu an düz gamepad. Dokun: profile geç. Pad\'de: '+comboTx():'Profil açık: '+pn+'. Dokun: düz gamepad. Pad\'de: '+comboTx();
-  const n=document.getElementById('modeNote');
-  if(n)n.innerHTML=m===1?'':`<div class="mnote"><span>Şu an <b>düz gamepad</b>${m<0?' (kart bağlı değil)':''}. Aşağıda <b>${esc(P().name)}</b> profilini düzenliyorsun. Pad'de geçiş: ${esc(comboTx())}</span>${m===0?`<button class="btn pri" onclick="useProfile(S.cur)">Bu profile geç</button>`:''}</div>`;
+  document.getElementById('profName').textContent=pl?'Düz gamepad':pn;
+  b.title=(pl?'Düz gamepad. Dokun: profile geç.':'Profil: '+pn+'. Dokun: düz gamepad.')+' Pad\'de: '+comboTx()+(m<0?' (kart bağlı değil)':'');
 }
 function sendCombo(){
   const d=S.device,a=CIDX.indexOf(d.comboA),b=CIDX.indexOf(d.comboB);
   if(PM.connected()&&PM.link.info&&a>=0&&b>=0&&a!==b)PM.sendLine('combo '+a+' '+b+' '+(d.holdMs||1000)).catch(()=>{});
 }
 function setMode(on){
-  if(!PM.connected()||!PM.link.info){toast('Kart bağlı değil');return;}
-  PM.sendLine('map '+(on?1:0)).catch(()=>{});
+  ui.plain=!on;
+  if(PM.connected()&&PM.link.info){PM.link.info.mapping=on?1:0;PM.sendLine('map '+(on?1:0)).catch(()=>{});}
+  render();renderCard();if(sheetOpen())renderSheet();
 }
-function toggleMode(){setMode(cardMapping()===0);}
+function toggleMode(){setMode(isPlain());}
 /* listeden profil seç: profili değiştirir ve kartta açar */
 function useProfile(i){
   selProfile(i);
-  if(PM.connected()&&PM.link.info){if(cardSynced())PM.sendLine('cs '+i).catch(()=>{});setMode(true);}
+  if(PM.connected()&&PM.link.info&&cardSynced()){PM.link.info.prof=i;PM.sendLine('cs '+i).catch(()=>{});}
+  setMode(true);
 }
 function selProfile(i){
   if(i===S.cur)return;
@@ -1495,7 +1504,7 @@ function cur(){const l=L();return l.btn[ui.sel]||(l.btn[ui.sel]={});}
 function curA(){const b=cur();return b[ui.act]||(b[ui.act]=act());}
 function curS(){return L().sticks[ui.sel];}
 function closeEditor(){document.body.classList.remove('editing');renderSummary();paintPad();}
-function pick(id){document.body.classList.add('editing');ui.sel=id;if(ui.act==='_new'||ui.act.startsWith('c_'))ui.act='single';if(rec)stopRec();render();}
+function pick(id){if(isPlain())return;document.body.classList.add('editing');ui.sel=id;if(ui.act==='_new'||ui.act.startsWith('c_'))ui.act='single';if(rec)stopRec();render();}
 function hasExit(li){const l=P().layers[li];return Object.values(l.btn).some(bd=>Object.values(bd).some(a=>a&&a.kind==='layer'&&a.layer!==li));}
 /* Sesli yazma: cihazın kendi dikte / asistanını açan hazır adımlar */
 const VOICE=[
@@ -1595,7 +1604,7 @@ function renderSheet(){
   if(stab==='step'){body=stepSheet();}
   else if(stab==='pick'){const st=curA().steps[(ui.pick||{}).i];body=pickSheet();SHEET_TITLE.pick=st?({key:'Klavye tuşu',mouse:'Fare',pad:'Gamepad tuşu',media:'Medya'}[st.t]||'Seç'):'Seç';}
   else if(stab==='profiller'){
-    const mm=cardMapping();
+    const mm=isPlain()?0:1;
     body=`<div class="card" style="padding:2px 14px"><div class="li2"><span class="pdot ${mm===0?'on':''}" style="${mm===0?'background:#4aa3ff':''}"></span><button class="otx lnk" onclick="setMode(false);closeSheet()"><b>🎮 Düz gamepad</b><small>Pad olduğu gibi gider, atama yok</small></button>${mm===0?'<span class="pchip on" style="height:30px">Etkin</span>':`<button class="pchip" style="height:30px" onclick="setMode(false);closeSheet()">Seç</button>`}</div>${S.profiles.map((q,i)=>`<div class="li2"><span class="pdot ${i===S.cur&&mm!==0?'on':''}"></span><button class="otx lnk" onclick="useProfile(${i});closeSheet()"><b>${esc(q.name)}</b><small>${esc(OUT_SHORT[q.output||'all'])} · ${countBinds(q)} atama</small></button>${i===S.cur&&mm===1?'<span class="pchip on" style="height:30px">Etkin</span>':`<button class="pchip" style="height:30px" onclick="useProfile(${i});closeSheet()">Seç</button>`}<button class="btn ico sm" aria-label="${esc(q.name)} ayarları" onclick="selProfile(${i});openSheet('profil')">${IC_TUNE}</button></div>`).join('')}</div>
       <div class="row" style="gap:8px;margin-top:12px"><button class="btn pri grow" onclick="newProfile()">＋ Yeni profil</button><button class="btn" onclick="dupProfile()">Kopyala</button></div>
       <div class="row" style="gap:8px;margin-top:8px"><button class="btn grow" onclick="importProfiles()">İçe aktar</button><button class="btn grow" onclick="backupProfiles()">Dışa aktar</button></div>
@@ -2085,7 +2094,7 @@ async function cardBtn(known){
     PM.link.onLine=ev=>{
       if(ev.ev==='prof'&&PM.link.info){PM.link.info.prof=ev.cur;renderMode();}
       if(ev.ev==='prof'&&ev.cur<S.profiles.length&&ev.cur!==S.cur){S.cur=ev.cur;ui.layer=0;render();toast('Profil: '+P().name);}
-      if(ev.ev==='mode'){if(PM.link.info)PM.link.info.mapping=ev.mapping;toast(ev.mapping?'Profil açık: '+((S.profiles[PM.link.info.prof]||P()).name):'Düz gamepad');renderCard();renderMode();if(document.getElementById('sheet').classList.contains('open'))renderSheet();}
+      if(ev.ev==='mode'){if(PM.link.info)PM.link.info.mapping=ev.mapping;toast(ev.mapping?'Profil açık: '+((S.profiles[PM.link.info.prof]||P()).name):'Düz gamepad');renderCard();render();if(document.getElementById('sheet').classList.contains('open'))renderSheet();}
       if(ev.ev==='hello'){renderCard();setTimeout(cardProfilesCheck,300);if(!updating&&(PM.link.via!=='ble'||vnum(ev.fw)>=vnum('0.9.11'))&&cardNeedsUpdate()&&!window._updAsked){window._updAsked=true;setTimeout(()=>ask('Kart için yeni yazılım var ('+ev.fw+' → '+bundledFw()+'). Şimdi kurulsun mu?',null).then(ok=>{if(ok)updCard(true);}),1500);}PM.sendLine('ctrls').catch(()=>{});setTimeout(()=>PM.sendLine('targets').catch(()=>{}),150);setTimeout(()=>PM.sendLine('hid list').catch(()=>{}),300);if(document.getElementById('sheet').classList.contains('open'))renderSheet();}
       if(ev.ev==='hello'&&ev.ca!==undefined){
         /* karttaki geçiş tuşları buradakinden farklıysa karta yaz (ayar yazmayı beklemeden) */
