@@ -44,6 +44,9 @@ bool engine_has_config(void);
 /* Her 8 ms'de bir */
 enum eng_mode engine_tick(const struct pad_state *p, int64_t now, struct out_rep *r);
 bool engine_mapping(void);
+/* geçiş kombinasyonu: ayardakinin üstüne yazar (a == 255: ayardaki geçerli) */
+void engine_set_combo(uint8_t a, uint8_t b, uint16_t hold_ms);
+void engine_get_combo(uint8_t *a, uint8_t *b, uint16_t *hold_ms);
 void engine_set_mapping(bool on);
 int engine_select_profile(int n);
 int engine_profile(void);

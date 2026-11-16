@@ -33,6 +33,7 @@ static size_t blob_len;
 static uint8_t rx[CFG_MAX];
 static size_t rx_len, rx_expect;
 static int saved_prof = -1;
+static uint8_t kombo[4] = { 255, 255, 0, 0 }; /* a, b, tutma ms (u16) */
 /* Ayar ekranının profilleri (düzenlenebilir hali, sıkıştırılmış JSON): karttan geri alınabilsin */
 #define JMAX 8192
 static uint8_t jblob[JMAX];
@@ -55,6 +56,10 @@ static int h_set(const char *key, size_t len, settings_read_cb read_cb, void *ar
 		if (read_cb(arg, &v, 1) == 1) saved_prof = v;
 		return 0;
 	}
+	if (!strcmp(key, "kombo")) {
+		if (read_cb(arg, kombo, sizeof(kombo)) != sizeof(kombo)) kombo[0] = 255;
+		return 0;
+	}
 	if (key[0] == 'c') {
 		int n = atoi(key + 1);
 
@@ -69,6 +74,7 @@ static int h_commit(void)
 	if (blob_len && engine_set_config(blob, blob_len) == 0) {
 		if (saved_prof >= 0) engine_select_profile(saved_prof);
 	}
+	if (kombo[0] != 255) engine_set_combo(kombo[0], kombo[1], kombo[2] | kombo[3] << 8);
 	return 0;
 }
 
@@ -151,10 +157,14 @@ static int hexval(char c)
 
 static void hello(void)
 {
-	OUT("{\"ev\":\"hello\",\"fw\":\"%s\",\"cfg\":%u,\"crc\":\"%08x\",\"prof\":%d,\"nprof\":%d,\"mapping\":%d,\"jlen\":%u,\"jcrc\":\"%08x\"}\n",
+	uint8_t ca, cb;
+	uint16_t ch;
+
+	engine_get_combo(&ca, &cb, &ch);
+	OUT("{\"ev\":\"hello\",\"fw\":\"%s\",\"cfg\":%u,\"crc\":\"%08x\",\"prof\":%d,\"nprof\":%d,\"mapping\":%d,\"jlen\":%u,\"jcrc\":\"%08x\",\"ca\":%u,\"cb\":%u,\"hold\":%u}\n",
 	    FW_VERSION, (unsigned)blob_len, blob_len ? crc32_ieee(blob, blob_len) : 0,
 	    engine_profile(), engine_profile_count(), engine_mapping(),
-	    (unsigned)jlen, jlen ? crc32_ieee(jblob, jlen) : 0);
+	    (unsigned)jlen, jlen ? crc32_ieee(jblob, jlen) : 0, ca, cb, ch);
 }
 
 extern bool bt_cmd(char *l);
@@ -250,6 +260,18 @@ static void cmd(char *l)
 		}
 	} else if (!strncmp(l, "live ", 5)) {
 		out_live(atoi(l + 5));
+	} else if (!strncmp(l, "combo ", 6)) {
+		/* geçiş tuşları: combo <a> <b> <ms>; ayardan bağımsız saklanır */
+		char *e;
+		long a = strtol(l + 6, &e, 10), b = strtol(e, &e, 10), ms = strtol(e, NULL, 10);
+
+		if (a >= 0 && a < NBTN && b >= 0 && b < NBTN && a != b) {
+			if (ms < 300 || ms > 5000) ms = 1000;
+			kombo[0] = a; kombo[1] = b; kombo[2] = ms & 255; kombo[3] = ms >> 8;
+			settings_save_one("pm/kombo", kombo, sizeof(kombo));
+			engine_set_combo(a, b, ms);
+		}
+		hello();
 	} else if (!strncmp(l, "map ", 4)) {
 		engine_set_mapping(l[4] == '1');
 		OUT("{\"ev\":\"mode\",\"mapping\":%d}\n", engine_mapping());

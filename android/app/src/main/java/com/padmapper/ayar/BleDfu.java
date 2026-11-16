@@ -55,8 +55,13 @@ final class BleDfu {
         return n != null && (n.contains("DFU") || n.contains("Dfu"));
     }
 
+    private final java.util.Set<String> seen = java.util.Collections.synchronizedSet(new java.util.HashSet<String>());
+    private volatile boolean filtered;
     private final ScanCallback scb = new ScanCallback() {
-        @Override public void onScanResult(int t, ScanResult r) { if (found == null && isDfu(r)) found = r.getDevice(); }
+        @Override public void onScanResult(int t, ScanResult r) {
+            seen.add(r.getDevice().getAddress());
+            if (found == null && (filtered || isDfu(r))) found = r.getDevice();
+        }
     };
 
     private final BluetoothGattCallback gcb = new BluetoothGattCallback() {
@@ -121,11 +126,19 @@ final class BleDfu {
         /* önyükleyiciyi bul (en çok 20 sn) */
         prog.on("wait", 0);
         ScanSettings ss = new ScanSettings.Builder().setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY).build();
-        sc.startScan(null, ss, scb);
-        try {
-            for (int t = 0; t < 80 && found == null; t++) Thread.sleep(250);
-        } finally { try { sc.stopScan(scb); } catch (Exception e) { } }
-        if (found == null) { prog.on("noboot", 0); return; }
+        /* önce süzgeçli tarama (bazı telefonlar süzgeçsiz taramada sonuç vermez), bulunmazsa süzgeçsiz */
+        java.util.List<android.bluetooth.le.ScanFilter> fl = new java.util.ArrayList<>();
+        fl.add(new android.bluetooth.le.ScanFilter.Builder().setServiceUuid(new ParcelUuid(SVC)).build());
+        fl.add(new android.bluetooth.le.ScanFilter.Builder().setDeviceName("AdaDFU").build());
+        for (int pass = 0; pass < 2 && found == null; pass++) {
+            filtered = pass == 0;
+            sc.startScan(filtered ? fl : null, ss, scb);
+            try {
+                for (int t = 0; t < 60 && found == null; t++) Thread.sleep(250);
+            } finally { try { sc.stopScan(scb); } catch (Exception e) { } }
+            Thread.sleep(300);
+        }
+        if (found == null) { prog.on("noboot", seen.size()); return; }
 
         try {
             for (int tr = 0; tr < 3 && !svcOk; tr++) {

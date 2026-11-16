@@ -66,6 +66,15 @@ static uint8_t d_pmod = PB_HOME, d_pprev = PB_LB, d_pnext = PB_RB;
 static uint16_t d_hold = 1000;
 /* kart her açılışta düz gamepad: eşleme kapalı */
 static bool mapping = false;
+static uint8_t ov_a = 255, ov_b = 255;
+static uint16_t ov_hold;
+
+static void combo_fix(void)
+{
+	if (ov_a < NBTN && ov_b < NBTN && ov_a != ov_b) { d_comboA = ov_a; d_comboB = ov_b; d_hold = ov_hold; }
+	if (d_hold < 300 || d_hold > 5000) d_hold = 1000;
+	if (d_comboA == d_comboB) { d_comboA = PB_LB; d_comboB = PB_RB; }
+}
 
 static int walk_profile(const uint8_t *p, const uint8_t *end, const uint8_t **next)
 {
@@ -149,8 +158,7 @@ int engine_set_config(const uint8_t *b, size_t len)
 	if ((d_comboA == PB_HOME && d_comboB == PB_SELECT) || (d_comboA == PB_SELECT && d_comboB == PB_HOME)) {
 		d_comboA = PB_LB; d_comboB = PB_RB; d_hold = 1000;
 	}
-	if (d_hold < 300 || d_hold > 5000) d_hold = 1000;
-	if (d_comboA == d_comboB) { d_comboA = PB_LB; d_comboB = PB_RB; }
+	combo_fix();
 	d_flags = b[8];
 	d_pmod = b[11] < NBTN ? b[11] : PB_HOME;
 	d_pprev = b[12] < NBTN ? b[12] : PB_LB;
@@ -165,6 +173,14 @@ int engine_set_config(const uint8_t *b, size_t len)
 
 bool engine_has_config(void) { return cfg != NULL; }
 bool engine_mapping(void) { return mapping; }
+void engine_set_combo(uint8_t a, uint8_t b, uint16_t hold_ms)
+{
+	LOCK();
+	ov_a = a; ov_b = b; ov_hold = hold_ms;
+	combo_fix();
+	UNLOCK();
+}
+void engine_get_combo(uint8_t *a, uint8_t *b, uint16_t *hold_ms) { *a = d_comboA; *b = d_comboB; *hold_ms = d_hold; }
 void engine_set_mapping(bool on) { LOCK(); mapping = on; reset_state(); UNLOCK(); }
 int engine_profile(void) { return cur; }
 int engine_profile_count(void) { return nprof; }
