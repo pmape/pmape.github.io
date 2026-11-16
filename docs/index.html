@@ -49,6 +49,9 @@ select,input[type=number],input[type=text],textarea{background:var(--bg);border:
 .mode.pad{color:#4aa3ff;border-color:#4aa3ff}
 .mode.map{color:#3ecf6e;border-color:#3ecf6e}
 .mode small{font-size:12px}
+.mode.off{opacity:.55}
+.mnote{display:flex;gap:8px;align-items:center;padding:8px 12px;margin:0 0 8px;border:1px solid #4aa3ff;border-radius:12px;font-size:13px}
+.mnote span{flex:1;min-width:0}
 #status{padding:10px 12px}
 .flow{display:flex;align-items:center;gap:4px}
 .fnode{flex:1;min-width:0;display:flex;align-items:center;gap:8px;background:none;border:0;padding:4px;border-radius:10px;cursor:pointer;text-align:left}
@@ -288,6 +291,7 @@ textarea{width:100%;min-height:140px;font-family:ui-monospace,Consolas,monospace
 
 <main>
   <div id="updBar"></div>
+  <div id="modeNote"></div>
   <section class="card" id="status"></section>
   <div class="col">
     <section class="card" style="padding:10px 10px 6px">
@@ -1088,7 +1092,8 @@ if(!S||!S.profiles||!S.profiles.length)S={cur:0,profiles:[demoProf()]};
 S.profiles.forEach(migrate);
 if(!S.device)S.device={startMode:'pad',comboA:'LB',comboB:'RB',holdMs:1000,profSwitch:true};
 /* yeni geçiş kombinasyonu: LB + RB 1 sn, açılış hep düz gamepad */
-if(!S.device.lbrb){S.device.lbrb=true;if(S.device.comboA==='HOME'&&S.device.comboB==='SELECT'){S.device.comboA='LB';S.device.comboB='RB';S.device.holdMs=1000;}S.device.startMode='pad';}
+function normDev(){if(!S.device.lbrb2){S.device.lbrb=S.device.lbrb2=true;S.device.comboA='LB';S.device.comboB='RB';S.device.holdMs=1000;S.device.startMode='pad';}}
+normDev();
 if(S.device.passUnmapped===undefined)S.device.passUnmapped=true;
 /* katmanlar kapalı: eski "katman değiştir" atamalarını bir kez temizle */
 if(!S.device.noLayers){S.device.noLayers=true;for(const q of S.profiles)for(const bd of Object.values(q.layers[0].btn))for(const k of Object.keys(bd))if(bd[k]&&bd[k].kind==='layer')delete bd[k];}
@@ -1199,19 +1204,34 @@ function paintPad(){
 function renderTop(){
   /* katmanlar şimdilik gizli: her zaman ana katman */
   ui.layer=0;
-  document.getElementById('profName').textContent=P().name;
   document.getElementById('outName').textContent='Tür: '+(OUT_SHORT[P().output||'all']||'Hepsi');
   renderMode();
 }
 /* üstteki durum simgesi: mavi = düz gamepad, yeşil = profil (kartın ışığıyla aynı) */
 function cardMapping(){return PM.connected()&&PM.link.info?(PM.link.info.mapping===0?0:1):-1;}
+const CIDX=['A','B','C','X','Y','Z','LB','RB','LT','RT','SELECT','START','HOME','L3','R3'];
+/* geçiş tuşlarının adı: kart bildirdiyse karttaki, yoksa buradaki ayar */
+function comboTx(){
+  const i=PM.link.info||{},d=S.device;
+  const a=i.ca!==undefined?CIDX[i.ca]:d.comboA,b=i.cb!==undefined?CIDX[i.cb]:d.comboB,ms=i.hold||d.holdMs||1000;
+  const t=x=>(BY_ID[x]&&BY_ID[x].t)||x||'?';
+  return t(a)+' + '+t(b)+' ('+(ms/1000).toString().replace('.',',')+' sn)';
+}
 function renderMode(){
   const b=document.getElementById('modeBtn');if(!b)return;
   const m=cardMapping(),cp=PM.link.info&&PM.link.info.prof;
-  const pn=m===1?((S.profiles[typeof cp==='number'&&cp<S.profiles.length?cp:S.cur]||{}).name||'Profil'):'';
-  b.className='mode '+(m===0?'pad':m===1?'map':'');
-  document.getElementById('modeTx').textContent=m===0?'Düz gamepad':m===1?'Profil açık':'';
-  b.title=m<0?'Kart bağlı değil':m===0?'Düz gamepad: pad olduğu gibi gidiyor. Dokun: profile geç (pad\'de LB+RB 1 sn).':'Profil açık: '+pn+'. Dokun: düz gamepad (pad\'de LB+RB 1 sn).';
+  const pn=(S.profiles[m===1&&typeof cp==='number'&&cp<S.profiles.length?cp:S.cur]||{}).name||'Profil';
+  /* kart her zaman düz gamepad açıldığı için bağlanana kadar da öyle göster */
+  b.className='mode '+(m===1?'map':'pad')+(m<0?' off':'');
+  document.getElementById('modeTx').textContent='';
+  document.getElementById('profName').textContent=m===1?pn:'Düz gamepad';
+  b.title=m<0?'Kart bağlı değil (kart düz gamepad olarak açılır)':m===0?'Şu an düz gamepad. Dokun: profile geç. Pad\'de: '+comboTx():'Profil açık: '+pn+'. Dokun: düz gamepad. Pad\'de: '+comboTx();
+  const n=document.getElementById('modeNote');
+  if(n)n.innerHTML=m===1?'':`<div class="mnote"><span>Şu an <b>düz gamepad</b>${m<0?' (kart bağlı değil)':''}. Aşağıda <b>${esc(P().name)}</b> profilini düzenliyorsun. Pad'de geçiş: ${esc(comboTx())}</span>${m===0?`<button class="btn pri" onclick="useProfile(S.cur)">Bu profile geç</button>`:''}</div>`;
+}
+function sendCombo(){
+  const d=S.device,a=CIDX.indexOf(d.comboA),b=CIDX.indexOf(d.comboB);
+  if(PM.connected()&&PM.link.info&&a>=0&&b>=0&&a!==b)PM.sendLine('combo '+a+' '+b+' '+(d.holdMs||1000)).catch(()=>{});
 }
 function setMode(on){
   if(!PM.connected()||!PM.link.info){toast('Kart bağlı değil');return;}
@@ -1576,10 +1596,10 @@ function renderSheet(){
   else if(stab==='pick'){const st=curA().steps[(ui.pick||{}).i];body=pickSheet();SHEET_TITLE.pick=st?({key:'Klavye tuşu',mouse:'Fare',pad:'Gamepad tuşu',media:'Medya'}[st.t]||'Seç'):'Seç';}
   else if(stab==='profiller'){
     const mm=cardMapping();
-    body=`<div class="card" style="padding:2px 14px"><div class="li2"><span class="pdot ${mm===0?'on':''}" style="${mm===0?'background:#4aa3ff':''}"></span><button class="otx lnk" onclick="setMode(false);closeSheet()"><b>🎮 Düz gamepad</b><small>Pad olduğu gibi gider, atama yok · pad'de LB+RB 1 sn</small></button>${mm===0?'<span class="pchip on" style="height:30px">Etkin</span>':`<button class="pchip" style="height:30px" onclick="setMode(false);closeSheet()">Seç</button>`}</div>${S.profiles.map((q,i)=>`<div class="li2"><span class="pdot ${i===S.cur&&mm!==0?'on':''}"></span><button class="otx lnk" onclick="useProfile(${i});closeSheet()"><b>${esc(q.name)}</b><small>${esc(OUT_SHORT[q.output||'all'])} · ${countBinds(q)} atama</small></button>${i===S.cur&&mm===1?'<span class="pchip on" style="height:30px">Etkin</span>':`<button class="pchip" style="height:30px" onclick="useProfile(${i});closeSheet()">Seç</button>`}<button class="btn ico sm" aria-label="${esc(q.name)} ayarları" onclick="selProfile(${i});openSheet('profil')">${IC_TUNE}</button></div>`).join('')}</div>
+    body=`<div class="card" style="padding:2px 14px"><div class="li2"><span class="pdot ${mm===0?'on':''}" style="${mm===0?'background:#4aa3ff':''}"></span><button class="otx lnk" onclick="setMode(false);closeSheet()"><b>🎮 Düz gamepad</b><small>Pad olduğu gibi gider, atama yok</small></button>${mm===0?'<span class="pchip on" style="height:30px">Etkin</span>':`<button class="pchip" style="height:30px" onclick="setMode(false);closeSheet()">Seç</button>`}</div>${S.profiles.map((q,i)=>`<div class="li2"><span class="pdot ${i===S.cur&&mm!==0?'on':''}"></span><button class="otx lnk" onclick="useProfile(${i});closeSheet()"><b>${esc(q.name)}</b><small>${esc(OUT_SHORT[q.output||'all'])} · ${countBinds(q)} atama</small></button>${i===S.cur&&mm===1?'<span class="pchip on" style="height:30px">Etkin</span>':`<button class="pchip" style="height:30px" onclick="useProfile(${i});closeSheet()">Seç</button>`}<button class="btn ico sm" aria-label="${esc(q.name)} ayarları" onclick="selProfile(${i});openSheet('profil')">${IC_TUNE}</button></div>`).join('')}</div>
       <div class="row" style="gap:8px;margin-top:12px"><button class="btn pri grow" onclick="newProfile()">＋ Yeni profil</button><button class="btn" onclick="dupProfile()">Kopyala</button></div>
       <div class="row" style="gap:8px;margin-top:8px"><button class="btn grow" onclick="importProfiles()">İçe aktar</button><button class="btn grow" onclick="backupProfiles()">Dışa aktar</button></div>
-      <p class="hint" style="margin:10px 0 0">Kart her açılışta <b>düz gamepad</b> başlar. Pad'de <b>LB + RB</b>'ye 1 saniye basınca seçili profil ile düz gamepad arasında geçer. Profil değiştirme: ${d.profSwitch?esc(BY_ID[d.profMod].t)+' basılıyken '+esc(BY_ID[d.profPrev].t)+' önceki, '+esc(BY_ID[d.profNext].t)+' sonraki profil.':'kapalı.'} Profiller kartta saklanır. Ayar simgesi o profilin ayarlarını açar.</p>`;
+      <p class="hint" style="margin:10px 0 0">Kart her açılışta <b>düz gamepad</b> başlar. Pad'de <b>${esc(comboTx())}</b> basılı tutunca seçili profil ile düz gamepad arasında geçer. Profil değiştirme: ${d.profSwitch?esc(BY_ID[d.profMod].t)+' basılıyken '+esc(BY_ID[d.profPrev].t)+' önceki, '+esc(BY_ID[d.profNext].t)+' sonraki profil.':'kapalı.'} Profiller kartta saklanır. Ayar simgesi o profilin ayarlarını açar.</p>`;
   }else if(stab==='profil'){
     const dz=(p.layers[0].sticks.LS||{}).dead??12;
     body=`<div class="card"><p class="lbl">Kart kendini ne olarak tanıtsın?</p>
@@ -1638,8 +1658,8 @@ function renderSheet(){
     sgroup('Düz gamepad ↔ profil geçişi',
       (PM.connected()&&PM.link.info?srow('Şu an',`<div class="seg sm"><button class="${PM.link.info.mapping!==0?'on':''}" onclick="setMode(true)">Profil</button><button class="${PM.link.info.mapping===0?'on':''}" onclick="setMode(false)">Düz gamepad</button></div>`,'Pad\'den aç/kapat tuşlarıyla değiştirdiğinde burası da değişir.'):'')+
       '<p class="hint" style="margin:6px 0">Kart her açılışta düz gamepad başlar. Işık: yeşil profil açık, mavi düz gamepad.</p>'+
-      srow('Geçiş tuşları',`<select onchange="S.device.comboA=this.value;save();renderSheet()">${bo(d.comboA)}</select>+<select onchange="S.device.comboB=this.value;save();renderSheet()">${bo(d.comboB)}</select>`)+
-      srow('Basılı tutma',`<input type="number" min="300" max="5000" step="100" value="${d.holdMs}" onchange="S.device.holdMs=Math.max(300,clamp(this.value));save();renderSheet()"><span class="hint">ms</span>`)+
+      srow('Geçiş tuşları',`<select onchange="S.device.comboA=this.value;save();sendCombo();renderSheet()">${bo(d.comboA)}</select>+<select onchange="S.device.comboB=this.value;save();sendCombo();renderSheet()">${bo(d.comboB)}</select>`)+
+      srow('Basılı tutma',`<input type="number" min="300" max="5000" step="100" value="${d.holdMs}" onchange="S.device.holdMs=Math.min(5000,Math.max(300,clamp(this.value)));save();sendCombo();renderSheet()"><span class="hint">ms</span>`)+
       srow('Atanmamış tuşlar gamepad olsun',tog(d.passUnmapped!==false,"S.device.passUnmapped=!(S.device.passUnmapped!==false);save();renderSheet()"))+
       (d.comboA===d.comboB?'<div class="note">İki farklı tuş seç.</div>':''))+
       sgroup('',`<div class="slist"><button onclick="closeSheet();openLearn()" ${PM.connected()&&cardCtl.cur?'':'disabled'}><span>🎯</span>Tanılama / tuşları tanıt<small>Pad'den gelen veri, gelmeyen tuşlar</small></button></div>`);
@@ -2067,6 +2087,13 @@ async function cardBtn(known){
       if(ev.ev==='prof'&&ev.cur<S.profiles.length&&ev.cur!==S.cur){S.cur=ev.cur;ui.layer=0;render();toast('Profil: '+P().name);}
       if(ev.ev==='mode'){if(PM.link.info)PM.link.info.mapping=ev.mapping;toast(ev.mapping?'Profil açık: '+((S.profiles[PM.link.info.prof]||P()).name):'Düz gamepad');renderCard();renderMode();if(document.getElementById('sheet').classList.contains('open'))renderSheet();}
       if(ev.ev==='hello'){renderCard();setTimeout(cardProfilesCheck,300);if(!updating&&(PM.link.via!=='ble'||vnum(ev.fw)>=vnum('0.9.11'))&&cardNeedsUpdate()&&!window._updAsked){window._updAsked=true;setTimeout(()=>ask('Kart için yeni yazılım var ('+ev.fw+' → '+bundledFw()+'). Şimdi kurulsun mu?',null).then(ok=>{if(ok)updCard(true);}),1500);}PM.sendLine('ctrls').catch(()=>{});setTimeout(()=>PM.sendLine('targets').catch(()=>{}),150);setTimeout(()=>PM.sendLine('hid list').catch(()=>{}),300);if(document.getElementById('sheet').classList.contains('open'))renderSheet();}
+      if(ev.ev==='hello'&&ev.ca!==undefined){
+        /* karttaki geçiş tuşları buradakinden farklıysa karta yaz (ayar yazmayı beklemeden) */
+        const d=S.device,wa=CIDX.indexOf(d.comboA),wb=CIDX.indexOf(d.comboB),wh=d.holdMs||1000;
+        const cmd='combo '+wa+' '+wb+' '+wh;
+        if(wa>=0&&wb>=0&&wa!==wb&&(ev.ca!==wa||ev.cb!==wb||ev.hold!==wh)&&window._comboSent!==cmd){window._comboSent=cmd;PM.sendLine(cmd).catch(()=>{});}
+        renderMode();
+      }
       if(ev.ev==='state')applyState(ev);
       if(ev.ev==='stats'&&ev.lat!==undefined){cardLat=ev;if(sheetOpen()&&stab==='cikis'){const el=document.getElementById('latBox');if(el)el.outerHTML=latHtml();}}
       if(ev.ev==='pad')livePad(ev);
@@ -2240,7 +2267,7 @@ function updNativeEv(want){
     if(ev.state==='wait')updModal(UPD_STEPS,1);
     else if(ev.state==='perm')updModal(UPD_STEPS,1,null,'Android kartın yükleme moduna erişim izni soruyor: <b>Tamam</b> de.');
     else if(ev.state==='write')updModal(UPD_STEPS,2,ev.p);
-    else if(ev.state==='noboot'){updModal(UPD_STEPS,1,null,'Kart yükleme modunda görünmedi.'+fail(),`<button class="btn pri" onclick="updBle=null;updClose()">Kapat</button>`);}
+    else if(ev.state==='noboot'){updModal(UPD_STEPS,1,null,'Kart yükleme modunda görünmedi.'+(updBle?' (Taramada '+(ev.p|0)+' Bluetooth cihazı görüldü.)':'')+fail(),`<button class="btn pri" onclick="updBle=null;updClose()">Kapat</button>`);}
     else if(ev.state==='err'){updModal(UPD_STEPS,2,null,'Yazılamadı: '+esc(ev.msg||'')+fail(),`<button class="btn pri" onclick="updBle=null;updClose()">Kapat</button>`);}
     else if(ev.state==='done')updWaitBack(want);
   };
@@ -2385,9 +2412,21 @@ async function unpairTarget(a){if(!await ask(`"${tName(a)}" unutulsun mu? Tekrar
 /* ---------- Karttan profilleri alma ---------- */
 const isFresh=()=>S.profiles.length===1&&snap(S.profiles[0])===snap(migrate(demoProf()));
 let cardChecked=false;
+/* karttaki ayar, yalnızca eski başlık (Home+Select, açılışta eşleme) yüzünden mi farklı */
+function legacyHdrMatch(){
+  const d=S.device,sv=[d.startMode,d.comboA,d.comboB,d.holdMs];
+  try{
+    for(const h of [['map','HOME','SELECT',1500],['pad','HOME','SELECT',1500],['map','LB','RB',1000]]){
+      [d.startMode,d.comboA,d.comboB,d.holdMs]=h;
+      if(PM.crc32(PM.compile(S))===parseInt(PM.link.info.crc,16))return true;
+    }
+  }catch(e){}finally{[d.startMode,d.comboA,d.comboB,d.holdMs]=sv;}
+  return false;
+}
 async function cardProfilesCheck(){
   const i=PM.link.info;if(!i||cardChecked||card.busy||updating)return;cardChecked=true;
   if(!(i.jlen||i.cfg)||cardSynced())return;
+  if(legacyHdrMatch()){writeCard();return;}
   if(isFresh()){await takeFromCard(true);return;}
   toast('Karttaki ayarlar buradakinden farklı. ⚙ → Kart bölümünden karttakileri alabilir ya da buradakileri yazabilirsin');
 }
@@ -2444,7 +2483,7 @@ function openLink(u){if(PM.native)PMNative.openUrl(u);else window.open(u,'_blank
 
 drawPad();render();
 if(presetPending)setTimeout(()=>ask(`Bu ayar ekranı ${presetPending.profiles.length} profille geldi (${presetPending.profiles.map(p=>p.name).join(', ')}). Bu bilgisayardaki profillerin yerine kullanılsın mı?`,null).then(ok=>{if(ok){loadBackupDirect(presetPending);}}),300);
-function loadBackupDirect(st){st=JSON.parse(JSON.stringify(st));st.device=Object.assign({},S.device,st.device||{});if(S.theme&&!st.theme)st.theme=S.theme;S=st;if(!S.device.profMod){S.device.profMod='HOME';S.device.profPrev='LB';S.device.profNext='RB';}S.profiles.forEach(migrate);S.profiles.forEach(p=>p._applied=snap(p));S.cur=Math.min(S.cur||0,S.profiles.length-1);ui.layer=0;save();render();toast('Profiller yüklendi');}
+function loadBackupDirect(st){st=JSON.parse(JSON.stringify(st));const _had2=!!(st.device&&st.device.lbrb2);st.device=Object.assign({},S.device,st.device||{});if(S.theme&&!st.theme)st.theme=S.theme;S=st;if(!_had2)S.device.lbrb2=false;normDev();if(!S.device.profMod){S.device.profMod='HOME';S.device.profPrev='LB';S.device.profNext='RB';}S.profiles.forEach(migrate);S.profiles.forEach(p=>p._applied=snap(p));S.cur=Math.min(S.cur||0,S.profiles.length-1);ui.layer=0;save();render();toast('Profiller yüklendi');}
 /* sayfa açılınca ya da kart takılınca, daha önce izin verildiyse kendiliğinden bağlan */
 PM.findKnown().then(k=>{if(k)cardBtn(k);}).catch(()=>{});
 PM.onPlug(k=>setTimeout(()=>cardBtn(k),800));
