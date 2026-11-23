@@ -1,6 +1,6 @@
 # PadMapper – Proje Durumu
 
-**Sürüm:** kart 0.9.13 · uygulama 0.36 (derlenmedi, CI bekliyor)
+**Sürüm:** kart 0.9.14 (dalda, denenmedi) · uygulama 0.36
 
 ## Çalışan özellikler
 - BLE pad → USB/BLE klavye + fare + gamepad eşleme (profil, katman, makro, turbo, aç-kapa, birlikte basış)
@@ -23,8 +23,8 @@
 - Ayar biçimi: başlık bayt 14 bit0 = profil başına 16 baytlık çubuk uzantısı. Eğri kullanılmıyorsa ayar eskisiyle birebir aynı (eski kartlarla uyumlu)
 
 ## Bilinen eksikler
-- Klavye/fare için anahtar kaybı düzeltmesi yok (yalnızca pad için var)
-- Firmware yerelde derlenemiyor (NCS yok); motor masaüstünde test edildi, geri kalanı CI ile doğrulanmalı
+- (0.9.14) Klavye/fare için de geçersiz anahtarda yeniden eşleşme eklendi
+- Firmware yerelde derlenemiyor (NCS yok); CI ile derleniyor, motor masaüstünde test edildi
 
 ## Sıradaki adım
-- Değişiklikleri ayrı dalda CI'da derle, kartta dene, sonra main'e al
+- 0.9.14 kartta denenip main'e alınacak

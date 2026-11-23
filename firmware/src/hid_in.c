@@ -334,11 +334,25 @@ static void disconnected(struct bt_conn *conn, uint8_t reason)
 	scan_resume();
 }
 
+/* Klavye/fare başka bir cihazla eşlenince karttaki anahtar geçersiz olur: sil ve yeniden eşlen. */
+static bt_addr_le_t rekey_addr;
+static void rekey_fn(struct k_work *w)
+{
+	OUT("{\"ev\":\"hid\",\"rekey\":1}\n");
+	bt_unpair(BT_ID_DEFAULT, &rekey_addr); /* bağlantıyı da keser */
+}
+static K_WORK_DEFINE(rekey_work, rekey_fn);
+
 static void security_changed(struct bt_conn *conn, bt_security_t level, enum bt_security_err err)
 {
 	struct slot *s = slot_of(conn);
 
 	if (!s) return;
+	if (err == BT_SECURITY_ERR_PIN_OR_KEY_MISSING) {
+		rekey_addr = *bt_conn_get_dst(conn);
+		k_work_submit(&rekey_work);
+		return;
+	}
 	k_work_reschedule(&s->disc, K_NO_WAIT);
 }
 
