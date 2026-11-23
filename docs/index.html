@@ -346,13 +346,14 @@ const PM = (() => {
     const u16 = v => { v = Math.max(0, Math.min(65535, Math.round(+v || 0))); b.push(v & 255, v >> 8); };
     const d = S.device;
     const profs = S.profiles.map(p => p._applied ? JSON.parse(p._applied) : p).slice(0, 8);
+    const ext = profs.some(p => p.layers.some(l => ['LS', 'RS'].some(k => l.sticks[k] && (l.sticks[k].curve || l.sticks[k].adz))));
     b.push(80, 77, 2);
     u8(d.startMode === 'pad' ? 1 : 0);
     u8(BTN[d.comboA] ?? 12); u8(BTN[d.comboB] ?? 10);
     u16(d.holdMs || 1500);
     u8((d.profSwitch ? 1 : 0) | (d.passUnmapped !== false ? 2 : 0));
     u8(profs.length); u8(0); /* seçili profil ayrıca 'cs' ile gider */
-    u8(BTN[d.profMod || 'HOME'] ?? 12); u8(BTN[d.profPrev || 'LB'] ?? 6); u8(BTN[d.profNext || 'RB'] ?? 7); u8(0); u8(0);
+    u8(BTN[d.profMod || 'HOME'] ?? 12); u8(BTN[d.profPrev || 'LB'] ?? 6); u8(BTN[d.profNext || 'RB'] ?? 7); u8(ext ? 1 : 0); u8(0);
     for (const p of profs) {
       u8(OUT[p.output || 'all']); u8(p.trigThr ?? 30); u16(p.longMs || 300); u16(p.doubleMs || 250);
       for (const l of p.layers) for (const s of ['LS', 'RS']) {
@@ -375,6 +376,10 @@ const PM = (() => {
         }
       });
       u16(binds.length);
+      if (ext) for (const l of p.layers) for (const k of ['LS', 'RS']) {
+        const st = l.sticks[k] || {};
+        u8(Math.max(-50, Math.min(50, st.curve | 0))); u8(Math.max(0, Math.min(50, st.adz | 0)));
+      }
       for (const { li, btn, trig, other, a } of binds) {
         const steps = a.kind === 'layer' ? [] : expand(a.steps, d.layout).slice(0, 255);
         u8(li); u8(btn); u8(trig); u8(other);
@@ -404,7 +409,7 @@ const PM = (() => {
     const d = { startMode: u8() ? 'pad' : 'map', comboA: BTNI[u8()] || 'HOME', comboB: BTNI[u8()] || 'SELECT', holdMs: u16() };
     const fl = u8(); d.profSwitch = !!(fl & 1); d.passUnmapped = !!(fl & 2);
     const np = u8(); u8();
-    d.profMod = BTNI[u8()] || 'HOME'; d.profPrev = BTNI[u8()] || 'LB'; d.profNext = BTNI[u8()] || 'RB'; u8(); u8();
+    d.profMod = BTNI[u8()] || 'HOME'; d.profPrev = BTNI[u8()] || 'LB'; d.profNext = BTNI[u8()] || 'RB'; const fl2 = u8(); u8();
     const profiles = [];
     for (let n = 0; n < np; n++) {
       const p = { name: 'Profil ' + (n + 1), output: OUTI[u8()] || 'all', trigThr: u8(), longMs: u16(), doubleMs: u16(), gapMs: 50, layers: [] };
@@ -417,6 +422,7 @@ const PM = (() => {
         p.layers.push({ btn: {}, sticks });
       }
       const nb = u16();
+      if (fl2 & 1) for (let l = 0; l < 4; l++) for (const s of ['LS', 'RS']) { p.layers[l].sticks[s].curve = (u8() << 24) >> 24; p.layers[l].sticks[s].adz = u8(); }
       for (let k = 0; k < nb; k++) {
         const li = u8(), btn = BTNI[u8()], trig = u8(), other = u8(), kind = u8(), mode = u8(), loop = u16(), tl = u8(), how = u8(), ns = u8();
         const a = { kind: kind ? 'layer' : 'combo', mode: MODEI[mode] || 'normal', turbo: loop, layer: tl || 1, how: how ? 'toggle' : 'hold', steps: [] };
@@ -1484,6 +1490,7 @@ function explain(a,b){
 }
 function stickPanel(b){
   const st=L().sticks[b.id];
+  if(st.curve==null)st.curve=0;if(st.adz==null)st.adz=0;
   const modes=[['off','Kapalı'],['mouse','Fare'],['keys','Tuşlar'],['scroll','Tekerlek'],['pad','Gamepad']];
   const expl={off:'Çubuk hiçbir şey göndermez.',mouse:'Çubuğu ittikçe imleç o yöne gider; çok itersen hızlı gider.',keys:'Her yön bir klavye tuşu olur. Çapraza itince iki tuş birlikte basılır (W + D gibi).',scroll:'Çubuk fare tekerleği gibi sayfayı kaydırır.',pad:'Çubuk olduğu gibi gamepad çubuğu olarak gider.'};
   const sl=(lbl,key,min,max,unit)=>`<div class="sl"><div class="row"><span style="flex:1">${lbl}</span><span class="hint">${unit==='%'?'%'+st[key]:st[key]}</span></div><input type="range" min="${min}" max="${max}" value="${st[key]}" oninput="curS().${key}=+this.value;this.previousElementSibling.lastElementChild.textContent=${unit==='%'?"'%'+this.value":'this.value'}" onchange="render()"></div>`;
@@ -1494,7 +1501,7 @@ function stickPanel(b){
     const c=(d,n)=>`<label class="hint">${n}${keySel(st.keys[d],`curS().keys.${d}=this.value;render()`)}</label>`;
     h+=`<div class="card" style="margin-top:10px"><p class="lbl">Yön tuşları</p><div class="dir"><span></span>${c('up','Yukarı')}<span></span>${c('left','Sol')}<span></span>${c('right','Sağ')}<span></span>${c('down','Aşağı')}<span></span></div></div>`;
   }
-  if(st.mode!=='off'&&st.mode!=='inherit')h+=`<div class="card" style="margin-top:10px"><p class="lbl" style="margin:0">İnce ayar</p>${st.mode==='mouse'||st.mode==='scroll'?sl('Hız','sens',1,30,''):''}${sl('Ölü bölge','dead',0,50,'%')}</div>`;
+  if(st.mode!=='off'&&st.mode!=='inherit')h+=`<div class="card" style="margin-top:10px"><p class="lbl" style="margin:0">İnce ayar</p>${st.mode==='mouse'||st.mode==='scroll'?sl('Hız','sens',1,30,''):''}${sl('Ölü bölge','dead',0,50,'%')}${st.mode==='mouse'||st.mode==='pad'?sl('Eğri','curve',-50,50,'')+sl('Ters ölü bölge','adz',0,40,'%')+'<p class="hint" style="margin:6px 0 0">Eğri: artı = ortada daha hassas, eksi = daha atak, 0 = düz. Ters ölü bölge: oyunun kendi ölü bölgesini aşmak için çubuk az itilse de en az bu kadar gider. (Kart 0.9.13 ve sonrası.)</p>':''}</div>`;
   h+=`<p class="hint" style="margin:10px 0 0;text-align:center">Çubuğa basma (${b.id==='LS'?'L3':'R3'}) ayrı bir tuştur; çizimde ${b.id==='LS'?'L3':'R3'}'e dokun.</p>`;
   return h;
 }
@@ -1640,7 +1647,8 @@ function renderSheet(){
       <div class="card" style="margin-top:6px;padding:2px 14px">${scan.found.filter(x=>x.hid).sort((a,b)=>b.rssi-a.rssi).map(x=>`<div class="li2"><span class="obox" style="color:var(--mute)">${IC.pad}</span><div class="grow"><b>${esc(x.name||'Adsız pad')}</b><div class="hint">${x.rssi>-60?'güçlü':x.rssi>-75?'orta':'zayıf'} sinyal</div></div>${cardCtl.cur===x.addr?'<span class="ok">bağlı</span>':scan.pairing===x.addr?'<span class="spin"></span>':`<button class="pchip" onclick="pair('${x.addr}')">Bağlan</button>`}</div>`).join('')||'<p class="hint" style="margin:10px 0">Henüz bir şey bulunamadı.</p>'}</div>`:''}
       ${cardCtl.list.filter(x=>x.addr!==cur).length?`<p class="lbl" style="margin:12px 0 6px">Kayıtlı pad'ler</p><div class="card" style="padding:2px 14px">${cardCtl.list.filter(x=>x.addr!==cur).map(x=>`<div class="li2"><span class="obox" style="color:var(--mute)">${IC.pad}</span><div class="grow"><b>${esc(ctrlName(x.addr))}</b></div><button class="pchip" onclick="useCtrl('${x.addr}')">Seç</button><button class="btn ico sm" aria-label="Unut" onclick="forgetCtrl('${x.addr}')">✕</button></div>`).join('')}</div>`:''}
       <p class="hint" style="margin:10px 0 0">Yeni pad'i eşleşme moduna al (D8 Pro'da X + Home). Listede görününce Bağlan'a dokun.</p>
-      <button class="btn" style="width:100%;margin-top:10px" onclick="closeSheet();openLearn()" ${c&&cur?'':'disabled'}>Tuşları tanıt / tanılama</button>`;
+      <button class="btn" style="width:100%;margin-top:10px" onclick="closeSheet();openLearn()" ${c&&cur?'':'disabled'}>Tuşları tanıt / tanılama</button>
+      <details class="card" style="margin-top:14px" ${cardHid&&cardHid.list&&cardHid.list.length?'open':''}><summary class="lbl" style="margin:0;cursor:pointer">⌨🖱 Bluetooth klavye / fare (isteğe bağlı)</summary><div style="margin-top:8px">${hidHtml()}</div></details>`;
   }else if(stab==='cikis'){
     body=routeHtml()+latHtml();
   }else{
@@ -2030,7 +2038,8 @@ function renderCard(){
   /* giriş: pad */
   const padOn=c&&st?!!st.pad:false;
   const padName=cardCtl.cur?ctrlName(cardCtl.cur):'Pad';
-  const inSub=!c?'—':st?(padOn?'bağlı':'bekleniyor'):'';
+  const bat=padOn&&st.bat>=0?st.bat:-1;
+  const inSub=!c?'—':st?(padOn?'bağlı'+(bat>=0?` · <span style="color:${bat<=15?'var(--l1)':'inherit'}">🔋%${bat}</span>`:''):'bekleniyor'):'';
   /* kart */
   const cardSub=!c?(connMsg||'dokun: bağlan'):card.busy?'yazılıyor…':s?'kaydedildi ✓':'eşitleniyor';
   /* çıkış */
@@ -2054,6 +2063,7 @@ function renderCard(){
     <span class="farr">›</span>
     <button class="fnode ${c&&st&&st.path!==2?'on':''}" onclick="openSheet('cikis')"><span class="fi" style="color:var(--acc)">${outS==='Bluetooth'?'<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 7l10 10-5 5V2l5 5L7 17"/></svg>':'<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg>'}</span><span style="min-width:0"><small>Çıkış</small><b>${esc(outT)}</b><small>${outS}</small></span></button>
   </div>
+  ${st&&(st.kb||st.ms)?`<button class="fline" style="width:100%;background:none;border:0;border-top:1px solid var(--line);color:inherit;font:inherit;font-size:13px;cursor:pointer;text-align:left" onclick="openSheet('giris')"><span style="flex:1">${st.kb?'⌨ Klavye':''}${st.kb&&st.ms?' + ':''}${st.ms?'🖱 Fare':''} bağlı</span><span class="tag">${cardHid&&cardHid.mode?'gamepad\'e çevriliyor':'doğrudan'}</span></button>`:''}
   <div class="fline">${c?`<span style="flex:1">Ayarlar <b>${dev}</b> gidiyor</span><span class="tag">${via}</span>${PM.link.info.mapping===0?'<span class="tag" title="Pad olduğu gibi gamepad">düz gamepad</span>':''}`
       :`<span style="flex:1" class="hint">${connMsg||'Kart bağlı değil. Ayar yapmak için bağlan.'}</span><button class="btn pri" onclick="cardBtn()">${connMsg?'Vazgeç':'Bağlan'}</button>`}</div>`;
   /* güncelleme şeridi */
@@ -2104,6 +2114,7 @@ async function cardBtn(known){
         renderMode();
       }
       if(ev.ev==='state')applyState(ev);
+      if(ev.ev==='bat'&&cardState){cardState.bat=ev.pct;renderCard();}
       if(ev.ev==='stats'&&ev.lat!==undefined){cardLat=ev;if(sheetOpen()&&stab==='cikis'){const el=document.getElementById('latBox');if(el)el.outerHTML=latHtml();}}
       if(ev.ev==='pad')livePad(ev);
       if(ev.ev==='name'){cardName=ev.name;const el=document.getElementById('btname');if(el&&document.activeElement!==el)el.value=ev.name;}
