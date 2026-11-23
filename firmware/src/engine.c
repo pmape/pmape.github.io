@@ -1,5 +1,6 @@
 /* Eşleme motoru. Biçim için engine.h'ye bak. */
 #include <string.h>
+#include <math.h>
 #include "engine.h"
 
 #ifdef HOST_TEST
@@ -25,6 +26,7 @@ static K_MUTEX_DEFINE(mtx);
 #define MAXP 8
 #define HDR 16
 #define PHDR 64
+#define PEXT 16 /* başlık b14 bit0: her profilde 4 katman x 2 çubuk x (eğri int8, ters ölü bölge %) */
 #define BHDR 11
 #define STEP 5
 
@@ -41,6 +43,7 @@ static inline uint16_t rd16(const uint8_t *p) { return p[0] | (p[1] << 8); }
 /* ---------- ayar ---------- */
 
 static const uint8_t *cfg;
+static int phdr = PHDR; /* uzantılı profillerde PHDR + PEXT */
 static size_t cfg_len;
 static const uint8_t *prof_at[MAXP];
 static int nprof, cur;
@@ -50,7 +53,7 @@ struct bind {
 	uint16_t loop;
 	const uint8_t *steps;
 };
-struct stick { uint8_t mode, sens, dead, k[4]; };
+struct stick { uint8_t mode, sens, dead, k[4]; int8_t curve; uint8_t adz; };
 
 static struct bind binds[MAXB];
 static int nbinds;
@@ -76,11 +79,11 @@ static void combo_fix(void)
 	if (d_comboA == d_comboB) { d_comboA = PB_LB; d_comboB = PB_RB; }
 }
 
-static int walk_profile(const uint8_t *p, const uint8_t *end, const uint8_t **next)
+static int walk_profile(const uint8_t *p, const uint8_t *end, const uint8_t **next, int ph)
 {
-	if (p + PHDR > end) return -1;
+	if (p + ph > end) return -1;
 	int nb = rd16(p + 62);
-	const uint8_t *q = p + PHDR;
+	const uint8_t *q = p + ph;
 
 	if (nb > MAXB) return -2;
 	for (int i = 0; i < nb; i++) {
@@ -98,9 +101,10 @@ int engine_check(const uint8_t *b, size_t len)
 	if (len < HDR || b[0] != 'P' || b[1] != 'M' || b[2] != 2) return -1;
 	if (b[9] < 1 || b[9] > MAXP) return -2;
 	const uint8_t *p = b + HDR, *end = b + len;
+	int ph = (b[14] & 1) ? PHDR + PEXT : PHDR;
 
 	for (int i = 0; i < b[9]; i++) {
-		int e = walk_profile(p, end, &p);
+		int e = walk_profile(p, end, &p, ph);
 		if (e) return e - 10 * (i + 1);
 	}
 	return p == end ? 0 : -9;
@@ -119,10 +123,19 @@ static void load_profile(int n)
 
 			sticks[l][s].mode = q[0]; sticks[l][s].sens = q[1]; sticks[l][s].dead = q[2];
 			memcpy(sticks[l][s].k, q + 3, 4);
+			if (phdr > PHDR) {
+				const uint8_t *x = p + PHDR + (l * 2 + s) * 2;
+
+				sticks[l][s].curve = CLAMP((int8_t)x[0], -50, 50);
+				sticks[l][s].adz = x[1] > 50 ? 50 : x[1];
+			} else {
+				sticks[l][s].curve = 0;
+				sticks[l][s].adz = 0;
+			}
 		}
 	}
 	nbinds = rd16(p + 62);
-	const uint8_t *q = p + PHDR;
+	const uint8_t *q = p + phdr;
 
 	for (int i = 0; i < nbinds; i++) {
 		struct bind *b = &binds[i];
@@ -145,11 +158,12 @@ int engine_set_config(const uint8_t *b, size_t len)
 	LOCK();
 	cfg = b; cfg_len = len;
 	nprof = b[9];
+	phdr = (b[14] & 1) ? PHDR + PEXT : PHDR;
 	const uint8_t *p = b + HDR;
 
 	for (int i = 0; i < nprof; i++) {
 		prof_at[i] = p;
-		walk_profile(p, b + len, &p);
+		walk_profile(p, b + len, &p, phdr);
 	}
 	d_comboA = b[4] < NBTN ? b[4] : PB_LB;
 	d_comboB = b[5] < NBTN ? b[5] : PB_RB;
@@ -273,7 +287,11 @@ static void tog_flip(int bi, uint8_t t, uint8_t c)
 
 /* çalışan makrolar */
 #define MAXR 10
-static struct { int16_t bi; uint8_t step, used, loop; int8_t btn; int64_t next; } runs[MAXR];
+#define RHELD 8
+static struct {
+	int16_t bi; uint8_t step, used, loop, nheld; int8_t btn; int64_t next;
+	struct { uint8_t t, c; } held[RHELD]; /* makronun "basılı tut" ile bastıkları */
+} runs[MAXR];
 
 static int run_find(int bi)
 {
@@ -281,22 +299,31 @@ static int run_find(int bi)
 	return -1;
 }
 
+/* makro yarıda kesilince basılı bıraktıklarını da bırak (tuş takılı kalmasın) */
+static void run_kill(int i)
+{
+	for (int k = 0; k < runs[i].nheld; k++) o_up(runs[i].held[k].t, runs[i].held[k].c);
+	runs[i].nheld = 0;
+	runs[i].used = 0;
+}
+
 static void run_start(int bi, bool loop, int btn, int64_t now)
 {
 	int i = run_find(bi);
 
-	if (i < 0) for (i = 0; i < MAXR && runs[i].used; i++);
+	if (i >= 0) run_kill(i);
+	else for (i = 0; i < MAXR && runs[i].used; i++);
 	if (i >= MAXR) return;
 	runs[i].used = 1; runs[i].bi = bi; runs[i].step = 0; runs[i].loop = loop;
-	runs[i].btn = btn; runs[i].next = now;
+	runs[i].btn = btn; runs[i].next = now; runs[i].nheld = 0;
 }
 
 static void run_stop_btn(int btn)
 {
-	for (int i = 0; i < MAXR; i++) if (runs[i].used && runs[i].btn == btn) runs[i].used = 0;
+	for (int i = 0; i < MAXR; i++) if (runs[i].used && runs[i].btn == btn) run_kill(i);
 }
 
-static void exec_step(const uint8_t *s, int64_t now)
+static void exec_step(int ri, const uint8_t *s, int64_t now)
 {
 	uint8_t t = s[0], c = s[1], a = s[2];
 
@@ -308,8 +335,15 @@ static void exec_step(const uint8_t *s, int64_t now)
 	if (a == 0) {
 		o_down(t, c);
 		if (!(t == ST_MOUSE && c >= 5)) up_later(t, c, now + (t == ST_CC ? 60 : 20));
-	} else if (a == 1) o_down(t, c);
-	else o_up(t, c);
+	} else if (a == 1) {
+		o_down(t, c);
+		if (runs[ri].nheld < RHELD) { runs[ri].held[runs[ri].nheld].t = t; runs[ri].held[runs[ri].nheld++].c = c; }
+	} else {
+		o_up(t, c);
+		for (int k = 0; k < runs[ri].nheld; k++) {
+			if (runs[ri].held[k].t == t && runs[ri].held[k].c == c) { runs[ri].held[k] = runs[ri].held[--runs[ri].nheld]; break; }
+		}
+	}
 }
 
 static void runs_tick(int64_t now)
@@ -326,7 +360,7 @@ static void runs_tick(int64_t now)
 			}
 			const uint8_t *s = b->steps + runs[i].step * STEP;
 
-			exec_step(s, now);
+			exec_step(i, s, now);
 			runs[i].step++;
 			if (runs[i].step >= b->nsteps) {
 				if (!runs[i].loop) { runs[i].used = 0; break; }
@@ -428,7 +462,7 @@ static void fire(int bi, int hb, int64_t now)
 	case 2: /* toggle */
 		if (single_out(b)) tog_flip(bi, b->steps[0], b->steps[1]);
 		else if (all_out(b)) { for (int i = 0; i < b->nsteps; i++) tog_flip(bi, b->steps[5 * i], b->steps[5 * i + 1]); }
-		else if (run_find(bi) >= 0) runs[run_find(bi)].used = 0;
+		else if (run_find(bi) >= 0) run_kill(run_find(bi));
 		else run_start(bi, true, -1, now);
 		break;
 	default:
@@ -536,6 +570,15 @@ static const struct stick *stick_of(int l, int s)
 static uint8_t tick_keys[8];
 static int ntick;
 
+/* ölü bölgeden sonraki 0..1 büyüklüğe eğri ve ters ölü bölge uygula.
+ * eğri > 0: ortada daha hassas (yavaş başlar), < 0: daha atak. */
+static float shape(const struct stick *st, float n)
+{
+	if (st->curve) n = powf(n, exp2f(st->curve / 50.0f));
+	if (st->adz) n = st->adz / 100.0f + (1.0f - st->adz / 100.0f) * n;
+	return n;
+}
+
 static void stick_tick(int s, uint8_t x, uint8_t y, int8_t *mx, int8_t *my, uint8_t *gx, uint8_t *gy)
 {
 	const struct stick *st = stick_of(active_layer(), s);
@@ -548,7 +591,7 @@ static void stick_tick(int s, uint8_t x, uint8_t y, int8_t *mx, int8_t *my, uint
 		float mag = ax > ay ? ax : ay;
 
 		if (mag <= dz) { acc[s][0] = acc[s][1] = 0; break; }
-		float k = (mag - dz) / (1.0f - dz) / mag;
+		float k = shape(st, (mag - dz) / (1.0f - dz)) / mag;
 		float v[2] = { nx * k, ny * k };
 		float mx_ = 3.5f * (st->sens ? st->sens : 8) * tscale;
 
@@ -583,6 +626,18 @@ static void stick_tick(int s, uint8_t x, uint8_t y, int8_t *mx, int8_t *my, uint
 		while (wacc <= -1) { wheel--; wacc += 1; }
 		break;
 	case SM_PAD:
+		if (st->curve || st->adz) {
+			/* dairesel ölü bölge + eğri */
+			float mag = sqrtf(nx * nx + ny * ny);
+
+			if (mag > 1.0f) { nx /= mag; ny /= mag; mag = 1.0f; }
+			if (mag <= dz || dz >= 1.0f) { *gx = *gy = 128; break; }
+			float k = shape(st, (mag - dz) / (1.0f - dz)) / mag;
+
+			*gx = (uint8_t)CLAMP((int)lroundf(128.0f + nx * k * 127.0f), 1, 255);
+			*gy = (uint8_t)CLAMP((int)lroundf(128.0f + ny * k * 127.0f), 1, 255);
+			break;
+		}
 		*gx = ax <= dz ? 128 : x;
 		*gy = ay <= dz ? 128 : y;
 		break;

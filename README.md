@@ -3,7 +3,7 @@
 Seeed XIAO nRF52840 ile reWASD benzeri gamepad eşleyici. Bluetooth (BLE) gamepad'i okur, ayarlara göre tablete USB üzerinden klavye, fare ya da gamepad olarak gönderir.
 
 - `firmware/` – kart yazılımı (nRF Connect SDK / Zephyr)
-- `web/index.html` – ayar ekranı (Chrome'da açılır)
+- `web/padmapper.html` – ayar ekranı (Chrome'da açılır)
 
 ## Kart yazılımını yükleme
 

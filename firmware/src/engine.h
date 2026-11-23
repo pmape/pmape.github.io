@@ -6,11 +6,12 @@
  *  Başlık 16 bayt:
  *   'P' 'M' sürüm(2) açılış(0=eşleme açık,1=gamepad) kombA kombB tutma_ms(u16)
  *   bayraklar(b0=profil geçişi açık, b1=atanmamış gamepad'e geçsin) profil_sayısı seçili
- *   profil_değiştirici profil_önceki profil_sonraki boş boş
+ *   profil_değiştirici profil_önceki profil_sonraki bayraklar2(b0=çubuk uzantısı) boş
  *  Her profil:
  *   çıkış(0 kb+fare,1 kb,2 pad,3 hepsi) tetik_eşik(%) uzun_ms(u16) çift_ms(u16)
  *   4 katman x 2 çubuk (sol, sağ) x 7 bayt: mod hız ölü% yukarı aşağı sol sağ (HID kodu)
  *     mod: 0 ana gibi, 1 kapalı, 2 fare, 3 tuşlar, 4 tekerlek, 5 gamepad
+ *   (bayraklar2 b0 ise) 4 katman x 2 çubuk x 2 bayt: eğri(int8 -50..50, 0 düz) ters_ölü%
  *   atama_sayısı(u16), sonra her atama:
  *     katman tuş tetik diğer tür tekrar döngü_ms(u16) hedef_katman nasıl adım_sayısı
  *       tetik: 0 tek, 1 çift, 2 uzun, 3 basma anı, 4 bırakma, 5 birlikte (diğer = öbür tuş)

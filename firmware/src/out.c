@@ -20,6 +20,7 @@
 #include "ble_out.h"
 #include "ble_cfg.h"
 #include "hid_in.h"
+#include "wd.h"
 
 /* ---------- HID tanımları ---------- */
 
@@ -289,20 +290,27 @@ static uint8_t bt_last[4][9], bt_len[4];
 static volatile bool state_force;
 void out_state_request(void) { state_force = true; }
 
+extern int pad_battery(void);
+
 static void state_tick(void)
 {
-	static int last[8] = { -1, -1, -1, -1, -1, -1, -1, -1 };
-	int now[8] = {
+	static int last[11] = { -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1 };
+	struct hid_in hi;
+
+	hid_in_get(&hi);
+	int now[11] = {
 		engine_mapping(), engine_profile(), ble_out_route(),
 		use_bt ? 1 : (bt_side ? 2 : 0), /* yol: 0 kablo, 1 Bluetooth, 2 Bluetooth aranıyor */
 		pad_connected, engine_active_layer(), usb_cfg, ble_out_ready(),
+		pad_battery(), hi.kb_on, hi.ms_on, /* pad pili (%/-1), bağlı Bluetooth klavye / fare */
 	};
 
 	if (!state_force && !memcmp(now, last, sizeof(now))) return;
 	state_force = false;
 	memcpy(last, now, sizeof(now));
-	OUT("{\"ev\":\"state\",\"mapping\":%d,\"prof\":%d,\"route\":%d,\"path\":%d,\"pad\":%d,\"layer\":%d,\"usb\":%d,\"bt\":%d}\n",
-	    now[0], now[1], now[2], now[3], now[4], now[5], now[6], now[7]);
+	OUT("{\"ev\":\"state\",\"mapping\":%d,\"prof\":%d,\"route\":%d,\"path\":%d,\"pad\":%d,\"layer\":%d,\"usb\":%d,\"bt\":%d,"
+	    "\"bat\":%d,\"kb\":%d,\"ms\":%d}\n",
+	    now[0], now[1], now[2], now[3], now[4], now[5], now[6], now[7], now[8], now[9], now[10]);
 }
 
 static void bt_send(int which, const uint8_t *buf, uint8_t len, bool force)
@@ -336,9 +344,25 @@ static void led_update(uint32_t tick)
 		gpio_pin_set_dt(&led_r, false);
 		return;
 	}
-	gpio_pin_set_dt(&led_g, on && mapping_on && !red);
-	gpio_pin_set_dt(&led_b, on && !mapping_on && !red);
-	gpio_pin_set_dt(&led_r, red);
+	/* renk: mavi = düz gamepad; profil açıkken profile göre
+	 * 1 yeşil, 2 sarı, 3 mor, 4 beyaz (sonra başa döner). Kırmızı = hata. */
+	bool r = false, g = false, b = true;
+
+	if (mapping_on) {
+		static const uint8_t pc[4] = { 0x2, 0x6, 0x5, 0x7 }; /* bit0 b, bit1 g, bit2 r */
+		uint8_t c = pc[engine_profile() & 3];
+
+		b = c & 1; g = c & 2; r = c & 4;
+		/* katman basılıyken/açıkken hızlı yanıp söner */
+		if (engine_active_layer() > 0 && (tick / 6) % 2) on = false;
+	}
+	/* pad pili %15 ve altı: 4 sn'de bir kısa kırmızı */
+	int bat = pad_battery();
+
+	if (!red && pad_connected && bat >= 0 && bat <= 15 && (tick % 500) < 12) { red = true; on = false; }
+	gpio_pin_set_dt(&led_g, on && g && !red);
+	gpio_pin_set_dt(&led_b, on && b && !red);
+	gpio_pin_set_dt(&led_r, red || (on && r));
 #endif
 }
 
@@ -450,6 +474,7 @@ static void out_thread(void *a, void *b, void *c)
 	while (1) {
 		/* pad'den yeni rapor gelirse hemen, yoksa en geç 8 ms'de bir */
 		k_sem_take(&kick, K_MSEC(8));
+		wd_pet(WD_OUT);
 		{
 			static int64_t last_led;
 			int64_t n = k_uptime_get();

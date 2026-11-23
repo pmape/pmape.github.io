@@ -25,10 +25,12 @@
 #include <zephyr/bluetooth/uuid.h>
 #include <zephyr/settings/settings.h>
 #include <zephyr/drivers/uart.h>
+#include <zephyr/sys/reboot.h>
 
 #include <bluetooth/scan.h>
 #include <bluetooth/gatt_dm.h>
 #include <bluetooth/services/hogp.h>
+#include <bluetooth/services/bas_client.h>
 
 #include "log.h"
 #include "pad.h"
@@ -38,6 +40,7 @@
 #include "ble_out.h"
 #include "ble_cfg.h"
 #include "hid_in.h"
+#include "wd.h"
 
 bool usb_listening(void)
 {
@@ -239,6 +242,7 @@ static int h_ctrl_set(const char *key, size_t len, settings_read_cb read_cb, voi
 		if (i >= 0 && i < MAXC) {
 			memset(&lms[i], 0, sizeof(lms[i]));
 			read_cb(arg, &lms[i], MIN(len, sizeof(lms[i])));
+			if (lms[i].n > LM_MAX) lms[i].n = 0; /* bozuk kayıt */
 		}
 		return 0;
 	}
@@ -518,6 +522,85 @@ static bool is_pad_conn(struct bt_conn *c)
 	return bt_conn_get_info(c, &i) == 0 && i.role == BT_CONN_ROLE_CENTRAL && !hid_in_is(c);
 }
 
+/* Pad bağlandı ama 12 sn içinde tuşları dinlemeye hazır olamadıysa (servis bulunamadı, eşleşme takıldı…)
+ * bağlantıyı kes: tarama yeniden başlar ve kart asılı kalmaz. */
+static bool pad_ready;
+static void ready_to_fn(struct k_work *w)
+{
+	if (cur_conn && !pad_ready) {
+		print_err("pad_not_ready", 0);
+		bt_conn_disconnect(cur_conn, BT_HCI_ERR_REMOTE_USER_TERM_CONN);
+	}
+}
+static K_WORK_DELAYABLE_DEFINE(ready_to, ready_to_fn);
+
+/* ---------- pad pili (Battery Service, varsa) ---------- */
+
+static struct bt_bas_client bas;
+static bool bas_ok, bas_notify;
+static volatile int pad_bat = -1; /* % ya da -1 = bilinmiyor */
+
+int pad_battery(void) { return pad_bat; }
+
+static void bat_set(uint8_t v)
+{
+	int n = v <= 100 ? v : -1;
+
+	if (n == pad_bat) return;
+	pad_bat = n;
+	OUT("{\"ev\":\"bat\",\"pct\":%d}\n", n);
+}
+
+static void bat_notify_cb(struct bt_bas_client *b, uint8_t level) { bat_set(level); }
+static void bat_read_cb(struct bt_bas_client *b, uint8_t level, int err) { if (!err) bat_set(level); }
+
+static void bas_dm_done(struct bt_gatt_dm *dm, void *ctx)
+{
+	int err = bt_bas_handles_assign(dm, &bas);
+
+	bt_gatt_dm_data_release(dm);
+	if (err) return;
+	bas_ok = true;
+	bas_notify = bt_bas_notify_supported(&bas) && !bt_bas_subscribe_battery_level(&bas, bat_notify_cb);
+	bt_bas_read_battery_level(&bas, bat_read_cb);
+}
+static void bas_dm_nf(struct bt_conn *c, void *ctx) { }
+static void bas_dm_err(struct bt_conn *c, int err, void *ctx) { }
+static const struct bt_gatt_dm_cb bas_dm_cb = {
+	.completed = bas_dm_done, .service_not_found = bas_dm_nf, .error_found = bas_dm_err,
+};
+
+static void bas_start_fn(struct k_work *w);
+static K_WORK_DELAYABLE_DEFINE(bas_start, bas_start_fn);
+static void bas_start_fn(struct k_work *w)
+{
+	if (!cur_conn || !pad_ready) return;
+	int err = bt_gatt_dm_start(cur_conn, BT_UUID_BAS, &bas_dm_cb, NULL);
+
+	/* başka bir servis aranıyorsa biraz sonra */
+	if (err == -EALREADY || err == -EBUSY) k_work_reschedule(&bas_start, K_MSEC(500));
+}
+
+/* bildirim desteklemeyen pad'ler için dakikada bir oku */
+static void bat_poll(void)
+{
+	static int64_t last;
+	int64_t now = k_uptime_get();
+
+	if (!cur_conn || !bas_ok || bas_notify || now - last < 60000) return;
+	last = now;
+	bt_bas_read_battery_level(&bas, bat_read_cb);
+}
+
+/* Pad başka bir cihazla eşlenince kartta kalan eski anahtar geçersiz olur: sil ve yeniden eşlen. */
+static bt_addr_le_t rekey_addr;
+static void rekey_fn(struct k_work *w)
+{
+	OUT("{\"ev\":\"rekey\"}\n");
+	bt_unpair(BT_ID_DEFAULT, &rekey_addr); /* bağlantıyı da keser */
+}
+static K_WORK_DEFINE(rekey_work, rekey_fn);
+
 static void connected(struct bt_conn *conn, uint8_t conn_err)
 {
 	char addr[BT_ADDR_LE_STR_LEN];
@@ -541,6 +624,8 @@ static void connected(struct bt_conn *conn, uint8_t conn_err)
 	start_scan();
 	want_set = false;
 	saved_front(&cur_addr);
+	pad_ready = false;
+	k_work_reschedule(&ready_to, K_SECONDS(12));
 
 	/* Şifreleme iste; desteklemeyen cihazlarda doğrudan devam et */
 	if (bt_conn_set_security(conn, BT_SECURITY_L2)) {
@@ -552,6 +637,11 @@ static void disconnected(struct bt_conn *conn, uint8_t reason)
 {
 	if (!is_pad_conn(conn)) return;
 	OUT("{\"ev\":\"disconnected\",\"reason\":%u}\n", reason);
+	pad_ready = false;
+	k_work_cancel_delayable(&ready_to);
+	k_work_cancel_delayable(&bas_start);
+	bas_ok = bas_notify = false;
+	if (pad_bat >= 0) { pad_bat = -1; OUT("{\"ev\":\"bat\",\"pct\":-1}\n"); }
 	out_set_connected(false);
 	pad_reset();
 
@@ -569,6 +659,11 @@ static void security_changed(struct bt_conn *conn, bt_security_t level, enum bt_
 {
 	if (!is_pad_conn(conn)) return;
 	OUT("{\"ev\":\"security\",\"level\":%u,\"err\":%d}\n", level, err);
+	if (err == BT_SECURITY_ERR_PIN_OR_KEY_MISSING) {
+		rekey_addr = *bt_conn_get_dst(conn);
+		k_work_submit(&rekey_work);
+		return;
+	}
 	start_discovery(conn);
 }
 
@@ -689,6 +784,14 @@ static void subscribe_inputs(void)
 	memset(rep_cache, 0, sizeof(rep_cache));
 	OUT("{\"ev\":\"ready\",\"inputs\":%d}\n", n);
 	out_set_connected(n > 0);
+	pad_ready = n > 0;
+	/* hiç giriş yoksa bekleme, hemen yeniden dene */
+	if (n > 0) {
+		k_work_cancel_delayable(&ready_to);
+		k_work_reschedule(&bas_start, K_MSEC(300));
+	} else {
+		k_work_reschedule(&ready_to, K_NO_WAIT);
+	}
 }
 
 static size_t map_next_off;
@@ -897,6 +1000,28 @@ bool bt_cmd(char *l)
 	return false;
 }
 
+/* ---------- yazılım bekçisi ----------
+ * Çıkış iş parçacığı (8 ms'de bir) ve sistem iş kuyruğu düzenli "yaşıyorum" der.
+ * Biri 10 sn susarsa (Bluetooth bağlantı zaman aşımından uzun) kart kendini yeniden başlatır. (Donanım bekçisi önyükleyicide de
+ * çalışmaya devam ettiğinden güncelleme sırasında kartı sıfırlayabilirdi; o yüzden yazılım.) */
+static volatile uint32_t wd_last[WD_N];
+
+void wd_pet(int i) { if (i >= 0 && i < WD_N) wd_last[i] = k_uptime_get_32(); }
+
+static void wd_q_fn(struct k_work *w) { wd_pet(WD_QUEUE); }
+static K_WORK_DEFINE(wd_q, wd_q_fn);
+
+static void wd_timer_fn(struct k_timer *t)
+{
+	uint32_t now = k_uptime_get_32();
+
+	for (int i = 0; i < WD_N; i++) {
+		if (wd_last[i] && now - wd_last[i] > 10000) sys_reboot(SYS_REBOOT_COLD);
+	}
+	k_work_submit(&wd_q);
+}
+static K_TIMER_DEFINE(wd_timer, wd_timer_fn, NULL);
+
 /* ---------- ana ---------- */
 
 static void usb_status_cb(enum usb_dc_status_code status, const uint8_t *param)
@@ -915,10 +1040,12 @@ int main(void)
 	}
 	k_sleep(K_MSEC(1500));
 	out_start();
+	k_timer_start(&wd_timer, K_SECONDS(1), K_SECONDS(1));
 
 	OUT("{\"ev\":\"hello\",\"fw\":\"" FW_VERSION "\"}\n");
 
 	bt_hogp_init(&hogp, &hogp_params);
+	bt_bas_client_init(&bas);
 
 	err = bt_enable(NULL);
 	if (err) {
@@ -940,7 +1067,8 @@ int main(void)
 	/* Ekran kartın orada olduğunu anlasın diye ara ara haber ver */
 	while (1) {
 		k_sleep(K_SECONDS(3));
-		OUT("{\"ev\":\"alive\",\"connected\":%d}\n", cur_conn != NULL);
+		OUT("{\"ev\":\"alive\",\"connected\":%d,\"bat\":%d}\n", cur_conn != NULL, pad_bat);
+		bat_poll();
 		{
 			struct bt_conn_info ci;
 			uint32_t pad_us = 0;
