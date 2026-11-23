@@ -1,6 +1,6 @@
 # PadMapper – Proje Durumu
 
-**Sürüm:** kart 0.9.14 (dalda, denenmedi) · uygulama 0.36
+**Sürüm:** kart 0.9.14 · uygulama 0.36 (yayında, 2026-11-23)
 
 ## Çalışan özellikler
 - BLE pad → USB/BLE klavye + fare + gamepad eşleme (profil, katman, makro, turbo, aç-kapa, birlikte basış)
@@ -27,4 +27,4 @@
 - Firmware yerelde derlenemiyor (NCS yok); CI ile derleniyor, motor masaüstünde test edildi
 
 ## Sıradaki adım
-- 0.9.14 kartta denenip main'e alınacak
+- Yeni istek bekleniyor
