@@ -1,6 +1,6 @@
 # PadMapper – Proje Durumu
 
-**Sürüm:** kart 0.9.14 · uygulama 0.37 (hazır, yayınlanmadı, 2026-11-25)
+**Sürüm:** kart 0.9.14 · uygulama 0.37 (yayında, 2026-11-25)
 
 ## Çalışan özellikler
 - BLE pad → USB/BLE klavye + fare + gamepad eşleme (profil, katman, makro, turbo, aç-kapa, birlikte basış)
@@ -33,4 +33,4 @@
 - Firmware yerelde derlenemiyor (NCS yok); CI ile derleniyor, motor masaüstünde test edildi
 
 ## Sıradaki adım
-- 0.37'yi yayınla (push → CI) ve telefonda Bluetooth güncellemesini dene
+- Telefonda Bluetooth güncellemesini ve ikili basmayı dene
