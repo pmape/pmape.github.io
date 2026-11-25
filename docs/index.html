@@ -112,7 +112,7 @@ svg:not([width]){width:100%;height:auto;display:block;max-height:46vh}
 @keyframes lpulse{50%{opacity:.45}}
 .lpad .arr{fill:#fff;font-size:16px;font-weight:800;text-anchor:middle;dominant-baseline:central;pointer-events:none}
 .b.live text{fill:#fff}
-.lb{font-size:7px;font-weight:600;fill:var(--acc2);pointer-events:none;dominant-baseline:central}
+.lb{font-size:8px;font-weight:600;fill:var(--acc2);pointer-events:none;dominant-baseline:central}
 .lb.inh{fill:var(--inht)}
 .b text{fill:var(--text);font-size:9px;font-weight:700;text-anchor:middle;dominant-baseline:central;pointer-events:none}
 .col{display:flex;flex-direction:column;gap:10px;min-width:0}
@@ -1174,8 +1174,10 @@ function descStick(st){
 const MSHORT={left:'Sol tık',right:'Sağ tık',middle:'Orta tık',back:'Geri',fwd:'İleri',wheelUp:'Teker↑',wheelDown:'Teker↓'};
 function shortAct(a){
   if(a.kind==='layer')return a.layer?'→S'+a.layer:'→Ana';
-  const s=a.steps[0];let t=a.steps.length>1?'Makro':s.t==='key'?keyName(s.k):s.t==='mouse'?MSHORT[s.b]:'🎮'+s.p;
-  if(t.length>8)t=t.slice(0,7)+'…';
+  const one=s=>s.t==='key'?keyName(s.k):s.t==='mouse'?MSHORT[s.b]:s.t==='pad'?s.p:s.t==='media'?'♪':s.t==='text'?'Aa':'↔';
+  const tog=a.steps.length>1&&!a.seq;
+  let t=tog?(a.steps.every(s=>s.t==='pad')?'🎮':'')+a.steps.map(one).join('+'):a.steps.length>1?'Makro':(a.steps[0].t==='pad'?'🎮':'')+one(a.steps[0]);
+  if(t.length>(tog?12:8))t=t.slice(0,tog?11:7)+'…';
   return (a.mode==='turbo'?'⚡':a.mode==='toggle'?'⇄':a.mode==='macro'?'▶':'')+t;
 }
 function shortBind(bd){const l=actList(bd).filter(([k])=>isSet(bd[k]));if(!l.length)return '';return shortAct(bd[l[0][0]])+(l.length>1?' +'+(l.length-1):'');}
@@ -1207,8 +1209,8 @@ function paintPad(){
       if(ui.layer>0&&!mapped&&!(bd&&bd.noInherit))inh=bindSet(P().layers[0].btn[b.id]);}
     const lb=document.getElementById('l-'+b.id);
     const src=b.stick?(mapped?L().sticks[b.id]:inh?P().layers[0].sticks[b.id]:null):(mapped?L().btn[b.id]:inh?P().layers[0].btn[b.id]:null);
-    lb.textContent='';lb.classList.toggle('inh',!mapped&&inh);
     const pl=isPlain();
+    lb.textContent=src&&!pl?(b.stick?shortStick(src):shortBind(src)):'';lb.classList.toggle('inh',!mapped&&inh);
     g.classList.toggle('map',!!mapped&&!pl);g.classList.toggle('inh',!mapped&&inh&&!pl);g.classList.toggle('sel',ui.sel===b.id&&!pl);
   }
 }
@@ -1373,6 +1375,9 @@ function togetherView(a,b){
     <div class="seg">${modes.map(([k,n])=>`<button class="${m===k?'on':''}" onclick="curA().mode='${k}';render()">${n}</button>`).join('')}</div>
     ${m==='turbo'?`<div class="row" style="margin-top:10px"><span class="hint" style="flex:1">Hız (her basış arası)</span><input type="number" min="20" max="2000" step="10" value="${a.turbo}" style="width:84px" onchange="curA().turbo=Math.max(20,clamp(this.value));render()"><span class="hint">ms</span></div>`:''}
     <p class="hint" style="margin:8px 0 0">${hint}</p>
+    <p class="lbl" style="margin:14px 0 6px">Aynı anda kaç tuşa bassın?</p>
+    <div class="seg">${['Tekli','İkili','Üçlü','Dörtlü'].map((n,i)=>`<button class="${a.steps.length===i+1?'on':''}" onclick="setCount(${i+1})">${n}</button>`).join('')}</div>
+    <p class="hint" style="margin:8px 0 0">Örnek: İkili seç, B ve X'i seç; ${esc(BY_ID[ui.sel].t)} tuşuna basınca ikisi birlikte basılır.</p>
   </div>
   <div class="row" style="margin-top:12px;gap:8px"><button class="btn grow" onclick="clearAct()">Temizle</button><button class="btn pri grow" onclick="toSeq()" ${a.steps.length?'':'disabled'}>${IC.book} Sıralı yap (makro)</button></div>
   <p class="hint" style="text-align:center;margin:8px 0 0">Sırayla ve aralarında süre olsun istersen makroya çevir</p>`;
@@ -1413,6 +1418,18 @@ function addTogether(t){
   if(t==='text'){a.seq=true;if(a.mode==='normal')a.mode='macro';a.steps.push({t:'text',s:'',after:0});render();openStep(a.steps.length-1);return;}
   a.steps.forEach(s=>{s.after=0;});a.steps.push(Object.assign(newStep(t,0),{a:'press'}));render();pickFor(a.steps.length-1);
 }
+/* "Aynı anda kaç tuş": eksikse aynı türden boş yuva ekle ve ilkini seçtir, fazlaysa sondan sil */
+function setCount(n){
+  const a=curA(),st=a.steps;
+  if(st.length===n)return;
+  if(st.length>n){undoSave();st.splice(n);render();undoToast('Fazla tuşlar silindi');return;}
+  const last=st[st.length-1];
+  const t=last&&last.t!=='text'&&last.t!=='move'?last.t:ok('pad')?'pad':'key';
+  const first=st.length;
+  st.forEach(s=>{s.after=0;});
+  while(st.length<n)st.push(Object.assign(newStep(t,0),{a:'press'}));
+  render();pickFor(first,false,true);
+}
 function addSeq(t){
   const a=curA();
   if(t==='wait'){if(!a.steps.length){toast('Önce bir adım ekle');return;}const s=a.steps[a.steps.length-1];s.after=(+s.after||0)+100;render();openStep(a.steps.length-1);return;}
@@ -1443,7 +1460,7 @@ function setStepS(i,k,v){curA().steps[i][k]=v;render();renderSheet();}
 function setStepType(i,t){const s=curA().steps;s[i]=Object.assign(newStep(t,s[i].after),{a:'press'});render();renderSheet();}
 function mvStep(i,d){const s=curA().steps,j=i+d;if(j<0||j>=s.length)return;[s[i],s[j]]=[s[j],s[i]];ui.step=j;render();renderSheet();}
 /* değer seçiciler: klavye (bilgisayar düzeni), fare, gamepad, medya */
-function pickFor(i,fromStep){ui.pick={i,back:fromStep?'step':null};openSheet('pick');}
+function pickFor(i,fromStep,chain){ui.pick={i,back:fromStep?'step':null,chain:!!chain};openSheet('pick');}
 const KB_ROWS=[
   ['Escape','F1','F2','F3','F4','F5','F6','F7','F8','F9','F10','F11','F12'],
   ['Digit1','Digit2','Digit3','Digit4','Digit5','Digit6','Digit7','Digit8','Digit9','Digit0','Minus','Equal','Backspace'],
@@ -1458,7 +1475,7 @@ const KB_FLEX={Backspace:1.4,Tab:1.4,CapsLock:1.6,Enter:1.8,ShiftLeft:2,ShiftRig
 const KB_MOD=new Set(['Escape','Backspace','Tab','CapsLock','Enter','ShiftLeft','ShiftRight','ControlLeft','ControlRight','MetaLeft','AltLeft','AltRight','Insert','Home','PageUp','Delete','End','PageDown','PrintScreen','ArrowLeft','ArrowUp','ArrowDown','ArrowRight']);
 function pickSheet(){
   const a=curA(),s=a.steps[ui.pick.i];if(!s)return '';
-  const done=`<div class="row" style="margin-top:12px;gap:8px">${ui.pick.back?`<button class="btn grow" onclick="openStep(${ui.pick.i})">‹ Adım</button>`:''}<button class="btn pri grow" onclick="${ui.pick.back?`openStep(${ui.pick.i})`:'closeSheet()'}">Tamam</button></div>`;
+  const done=`<div class="row" style="margin-top:12px;gap:8px">${ui.pick.back?`<button class="btn grow" onclick="openStep(${ui.pick.i})">‹ Adım</button>`:''}${ui.pick.chain&&ui.pick.i<a.steps.length-1?`<button class="btn pri grow" onclick="pickFor(${ui.pick.i+1},false,true)">Sonraki: ${ui.pick.i+2}. tuş ›</button>`:`<button class="btn pri grow" onclick="${ui.pick.back?`openStep(${ui.pick.i})`:'closeSheet()'}">Tamam</button>`}</div>`;
   if(s.t==='key'){
     const small=r=>r===0||r===6;
     return `<div class="bigval">${esc(keyName(s.k))}</div>
@@ -2235,6 +2252,8 @@ const SITE='https://pmape.github.io';
 const APK_URL=SITE+'/padmapper-ayar.apk';
 const PAGE_URL=SITE;
 const FW_URL=SITE+'/padmapper.uf2';
+/* Bluetooth'tan: önyükleyici çift bölmeli yazar (en çok ~405 KB), USB bellekli sürüm sığmaz → belleksiz sürüm */
+const FW_BLE_URL=SITE+'/padmapper-bellek-yok.uf2';
 const vnum=v=>String(v||'0').split('.').map(x=>parseInt(x)||0).reduce((a,x)=>a*1000+x,0);
 /* tarayıcıda: en son sürüm internetten (uygulamada: uygulamanın içindeki) */
 let webLatest='';
@@ -2248,7 +2267,7 @@ function updHtml(){
     :srow('Telefon uygulaması','<button class="btn" onclick="openLink(APK_URL)">İndir</button>','Android için. Kart takılınca kendisi açılır.');
   return app+srow('Kart yazılımı <span class="hint">'+(PM.connected()?'kartta '+esc(i.fw||'?'):'')+(b?' · yeni: '+esc(b):'')+'</span>',
       `<button class="btn ${need?'pri':''}" ${(usb&&(PM.native||canWeb))||bleOk?'':'disabled'} onclick="updCard()">${need?'Güncelle':'Yeniden kur'}</button>`,
-      (!PM.connected()?'Önce karta bağlan (USB kablo ya da Bluetooth). ':ble?'<b>Bluetooth\'tan kurulur</b> (kart 0.9.11 ve sonrası). Telefonu karta yakın tut. ':'')+
+      (!PM.connected()?'Önce karta bağlan (USB kablo ya da Bluetooth). ':ble?'<b>Bluetooth\'tan kurulur</b> (kart 0.9.11 ve sonrası). Telefonu karta yakın tut. Kablosuz kurulumda kartın USB belleği (AYAR.HTM) olmaz; sonraki kablolu güncellemede geri gelir. ':'')+
       (!PM.native&&!canWeb&&!ble?'Bu tarayıcı kabloyla yazamıyor; Chrome ya da Edge kullan. ':'')+
       'Basınca her şeyi kendisi yapar: kart yükleme moduna geçer, yeni yazılım yazılır, kart yeniden başlar. Dosya sürüklemek yok. Ayarların ve profillerin kartta kalır. Yarıda kesilirse kart bozulmaz, tekrar denersin.');
 }
@@ -2314,8 +2333,9 @@ async function updCard(skip){
     if(!PM.native){
       /* tarayıcı: yazılımı internetten al */
       updModal(UPD_STEPS,0);
-      try{const r=await fetch(FW_URL,{cache:'no-store'});if(!r.ok)throw new Error(r.status);updBin=PM.DFU.uf2ToBin(new Uint8Array(await r.arrayBuffer()));}
+      try{const r=await fetch(FW_BLE_URL,{cache:'no-store'});if(!r.ok)throw new Error(r.status);updBin=PM.DFU.uf2ToBin(new Uint8Array(await r.arrayBuffer()));}
       catch(e){updBle=null;updModal(UPD_STEPS,0,null,'Yeni yazılım internetten alınamadı.',`<button class="btn" onclick="updClose()">Kapat</button>`);return;}
+      if(updBin.bin.length>0x63000){updBle=null;updModal(UPD_STEPS,0,null,'Yazılım kablosuz yükleme için çok büyük. Bir kere USB kabloyla güncelle.',`<button class="btn" onclick="updClose()">Kapat</button>`);return;}
       if(updBin.base!==0x27000){updBle=null;updModal(UPD_STEPS,0,null,'Bu dosya bu karta ait değil.',`<button class="btn" onclick="updClose()">Kapat</button>`);return;}
     }
     updModal(UPD_STEPS,1);
