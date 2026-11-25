@@ -432,7 +432,10 @@ public class Main extends Activity {
         byte[] bin;
         try {
             long[] base = new long[1];
-            bin = Dfu.uf2ToBin(readAll(getAssets().open("padmapper.uf2")), base);
+            /* Bluetooth'ta önyükleyici çift bölmeli yazar (en çok ~405 KB): USB bellekli sürüm sığmaz, belleksizi yolla */
+            java.io.InputStream in;
+            try { in = getAssets().open("padmapper-bellek-yok.uf2"); } catch (java.io.IOException e) { in = getAssets().open("padmapper.uf2"); }
+            bin = Dfu.uf2ToBin(readAll(in), base);
             if (base[0] != 0x27000) throw new Exception("beklenmeyen adres " + Long.toHexString(base[0]));
         } catch (Exception e) { flashEv("err", 0, "Uygulamadaki kart yazılımı okunamadı: " + e.getMessage()); return; }
         if (ble != null) {

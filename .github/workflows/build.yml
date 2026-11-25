@@ -73,7 +73,7 @@ jobs:
         run: |
           if [ -n "$PM_KEYSTORE" ]; then echo "$PM_KEYSTORE" | base64 -d > android/padmapper.keystore; fi
           mkdir -p android/app/src/main/assets
-          rm -f android/app/src/main/assets/padmapper-bellek-yok.uf2
+          # belleksiz sürüm Bluetooth güncellemesi için uygulamada kalır (bellekli olan kablosuza sığmaz)
           cp web/padmapper.html android/app/src/main/assets/padmapper.html
           grep -o 'FW_VERSION "[^"]*"' firmware/src/cfg.h | cut -d'"' -f2 > android/app/src/main/assets/fw_version.txt
           cat android/app/src/main/assets/fw_version.txt

@@ -1,11 +1,16 @@
 # PadMapper – Proje Durumu
 
-**Sürüm:** kart 0.9.14 · uygulama 0.36 (yayında, 2026-11-23)
+**Sürüm:** kart 0.9.14 · uygulama 0.37 (hazır, yayınlanmadı, 2026-11-25)
 
 ## Çalışan özellikler
 - BLE pad → USB/BLE klavye + fare + gamepad eşleme (profil, katman, makro, turbo, aç-kapa, birlikte basış)
 - Bluetooth klavye/fare girişi (doğrudan veya gamepad'e çevirme)
 - Telefon/PC ayar ekranı (web/padmapper.html, Android uygulaması aynı sayfayı kullanır), kablosuz güncelleme
+
+## 0.37'de
+- Bluetooth güncelleme düzeltildi: önyükleyici kablosuzda çift bölme kullanır (en çok ~405 KB); USB bellekli yazılım 527 KB olduğu için reddediliyordu. Kablosuzda artık belleksiz sürüm (314 KB) gönderiliyor; uygulama bu dosyayı da içeriyor. Boyut aşılırsa anlaşılır hata.
+- "Nasıl çalışsın" altında "Aynı anda kaç tuşa bassın?" (Tekli/İkili/Üçlü/Dörtlü); seçici yuvaları sırayla açar
+- Çizimde tuşların yanında atamalar yeniden görünüyor (birlikte basış "B+X" diye); düz gamepad modunda gizli
 
 ## 0.9.13 / 0.36'da eklenenler
 - Yazılım bekçisi: çıkış iş parçacığı veya iş kuyruğu 10 sn donarsa kart yeniden başlar
@@ -19,6 +24,7 @@
 - Kopya web/index.html silindi
 
 ## Kararlar
+- Kablosuz güncellemede kartın USB belleği (AYAR.HTM) gelmez; sonraki kablolu güncellemede geri gelir. Bellekli sürüm 405 KB sınırına sığmıyor
 - Bekçi donanım değil yazılım: nRF donanım bekçisi önyükleyicide de çalıştığından güncelleme sırasında kartı sıfırlayabilirdi
 - Ayar biçimi: başlık bayt 14 bit0 = profil başına 16 baytlık çubuk uzantısı. Eğri kullanılmıyorsa ayar eskisiyle birebir aynı (eski kartlarla uyumlu)
 
@@ -27,4 +33,4 @@
 - Firmware yerelde derlenemiyor (NCS yok); CI ile derleniyor, motor masaüstünde test edildi
 
 ## Sıradaki adım
-- Yeni istek bekleniyor
+- 0.37'yi yayınla (push → CI) ve telefonda Bluetooth güncellemesini dene

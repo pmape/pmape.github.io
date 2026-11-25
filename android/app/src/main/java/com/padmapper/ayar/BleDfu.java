@@ -34,6 +34,8 @@ final class BleDfu {
     static final UUID PKT = UUID.fromString("00001532-1212-efde-1523-785feabcd123");
     static final UUID CCC = UUID.fromString("00002902-0000-1000-8000-00805f9b34fb");
     private static final int PRN = 10;
+    /* Adafruit önyükleyicisi kablosuzda çift bölme kullanır: (0xF4000 - 0x7000 - 0x27000) / 2 */
+    static final int MAX_BLE = 0x63000;
 
     private final Context ctx;
     private BluetoothGatt gatt;
@@ -108,6 +110,7 @@ final class BleDfu {
             if (n == null) throw new Exception("Kart cevap vermedi (" + what + ")");
             if (n.length == 0) throw new Exception("Bağlantı koptu (" + what + ")");
             if (n.length >= 3 && n[0] == 0x10 && n[1] == req) {
+                if (n[2] == 4) throw new Exception("Yazılım kablosuz yükleme için çok büyük (" + what + "). Bir kere USB kabloyla güncelle.");
                 if (n[2] != 1) throw new Exception("Kart reddetti (" + what + ", kod " + n[2] + ")");
                 return;
             }
@@ -117,6 +120,7 @@ final class BleDfu {
     private static byte[] le32(long v) { return new byte[] { (byte) v, (byte) (v >> 8), (byte) (v >> 16), (byte) (v >> 24) }; }
 
     void run(byte[] bin, Dfu.Prog prog) throws Exception {
+        if (bin.length > MAX_BLE) throw new Exception("Yazılım kablosuz yükleme için çok büyük (" + bin.length / 1024 + " KB). USB kabloyla güncelle.");
         BluetoothManager bm = (BluetoothManager) ctx.getSystemService(Context.BLUETOOTH_SERVICE);
         BluetoothAdapter a = bm == null ? null : bm.getAdapter();
         if (a == null || !a.isEnabled()) throw new Exception("Bluetooth kapalı");
